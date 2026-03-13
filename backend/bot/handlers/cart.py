@@ -22,12 +22,12 @@ async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     telegram_id = update.effective_user.id
 
-    user = sb_get_one("users", f"select=id&telegram_id=eq.{telegram_id}")
+    user = await sb_get_one("users", f"select=id&telegram_id=eq.{telegram_id}")
     if not user:
         await query.edit_message_text("Please /start first to register.", reply_markup=back_to_menu_keyboard())
         return
 
-    product = sb_get_one("products", f"select=id,merchant_id,name,base_price,stock,is_active&id=eq.{product_id}&is_active=eq.true")
+    product = await sb_get_one("products", f"select=id,merchant_id,name,base_price,stock,is_active&id=eq.{product_id}&is_active=eq.true")
     if not product:
         await query.edit_message_text("Product not found.", reply_markup=back_to_menu_keyboard())
         return
@@ -40,21 +40,21 @@ async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user["id"]
 
     # Find or create cart for user+merchant
-    cart = sb_get_one("cart", f"select=id&user_id=eq.{user_id}&merchant_id=eq.{product['merchant_id']}")
+    cart = await sb_get_one("cart", f"select=id&user_id=eq.{user_id}&merchant_id=eq.{product['merchant_id']}")
     if cart:
         cart_id = cart["id"]
     else:
-        new_cart = sb_post("cart", {"user_id": user_id, "merchant_id": product["merchant_id"]})
+        new_cart = await sb_post("cart", {"user_id": user_id, "merchant_id": product["merchant_id"]})
         cart_id = new_cart[0]["id"]
 
     # Check if product already in cart_items
-    existing = sb_get_one("cart_items", f"select=id,quantity&cart_id=eq.{cart_id}&product_id=eq.{product_id}")
+    existing = await sb_get_one("cart_items", f"select=id,quantity&cart_id=eq.{cart_id}&product_id=eq.{product_id}")
 
     if existing:
         new_qty = existing["quantity"] + quantity
-        sb_patch("cart_items", f"id=eq.{existing['id']}", {"quantity": new_qty, "unit_price": unit_price})
+        await sb_patch("cart_items", f"id=eq.{existing['id']}", {"quantity": new_qty, "unit_price": unit_price})
     else:
-        sb_post("cart_items", {
+        await sb_post("cart_items", {
             "cart_id": cart_id,
             "product_id": product_id,
             "quantity": quantity,
@@ -82,13 +82,13 @@ async def view_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     telegram_id = update.effective_user.id
-    user = sb_get_one("users", f"select=id&telegram_id=eq.{telegram_id}")
+    user = await sb_get_one("users", f"select=id&telegram_id=eq.{telegram_id}")
     if not user:
         await query.edit_message_text("Please /start first.", reply_markup=back_to_menu_keyboard())
         return
 
     # Get all carts for user
-    carts = sb_get("cart", f"select=id,merchant_id&user_id=eq.{user['id']}")
+    carts = await sb_get("cart", f"select=id,merchant_id&user_id=eq.{user['id']}")
     if not carts:
         await query.edit_message_text(
             "Your cart is empty!\n\nBrowse shops to add products.",
@@ -101,7 +101,7 @@ async def view_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cart_ids = [c["id"] for c in carts]
     cart_ids_str = ",".join(str(c) for c in cart_ids)
-    cart_items = sb_get("cart_items", f"select=id,cart_id,product_id,quantity,unit_price&cart_id=in.({cart_ids_str})&order=created_at.desc")
+    cart_items = await sb_get("cart_items", f"select=id,cart_id,product_id,quantity,unit_price&cart_id=in.({cart_ids_str})&order=created_at.desc")
 
     if not cart_items:
         await query.edit_message_text(
@@ -117,12 +117,12 @@ async def view_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cart_map = {c["id"]: c["merchant_id"] for c in carts}
     product_ids = list(set(ci["product_id"] for ci in cart_items))
     products_str = ",".join(str(p) for p in product_ids)
-    products = sb_get("products", f"select=id,name&id=in.({products_str})")
+    products = await sb_get("products", f"select=id,name&id=in.({products_str})")
     product_map = {p["id"]: p["name"] for p in products}
 
     merchant_ids = list(set(c["merchant_id"] for c in carts))
     merchants_str = ",".join(str(m) for m in merchant_ids)
-    merchants = sb_get("merchants", f"select=id,name&id=in.({merchants_str})")
+    merchants = await sb_get("merchants", f"select=id,name&id=in.({merchants_str})")
     merchant_map = {m["id"]: m["name"] for m in merchants}
 
     items = []
@@ -152,7 +152,7 @@ async def remove_from_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     item_id = int(query.data.split("_")[1])
 
-    sb_delete("cart_items", f"id=eq.{item_id}")
+    await sb_delete("cart_items", f"id=eq.{item_id}")
     await query.answer("Removed from cart!")
     await view_cart(update, context)
 
@@ -163,11 +163,11 @@ async def clear_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     telegram_id = update.effective_user.id
-    user = sb_get_one("users", f"select=id&telegram_id=eq.{telegram_id}")
+    user = await sb_get_one("users", f"select=id&telegram_id=eq.{telegram_id}")
     if user:
-        carts = sb_get("cart", f"select=id&user_id=eq.{user['id']}")
+        carts = await sb_get("cart", f"select=id&user_id=eq.{user['id']}")
         for c in carts:
-            sb_delete("cart_items", f"cart_id=eq.{c['id']}")
+            await sb_delete("cart_items", f"cart_id=eq.{c['id']}")
 
     await query.edit_message_text(
         "Cart cleared!",
@@ -181,7 +181,7 @@ async def checkout_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     telegram_id = update.effective_user.id
-    user = sb_get_one("users", f"select=id,address&telegram_id=eq.{telegram_id}")
+    user = await sb_get_one("users", f"select=id,address&telegram_id=eq.{telegram_id}")
 
     if user and user.get("address"):
         context.user_data["checkout_address"] = user["address"]
@@ -213,9 +213,9 @@ async def handle_checkout_text(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data["checkout_state"] = None
 
         telegram_id = update.effective_user.id
-        user = sb_get_one("users", f"select=id&telegram_id=eq.{telegram_id}")
+        user = await sb_get_one("users", f"select=id&telegram_id=eq.{telegram_id}")
         if user:
-            sb_patch("users", f"id=eq.{user['id']}", {"address": context.user_data["checkout_address"]})
+            await sb_patch("users", f"id=eq.{user['id']}", {"address": context.user_data["checkout_address"]})
 
         await update.message.reply_text(
             f"**Delivery to:**\n"
@@ -260,7 +260,7 @@ async def confirm_order_cod(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     telegram_id = update.effective_user.id
-    user = sb_get_one("users", f"select=id&telegram_id=eq.{telegram_id}")
+    user = await sb_get_one("users", f"select=id&telegram_id=eq.{telegram_id}")
     if not user:
         await query.edit_message_text("Error: User not found.", reply_markup=back_to_menu_keyboard())
         return
@@ -269,14 +269,14 @@ async def confirm_order_cod(update: Update, context: ContextTypes.DEFAULT_TYPE):
     address = context.user_data.get("checkout_address", "")
 
     # Get all carts + items
-    carts = sb_get("cart", f"select=id,merchant_id&user_id=eq.{user_id}")
+    carts = await sb_get("cart", f"select=id,merchant_id&user_id=eq.{user_id}")
     if not carts:
         await query.edit_message_text("Cart is empty!", reply_markup=back_to_menu_keyboard())
         return
 
     cart_ids = [c["id"] for c in carts]
     cart_ids_str = ",".join(str(c) for c in cart_ids)
-    cart_items = sb_get("cart_items", f"select=id,cart_id,product_id,quantity,unit_price&cart_id=in.({cart_ids_str})")
+    cart_items = await sb_get("cart_items", f"select=id,cart_id,product_id,quantity,unit_price&cart_id=in.({cart_ids_str})")
 
     if not cart_items:
         await query.edit_message_text("Cart is empty!", reply_markup=back_to_menu_keyboard())
@@ -285,7 +285,7 @@ async def confirm_order_cod(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Enrich with product info
     product_ids = list(set(ci["product_id"] for ci in cart_items))
     products_str = ",".join(str(p) for p in product_ids)
-    products = sb_get("products", f"select=id,name,sku,stock&id=in.({products_str})")
+    products = await sb_get("products", f"select=id,name,sku,stock&id=in.({products_str})")
     product_map = {p["id"]: p for p in products}
 
     # Group by merchant
@@ -308,7 +308,7 @@ async def confirm_order_cod(update: Update, context: ContextTypes.DEFAULT_TYPE):
         subtotal = sum(item["line_total"] for item in items)
         order_code = f"ORD-{uuid.uuid4().hex[:8].upper()}"
 
-        new_order = sb_post("orders", {
+        new_order = await sb_post("orders", {
             "order_code": order_code,
             "merchant_id": merchant_id,
             "user_id": user_id,
@@ -323,7 +323,7 @@ async def confirm_order_cod(update: Update, context: ContextTypes.DEFAULT_TYPE):
         order_id = new_order[0]["id"]
 
         for item in items:
-            sb_post("order_items", {
+            await sb_post("order_items", {
                 "order_id": order_id,
                 "product_id": item["product_id"],
                 "product_name": item["product_name"],
@@ -336,13 +336,13 @@ async def confirm_order_cod(update: Update, context: ContextTypes.DEFAULT_TYPE):
             prod = product_map.get(item["product_id"])
             if prod:
                 new_stock = max(0, prod["stock"] - item["quantity"])
-                sb_patch("products", f"id=eq.{item['product_id']}", {"stock": new_stock})
+                await sb_patch("products", f"id=eq.{item['product_id']}", {"stock": new_stock})
 
         created_orders.append({"order_code": order_code, "total": subtotal})
 
     # Clear cart items
     for c in carts:
-        sb_delete("cart_items", f"cart_id=eq.{c['id']}")
+        await sb_delete("cart_items", f"cart_id=eq.{c['id']}")
 
     # Build confirmation message
     text = "**Order Placed Successfully!**\n\n"

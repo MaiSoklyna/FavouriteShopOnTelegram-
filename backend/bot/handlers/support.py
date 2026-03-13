@@ -13,7 +13,7 @@ async def my_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     telegram_id = update.effective_user.id
-    user = sb_get_one(
+    user = await sb_get_one(
         "users",
         f"select=id,telegram_id,username,first_name,last_name,phone,address,created_at&telegram_id=eq.{telegram_id}"
     )
@@ -21,7 +21,7 @@ async def my_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Please /start first.", reply_markup=back_to_menu_keyboard())
         return
 
-    orders = sb_get("orders", f"select=id&user_id=eq.{user['id']}")
+    orders = await sb_get("orders", f"select=id&user_id=eq.{user['id']}")
     order_count = len(orders)
 
     text = f"**Your Profile**\n\n"

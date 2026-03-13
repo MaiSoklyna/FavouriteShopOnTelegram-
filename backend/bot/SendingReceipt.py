@@ -18,7 +18,7 @@ async def send_receipt_to_customer(bot, order_id: int):
     Called after order status changes to 'delivered'.
     """
     try:
-        order = sb_get_one(
+        order = await sb_get_one(
             "orders",
             f"select=id,order_code,subtotal,discount_amount,delivery_fee,total,"
             f"payment_method,payment_status,delivery_address,delivery_name,delivery_phone,"
@@ -29,15 +29,15 @@ async def send_receipt_to_customer(bot, order_id: int):
             logger.error(f"Order {order_id} not found for receipt")
             return False
 
-        user = sb_get_one("users", f"select=telegram_id,first_name,last_name,username&id=eq.{order['user_id']}")
+        user = await sb_get_one("users", f"select=telegram_id,first_name,last_name,username&id=eq.{order['user_id']}")
         if not user or not user.get("telegram_id"):
             logger.warning(f"Order {order_id} has no Telegram ID for customer")
             return False
 
-        merchant = sb_get_one("merchants", f"select=name,phone&id=eq.{order['merchant_id']}")
+        merchant = await sb_get_one("merchants", f"select=name,phone&id=eq.{order['merchant_id']}")
         merchant_name = merchant["name"] if merchant else "Unknown"
 
-        items = sb_get("order_items", f"select=quantity,unit_price,subtotal,product_name,selected_variants&order_id=eq.{order_id}&order=id")
+        items = await sb_get("order_items", f"select=quantity,unit_price,subtotal,product_name,selected_variants&order_id=eq.{order_id}&order=id")
 
         if not items:
             logger.warning(f"Order {order_id} has no items")
@@ -124,7 +124,7 @@ Thank you for shopping with us!
 
         logger.info(f"Receipt sent successfully for order {order_id} to user {user['telegram_id']}")
 
-        sb_patch("orders", f"id=eq.{order_id}", {"receipt_sent_at": datetime.utcnow().isoformat()})
+        await sb_patch("orders", f"id=eq.{order_id}", {"receipt_sent_at": datetime.utcnow().isoformat()})
 
         return True
 

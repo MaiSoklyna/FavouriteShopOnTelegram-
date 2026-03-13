@@ -13,12 +13,12 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     telegram_id = update.effective_user.id
-    user = sb_get_one("users", f"select=id&telegram_id=eq.{telegram_id}")
+    user = await sb_get_one("users", f"select=id&telegram_id=eq.{telegram_id}")
     if not user:
         await query.edit_message_text("Please /start first.", reply_markup=back_to_menu_keyboard())
         return
 
-    orders = sb_get(
+    orders = await sb_get(
         "orders",
         f"select=id,order_code,status,total,created_at,merchant_id&user_id=eq.{user['id']}&order=created_at.desc&limit=20"
     )
@@ -33,7 +33,7 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Enrich with merchant names
     merchant_ids = list(set(o["merchant_id"] for o in orders))
     merchants_str = ",".join(str(m) for m in merchant_ids)
-    merchants = sb_get("merchants", f"select=id,name&id=in.({merchants_str})")
+    merchants = await sb_get("merchants", f"select=id,name&id=in.({merchants_str})")
     merchant_map = {m["id"]: m["name"] for m in merchants}
 
     for o in orders:
@@ -54,7 +54,7 @@ async def view_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     order_id = int(query.data.split("_")[1])
 
-    order = sb_get_one(
+    order = await sb_get_one(
         "orders",
         f"select=id,order_code,status,payment_method,payment_status,delivery_address,total,created_at,merchant_id&id=eq.{order_id}"
     )
@@ -62,10 +62,10 @@ async def view_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Order not found.", reply_markup=back_to_menu_keyboard())
         return
 
-    merchant = sb_get_one("merchants", f"select=name&id=eq.{order['merchant_id']}")
+    merchant = await sb_get_one("merchants", f"select=name&id=eq.{order['merchant_id']}")
     merchant_name = merchant["name"] if merchant else "Unknown"
 
-    items = sb_get("order_items", f"select=product_name,quantity,subtotal&order_id=eq.{order_id}")
+    items = await sb_get("order_items", f"select=product_name,quantity,subtotal&order_id=eq.{order_id}")
 
     status_emoji = {
         "pending": "Pending",
@@ -107,7 +107,7 @@ async def cancel_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     order_id = int(query.data.split("_")[2])
 
-    order = sb_get_one("orders", f"select=id,order_code,status&id=eq.{order_id}")
+    order = await sb_get_one("orders", f"select=id,order_code,status&id=eq.{order_id}")
     if not order:
         await query.answer("Order not found!", show_alert=True)
         return
@@ -116,14 +116,14 @@ async def cancel_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Restore stock
-    items = sb_get("order_items", f"select=product_id,quantity&order_id=eq.{order_id}")
+    items = await sb_get("order_items", f"select=product_id,quantity&order_id=eq.{order_id}")
     for item in items:
-        product = sb_get_one("products", f"select=stock&id=eq.{item['product_id']}")
+        product = await sb_get_one("products", f"select=stock&id=eq.{item['product_id']}")
         if product:
             new_stock = product["stock"] + item["quantity"]
-            sb_patch("products", f"id=eq.{item['product_id']}", {"stock": new_stock})
+            await sb_patch("products", f"id=eq.{item['product_id']}", {"stock": new_stock})
 
-    sb_patch("orders", f"id=eq.{order_id}", {"status": "cancelled", "payment_status": "refunded"})
+    await sb_patch("orders", f"id=eq.{order_id}", {"status": "cancelled", "payment_status": "refunded"})
 
     await query.edit_message_text(
         f"**Order {order['order_code']} Cancelled**\n\nStock has been restored.",

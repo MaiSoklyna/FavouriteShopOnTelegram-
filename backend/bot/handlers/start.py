@@ -58,13 +58,13 @@ def _make_token(user_id: int, telegram_id: int = None) -> str:
     return pyjwt.encode(claims, settings.SUPABASE_JWT_SECRET, algorithm="HS256")
 
 
-def _upsert_user(telegram_id, username, first_name, last_name):
+async def _upsert_user(telegram_id, username, first_name, last_name):
     """Get or create user via Supabase, returns (db_user_dict, is_new)."""
-    rows = sb_get("users", f"select=*&telegram_id=eq.{telegram_id}")
+    rows = await sb_get("users", f"select=*&telegram_id=eq.{telegram_id}")
     if rows:
         return rows[0], False
 
-    new_rows = sb_post("users", {
+    new_rows = await sb_post("users", {
         "telegram_id": telegram_id,
         "username": username or f"user_{telegram_id}",
         "first_name": first_name or "",
@@ -76,9 +76,9 @@ def _upsert_user(telegram_id, username, first_name, last_name):
     }, True
 
 
-def _complete_login_session(session_id: str, user_id: int, token: str):
+async def _complete_login_session(session_id: str, user_id: int, token: str):
     """Mark a login_sessions row as completed with the JWT."""
-    sb_patch("login_sessions", f"session_id=eq.{session_id}&status=eq.pending", {
+    await sb_patch("login_sessions", f"session_id=eq.{session_id}&status=eq.pending", {
         "jwt_token": token,
         "user_id": user_id,
         "status": "completed",
@@ -93,7 +93,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     first_name = tg_user.first_name or ""
     last_name = tg_user.last_name or ""
 
-    db_user, is_new = _upsert_user(telegram_id, username, first_name, last_name)
+    db_user, is_new = await _upsert_user(telegram_id, username, first_name, last_name)
     token = _make_token(db_user["id"], telegram_id)
 
     # --- deep-link: /start SESSION_ID (browser login) ---
@@ -101,7 +101,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if session_id and session_id.startswith("dash_"):
         # Dashboard login - check super_admins first, then merchant_admins
-        super_rows = sb_get("super_admins", f"select=id,full_name,email,is_active&telegram_id=eq.{telegram_id}")
+        super_rows = await sb_get("super_admins", f"select=id,full_name,email,is_active&telegram_id=eq.{telegram_id}")
         if super_rows and super_rows[0].get("is_active"):
             sa = super_rows[0]
             dash_token = create_access_token({
@@ -109,7 +109,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "role": "super_admin",
                 "email": sa["email"],
             })
-            _complete_login_session(session_id, sa["id"], dash_token)
+            await _complete_login_session(session_id, sa["id"], dash_token)
             await update.message.reply_text(
                 f"Hello, <b>{sa['full_name']}</b>!\n\n"
                 "You're now logged in as Super Admin - go back to your dashboard.",
@@ -117,7 +117,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        ma_rows = sb_get("merchant_admins", f"select=id,merchant_id,full_name,email,role,is_active&telegram_id=eq.{telegram_id}")
+        ma_rows = await sb_get("merchant_admins", f"select=id,merchant_id,full_name,email,role,is_active&telegram_id=eq.{telegram_id}")
         if ma_rows and ma_rows[0].get("is_active"):
             ma = ma_rows[0]
             dash_token = create_access_token({
@@ -126,7 +126,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "merchant_id": ma["merchant_id"],
                 "email": ma["email"],
             })
-            _complete_login_session(session_id, ma["id"], dash_token)
+            await _complete_login_session(session_id, ma["id"], dash_token)
             await update.message.reply_text(
                 f"Hello, <b>{ma['full_name']}</b>!\n\n"
                 "You're now logged in - go back to your dashboard.",
@@ -143,7 +143,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if session_id:
         # Miniapp customer login
-        _complete_login_session(session_id, db_user["id"], token)
+        await _complete_login_session(session_id, db_user["id"], token)
 
         if is_new:
             text = (
@@ -188,7 +188,7 @@ async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
 
     tg_user = update.effective_user
-    db_user = sb_get_one("users", f"select=id&telegram_id=eq.{tg_user.id}")
+    db_user = await sb_get_one("users", f"select=id&telegram_id=eq.{tg_user.id}")
     miniapp_url = (
         f"{settings.WEB_APP_URL}?auth={_make_token(db_user['id'], tg_user.id)}"
         if db_user else settings.WEB_APP_URL

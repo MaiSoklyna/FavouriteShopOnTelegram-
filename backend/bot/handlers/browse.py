@@ -15,11 +15,11 @@ async def browse_shops(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    merchants = sb_get("merchants", "select=*&status=eq.active&order=name")
+    merchants = await sb_get("merchants", "select=*&status=eq.active&order=name")
 
     # Enrich with product counts
     for m in merchants:
-        products = sb_get("products", f"select=id&merchant_id=eq.{m['id']}&is_active=eq.true")
+        products = await sb_get("products", f"select=id&merchant_id=eq.{m['id']}&is_active=eq.true")
         m["product_count"] = len(products)
 
     if not merchants:
@@ -43,19 +43,19 @@ async def view_shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     merchant_id = int(query.data.split("_")[1])
 
-    merchant = sb_get_one("merchants", f"select=*&id=eq.{merchant_id}")
+    merchant = await sb_get_one("merchants", f"select=*&id=eq.{merchant_id}")
     if not merchant:
         await query.edit_message_text("Shop not found.", reply_markup=back_to_menu_keyboard())
         return
 
     # Get products for this merchant to find categories with products
-    products = sb_get("products", f"select=category_id&merchant_id=eq.{merchant_id}&is_active=eq.true")
+    products = await sb_get("products", f"select=category_id&merchant_id=eq.{merchant_id}&is_active=eq.true")
     cat_ids = list(set(p["category_id"] for p in products if p.get("category_id")))
 
     categories = []
     if cat_ids:
         ids_str = ",".join(str(c) for c in cat_ids)
-        categories = sb_get("categories", f"select=id,name,icon_emoji&id=in.({ids_str})&order=name")
+        categories = await sb_get("categories", f"select=id,name,icon_emoji&id=in.({ids_str})&order=name")
 
     text = f"**{merchant['name']}**\n"
     if merchant.get("description"):
@@ -78,7 +78,7 @@ async def view_category_products(update: Update, context: ContextTypes.DEFAULT_T
     merchant_id = int(parts[1])
     category_id = int(parts[2])
 
-    products = sb_get(
+    products = await sb_get(
         "products",
         f"select=*&merchant_id=eq.{merchant_id}&category_id=eq.{category_id}&is_active=eq.true&order=name"
     )
@@ -90,7 +90,7 @@ async def view_category_products(update: Update, context: ContextTypes.DEFAULT_T
         )
         return
 
-    category = sb_get_one("categories", f"select=name&id=eq.{category_id}")
+    category = await sb_get_one("categories", f"select=name&id=eq.{category_id}")
     cat_name = category["name"] if category else "Products"
 
     await query.edit_message_text(
@@ -107,7 +107,7 @@ async def view_all_products(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     merchant_id = int(query.data.split("_")[1])
 
-    products = sb_get(
+    products = await sb_get(
         "products",
         f"select=*&merchant_id=eq.{merchant_id}&is_active=eq.true&order=name"
     )
@@ -133,12 +133,12 @@ async def view_product(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     product_id = int(query.data.split("_")[1])
 
-    product = sb_get_one("products", f"select=*&id=eq.{product_id}")
+    product = await sb_get_one("products", f"select=*&id=eq.{product_id}")
     if not product:
         await query.edit_message_text("Product not found.", reply_markup=back_to_menu_keyboard())
         return
 
-    merchant = sb_get_one("merchants", f"select=name&id=eq.{product['merchant_id']}")
+    merchant = await sb_get_one("merchants", f"select=name&id=eq.{product['merchant_id']}")
     merchant_name = merchant["name"] if merchant else "Unknown"
 
     context.user_data[f"qty_{product_id}"] = 1

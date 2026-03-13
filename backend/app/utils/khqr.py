@@ -12,16 +12,16 @@ from typing import Optional
 from bot.supabase_helpers import sb_get_one
 
 
-def get_merchant_name(merchant_id: int) -> str:
+async def get_merchant_name(merchant_id: int) -> str:
     """Fetch merchant name from Supabase"""
     if not merchant_id:
         return "Favourite of Shop"
 
-    result = sb_get_one("merchants", f"select=name&id=eq.{merchant_id}")
+    result = await sb_get_one("merchants", f"select=name&id=eq.{merchant_id}")
     return result['name'] if result else "Unknown Merchant"
 
 
-def get_merchant_account_info(merchant_id: int) -> dict:
+async def get_merchant_account_info(merchant_id: int) -> dict:
     """Fetch merchant payment account information"""
     if not merchant_id:
         return {
@@ -30,7 +30,7 @@ def get_merchant_account_info(merchant_id: int) -> dict:
             'bakong_account': None
         }
 
-    result = sb_get_one("merchants", f"select=name,bakong_account,phone&id=eq.{merchant_id}")
+    result = await sb_get_one("merchants", f"select=name,bakong_account,phone&id=eq.{merchant_id}")
 
     if result:
         return {
@@ -46,7 +46,7 @@ def get_merchant_account_info(merchant_id: int) -> dict:
     }
 
 
-def generate_khqr_payload(
+async def generate_khqr_payload(
     amount: float,
     order_id: str,
     merchant_id: Optional[int] = None,
@@ -54,46 +54,29 @@ def generate_khqr_payload(
 ) -> str:
     """
     Generate KHQR payload string following simplified EMV QR format
-
-    Args:
-        amount: Transaction amount
-        order_id: Order identifier
-        merchant_id: Merchant ID (optional, defaults to platform)
-        currency: Currency code (USD or KHR)
-
-    Returns:
-        KHQR payload string
     """
-    merchant_info = get_merchant_account_info(merchant_id) if merchant_id else {
+    merchant_info = await get_merchant_account_info(merchant_id) if merchant_id else {
         'name': 'Favourite of Shop',
         'account_id': 'platform@bakong'
     }
 
-    # Simplified KHQR format for MVP
-    # Production format should follow full EMV QR specification
-    # with proper field tags and CRC calculation
-
     payload_parts = [
-        f"00:KHQR",  # Payload Format Indicator
-        f"01:12",    # Point of Initiation (12 = static)
-        f"30:{merchant_info['account_id']}",  # Merchant Account
-        f"52:0000",  # Merchant Category Code
-        f"53:{currency}",  # Transaction Currency
-        f"54:{amount:.2f}",  # Transaction Amount
-        f"58:KH",    # Country Code
-        f"59:{merchant_info['name'][:25]}",  # Merchant Name (max 25 chars)
-        f"62:ORD-{order_id}",  # Additional Data (Order ID)
+        f"00:KHQR",
+        f"01:12",
+        f"30:{merchant_info['account_id']}",
+        f"52:0000",
+        f"53:{currency}",
+        f"54:{amount:.2f}",
+        f"58:KH",
+        f"59:{merchant_info['name'][:25]}",
+        f"62:ORD-{order_id}",
     ]
 
     payload = "|".join(payload_parts)
-
-    # For production, calculate CRC-16 checksum and append
-    # payload += f"|63:{calculate_crc16(payload)}"
-
     return payload
 
 
-def generate_khqr(
+async def generate_khqr(
     amount: float,
     order_id: str,
     merchant_id: Optional[int] = None,
@@ -101,34 +84,21 @@ def generate_khqr(
 ) -> str:
     """
     Generate KHQR QR code as base64 encoded image
-
-    Args:
-        amount: Transaction amount
-        order_id: Order identifier
-        merchant_id: Merchant ID (optional)
-        currency: Currency code (USD or KHR)
-
-    Returns:
-        Base64 encoded PNG image string
     """
-    # Generate KHQR payload
-    payload = generate_khqr_payload(amount, order_id, merchant_id, currency)
+    payload = await generate_khqr_payload(amount, order_id, merchant_id, currency)
 
-    # Create QR code
     qr = qrcode.QRCode(
-        version=1,  # Auto-adjust size
-        error_correction=qrcode.constants.ERROR_CORRECT_M,  # Medium error correction
-        box_size=8,  # Size of each box in pixels
-        border=2,    # Border size in boxes
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=8,
+        border=2,
     )
 
     qr.add_data(payload)
     qr.make(fit=True)
 
-    # Generate image
     img = qr.make_image(fill_color="black", back_color="white")
 
-    # Convert to base64
     buffer = BytesIO()
     img.save(buffer, format="PNG")
     buffer.seek(0)
@@ -145,24 +115,7 @@ def verify_khqr_payment(
 ) -> dict:
     """
     Verify KHQR payment status (MVP simulation)
-
-    In production, this would call BAKONG API to verify actual payment
-    For MVP, this is a placeholder that returns mock verification
-
-    Args:
-        transaction_id: KHQR transaction ID
-        order_id: Order ID to verify
-        expected_amount: Expected payment amount
-
-    Returns:
-        dict: Verification result with status and details
     """
-    # Production implementation would call:
-    # GET https://api.bakong.nbc.gov.kh/v1/check_transaction_status
-
-    # MVP: Return mock verification
-    # In real implementation, parse response from BAKONG API
-
     return {
         'success': False,
         'verified': False,
@@ -175,30 +128,19 @@ def verify_khqr_payment(
     }
 
 
-def generate_payment_deeplink(
+async def generate_payment_deeplink(
     amount: float,
     order_id: str,
     merchant_id: Optional[int] = None
 ) -> str:
     """
     Generate Bakong app deep link for direct payment
-
-    Args:
-        amount: Payment amount
-        order_id: Order identifier
-        merchant_id: Merchant ID
-
-    Returns:
-        Bakong app deep link URL
     """
-    merchant_info = get_merchant_account_info(merchant_id) if merchant_id else {
+    merchant_info = await get_merchant_account_info(merchant_id) if merchant_id else {
         'account_id': 'platform@bakong'
     }
 
-    # Bakong deep link format
-    # This opens the Bakong mobile app directly with payment details pre-filled
     account = merchant_info['account_id']
-
     deeplink = f"bakong://pay?account={account}&amount={amount:.2f}&note=Order-{order_id}"
 
     return deeplink

@@ -536,8 +536,8 @@ async def generate_khqr_endpoint(order_id: int, request: Request):
 
     try:
         from app.utils.khqr import generate_khqr, generate_payment_deeplink
-        qr_code = generate_khqr(amount, order_code, order.get("merchant_id"))
-        deeplink = generate_payment_deeplink(amount, order_code, order.get("merchant_id"))
+        qr_code = await generate_khqr(amount, order_code, order.get("merchant_id"))
+        deeplink = await generate_payment_deeplink(amount, order_code, order.get("merchant_id"))
     except Exception:
         # Fallback SVG
         svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
