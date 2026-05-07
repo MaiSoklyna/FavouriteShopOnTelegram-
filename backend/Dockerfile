@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# API-only mode (default)
+# Combined mode: FastAPI + Telegram bot in one process.
+# Railway injects $PORT at runtime; fall back to 8000 for local docker run.
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD API_PORT=${PORT:-8000} python run.py
