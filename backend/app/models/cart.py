@@ -1,6 +1,10 @@
-from pydantic import BaseModel
-from typing import Optional, List
+"""Cart schemas."""
+
+from __future__ import annotations
+
 from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 
 class SelectedVariant(BaseModel):
@@ -12,12 +16,12 @@ class SelectedVariant(BaseModel):
 
 class CartItemAdd(BaseModel):
     product_id: int
-    quantity: int = 1
-    selected_variants: Optional[List[SelectedVariant]] = []
+    quantity: int = Field(1, ge=1, le=99)
+    selected_variants: list[SelectedVariant] = []
 
 
 class CartItemUpdate(BaseModel):
-    quantity: int
+    quantity: int = Field(..., ge=0, le=99)
 
 
 class CartItemResponse(BaseModel):
@@ -25,17 +29,17 @@ class CartItemResponse(BaseModel):
     cart_id: int
     product_id: int
     quantity: int
-    selected_variants: Optional[list] = None
+    selected_variants: list | None = None
     unit_price: float
     line_total: float
-    product_name: Optional[str] = None
-    icon_emoji: Optional[str] = None
-    merchant_name: Optional[str] = None
-    primary_image: Optional[str] = None
-    created_at: Optional[datetime] = None
+    product_name: str | None = None
+    icon_emoji: str | None = None
+    merchant_name: str | None = None
+    primary_image: str | None = None
+    created_at: datetime | None = None
 
 
 class CartSummary(BaseModel):
     item_count: int
     subtotal: float
-    items: List[CartItemResponse] = []
+    items: list[CartItemResponse] = []

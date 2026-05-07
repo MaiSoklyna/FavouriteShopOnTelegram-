@@ -1,90 +1,34 @@
-from pydantic import BaseModel
-from typing import Optional
+"""User (customer) schemas — end-users who shop via Telegram Mini App."""
+
+from __future__ import annotations
+
 from datetime import datetime
 
-
-class UserRegister(BaseModel):
-    username: str
-    email: Optional[str] = None
-    password: str
-    phone_number: Optional[str] = None
-    telegram_id: Optional[int] = None
-
-
-class UserLogin(BaseModel):
-    username: str
-    password: str
+from pydantic import BaseModel, Field
 
 
 class ProfileUpdate(BaseModel):
-    phone_number: Optional[str] = None
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    delivery_address: Optional[str] = None
-    delivery_province: Optional[str] = None
-    bio: Optional[str] = None
+    """Fields a user can update on their own profile."""
 
-
-class TelegramAuth(BaseModel):
-    telegram_id: int
-    username: Optional[str] = None
-    first_name: str
-    last_name: Optional[str] = None
-    language: Optional[str] = "en"
-
-
-class UserUpdate(BaseModel):
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    address: Optional[str] = None
-    language: Optional[str] = None
+    phone_number: str | None = Field(None, max_length=20)
+    first_name: str | None = Field(None, max_length=100)
+    last_name: str | None = Field(None, max_length=100)
+    delivery_address: str | None = Field(None, max_length=500)
+    delivery_province: str | None = Field(None, max_length=100)
+    bio: str | None = Field(None, max_length=500)
 
 
 class UserResponse(BaseModel):
+    """Public user profile returned by API."""
+
     id: int
     telegram_id: int
-    username: Optional[str] = None
+    username: str | None = None
     first_name: str
-    last_name: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    language: str
-    address: Optional[str] = None
-    is_active: bool
-    created_at: Optional[datetime] = None
-
-
-# ── Admin login schemas ────────────────────────────────────────────
-
-class AdminLogin(BaseModel):
-    email: str
-    password: str
-    role: str = "merchant"  # "merchant" | "super_admin"
-
-
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: Optional[str] = None
-    expires_in: int = 3600
-    token_type: str = "bearer"
-    user: dict
-
-
-class MerchantAdminResponse(BaseModel):
-    id: int
-    merchant_id: int
-    full_name: str
-    email: str
-    role: str
-    is_active: bool
-    last_login: Optional[datetime] = None
-    created_at: Optional[datetime] = None
-
-
-class SuperAdminResponse(BaseModel):
-    id: int
-    full_name: str
-    email: str
-    is_active: bool
-    last_login: Optional[datetime] = None
-    created_at: Optional[datetime] = None
+    last_name: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    language: str = "en"
+    address: str | None = None
+    is_active: bool = True
+    created_at: datetime | None = None

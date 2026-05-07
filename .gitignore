@@ -5,14 +5,15 @@ __pycache__/
 *.pyc
 
 # Build output
-dashboard/.next/
-miniapp/dist/
+.next/
+dist/
+*.tsbuildinfo
 
-# Environment
+# Environment — block ALL .env files globally except .env.example
 .env
-.env.local
-backend/.env
-dashboard/.env.local
+.env.*
+!.env.example
+*.env.local
 
 # Vercel
 .vercel/
@@ -35,6 +36,9 @@ backend/uploads/
 
 # Supabase temp
 supabase/.temp/
+
+# Backup files from refactoring
+*.bak
 
 # Misc
 skills-lock.json

@@ -1,0 +1,2134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EcomerceBot v2 — Design Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:root {
+  --primary:        #1E6BFF;
+  --primary-dark:   #1751C4;
+  --primary-tint:   #E8F0FF;
+  --black:          #0B0B0F;
+  --text:           #4A4E5A;
+  --muted:          #8A8F9C;
+  --divider:        #ECEEF3;
+  --surface:        #FFFFFF;
+  --bg:             #F7F8FB;
+  --success:        #16A34A;
+  --warning:        #F59E0B;
+  --error:          #EF4444;
+  --shadow:         0 8px 24px rgba(30,107,255,0.08);
+  --shadow-pressed: inset 0 2px 4px rgba(0,0,0,0.06);
+
+  --r-input:  12px;
+  --r-card:   16px;
+  --r-sheet:  24px;
+  --r-pill:   999px;
+
+  --font: 'Inter', sans-serif;
+}
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #1a1a2e;
+  font-family: var(--font);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+/* ============================================================
+   PHONE SHELL
+   ============================================================ */
+.phone-shell {
+  position: relative;
+  width: 393px;
+  height: 852px;
+  background: #111;
+  border-radius: 50px;
+  box-shadow: 0 0 0 2px #333, 0 0 0 5px #222, 0 40px 80px rgba(0,0,0,0.6);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.phone-screen {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  border-radius: 48px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+/* Dynamic Island */
+.dynamic-island {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 34px;
+  background: #000;
+  border-radius: 20px;
+  z-index: 999;
+}
+/* Status bar */
+.status-bar {
+  height: 54px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 28px 8px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  background: transparent;
+}
+.status-time { font-size: 15px; font-weight: 600; color: var(--black); }
+.status-icons { display: flex; gap: 6px; align-items: center; }
+.status-icons svg { width: 16px; height: 16px; }
+
+/* ============================================================
+   SCREEN SYSTEM
+   ============================================================ */
+.screen {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  background: var(--bg);
+}
+.screen.active { display: flex; }
+
+.scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+.scroll-area::-webkit-scrollbar { display: none; }
+
+/* ============================================================
+   BOTTOM TAB BAR
+   ============================================================ */
+.tab-bar {
+  height: 72px;
+  background: var(--surface);
+  border-top: 1px solid var(--divider);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 8px 8px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 100;
+}
+.tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  flex: 1;
+  padding: 8px 0 0;
+  transition: all .15s;
+}
+.tab-item svg { width: 22px; height: 22px; }
+.tab-item span { font-size: 10px; font-weight: 500; color: var(--muted); }
+.tab-item.active span { color: var(--primary); }
+.tab-item.active svg { stroke: var(--primary); }
+.tab-item svg { stroke: var(--muted); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.tab-bot-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  cursor: pointer;
+  margin-top: -16px;
+}
+.tab-bot {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 20px rgba(30,107,255,0.4);
+  transition: transform .15s;
+}
+.tab-bot:active { transform: scale(.93); }
+.tab-bot svg { width: 24px; height: 24px; stroke: white; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tab-bot-wrap span { font-size: 10px; color: var(--primary); font-weight: 600; margin-top: 4px; }
+
+.cart-badge {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  cursor: pointer;
+  padding: 8px 0 0;
+}
+.cart-badge .badge {
+  position: absolute;
+  top: 5px;
+  right: 18px;
+  width: 16px;
+  height: 16px;
+  background: var(--error);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: white;
+  font-weight: 700;
+  border: 2px solid white;
+}
+.cart-badge svg { width: 22px; height: 22px; stroke: var(--muted); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.cart-badge span { font-size: 10px; font-weight: 500; color: var(--muted); }
+
+/* ============================================================
+   TOP APP BAR
+   ============================================================ */
+.top-bar {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--divider);
+  flex-shrink: 0;
+}
+.top-bar-title { font-size: 17px; font-weight: 600; color: var(--black); flex: 1; }
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: background .15s;
+}
+.icon-btn:active { background: var(--bg); }
+.icon-btn svg { width: 20px; height: 20px; stroke: var(--black); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ============================================================
+   TYPOGRAPHY HELPERS
+   ============================================================ */
+.display { font-size: 32px; line-height: 40px; font-weight: 700; }
+.h1      { font-size: 24px; line-height: 32px; font-weight: 700; }
+.h2      { font-size: 20px; line-height: 28px; font-weight: 600; }
+.h3      { font-size: 17px; line-height: 24px; font-weight: 600; }
+.body    { font-size: 15px; line-height: 22px; font-weight: 400; }
+.label   { font-size: 13px; line-height: 18px; font-weight: 500; }
+.caption { font-size: 12px; line-height: 16px; font-weight: 400; }
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font);
+  font-weight: 600;
+  border-radius: var(--r-input);
+  transition: all .15s;
+  white-space: nowrap;
+}
+.btn-lg { height: 52px; padding: 0 24px; font-size: 15px; }
+.btn-md { height: 44px; padding: 0 20px; font-size: 14px; }
+.btn-sm { height: 36px; padding: 0 16px; font-size: 13px; }
+.btn-primary { background: var(--primary); color: white; box-shadow: 0 4px 12px rgba(30,107,255,0.25); }
+.btn-primary:active { background: var(--primary-dark); transform: scale(.97); }
+.btn-secondary { background: transparent; color: var(--black); border: 1.5px solid var(--black); }
+.btn-secondary:active { background: var(--bg); }
+.btn-ghost { background: transparent; color: var(--primary); }
+.btn-ghost:active { background: var(--primary-tint); }
+.btn-full { width: 100%; border-radius: var(--r-input); }
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+.card {
+  background: var(--surface);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+/* Product card vertical */
+.product-card {
+  width: 168px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform .15s;
+}
+.product-card:active { transform: scale(.97); }
+.product-card-img {
+  width: 168px;
+  height: 168px;
+  background: var(--primary-tint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.product-card-img img { width: 100%; height: 100%; object-fit: cover; }
+.ai-tag {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: var(--primary);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.discount-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--error);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+}
+.product-card-body { padding: 10px 12px 12px; }
+.product-name { font-size: 13px; font-weight: 500; color: var(--black); line-height: 18px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.product-price { font-size: 15px; font-weight: 700; color: var(--primary); margin-top: 4px; }
+.product-price-orig { font-size: 12px; color: var(--muted); text-decoration: line-through; margin-left: 4px; }
+.stars { display: flex; gap: 1px; margin-top: 4px; }
+.star { color: var(--warning); font-size: 11px; }
+
+/* ============================================================
+   SECTION HEADER
+   ============================================================ */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 16px 12px;
+}
+.section-title { font-size: 17px; font-weight: 700; color: var(--black); display: flex; align-items: center; gap: 6px; }
+.see-all { font-size: 13px; font-weight: 600; color: var(--primary); cursor: pointer; }
+
+/* ============================================================
+   HORIZONTAL SCROLL ROW
+   ============================================================ */
+.h-scroll {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 0 16px 4px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.h-scroll::-webkit-scrollbar { display: none; }
+.h-scroll > * { scroll-snap-align: start; }
+
+/* ============================================================
+   HOME SCREEN
+   ============================================================ */
+
+/* Home top bar */
+.home-top-bar {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #a78bfa, #818cf8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+}
+.home-greeting { flex: 1; }
+.home-greeting .name { font-size: 17px; font-weight: 600; color: var(--black); }
+.home-greeting .sub { font-size: 12px; color: var(--muted); }
+.bell-btn { position: relative; }
+.notif-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  background: var(--error);
+  border-radius: 50%;
+  border: 1.5px solid white;
+}
+
+/* Search bar */
+.search-bar {
+  height: 52px;
+  margin: 10px 16px;
+  background: var(--bg);
+  border-radius: var(--r-input);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 10px;
+  border: 1.5px solid var(--divider);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.search-bar svg { width: 18px; height: 18px; stroke: var(--muted); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+.search-placeholder { flex: 1; font-size: 14px; color: var(--muted); }
+.bot-trigger {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform .15s;
+  flex-shrink: 0;
+}
+.bot-trigger:active { transform: scale(.9); }
+.bot-trigger svg { width: 16px; height: 16px; stroke: white; fill: none; stroke-width: 2; }
+
+/* Hero banner */
+.hero-carousel {
+  margin: 0 16px;
+  border-radius: var(--r-card);
+  overflow: hidden;
+  height: 180px;
+  position: relative;
+  flex-shrink: 0;
+}
+.hero-slide {
+  width: 100%;
+  height: 180px;
+  background: linear-gradient(135deg, #1E6BFF, #1751C4);
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+}
+.hero-slide::after {
+  content: '';
+  position: absolute;
+  right: -20px;
+  top: -20px;
+  width: 180px;
+  height: 180px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 50%;
+}
+.hero-slide::before {
+  content: '';
+  position: absolute;
+  right: 40px;
+  bottom: -40px;
+  width: 120px;
+  height: 120px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 50%;
+}
+.hero-tag { background: rgba(255,255,255,0.2); color: white; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: var(--r-pill); display: inline-block; margin-bottom: 6px; width: fit-content; }
+.hero-title { font-size: 22px; font-weight: 700; color: white; line-height: 28px; }
+.hero-sub { font-size: 12px; color: rgba(255,255,255,.75); margin-top: 3px; }
+.hero-cta {
+  background: white;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 18px;
+  border-radius: var(--r-pill);
+  display: inline-block;
+  cursor: pointer;
+  width: fit-content;
+}
+.hero-dots { display: flex; gap: 5px; align-items: center; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.4); }
+.dot.active { width: 18px; border-radius: 3px; background: white; }
+
+/* Category pills */
+.categories {
+  padding: 4px 16px 0;
+  flex-shrink: 0;
+}
+.categories-row {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding: 8px 0;
+}
+.categories-row::-webkit-scrollbar { display: none; }
+.cat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.cat-circle {
+  width: 56px;
+  height: 56px;
+  background: var(--primary-tint);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  transition: transform .15s;
+}
+.cat-item:active .cat-circle { transform: scale(.92); }
+.cat-label { font-size: 11px; font-weight: 500; color: var(--text); text-align: center; }
+
+/* Flash deals countdown */
+.countdown-pill {
+  background: var(--black);
+  color: white;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mini product card for flash deals */
+.mini-card {
+  width: 140px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  cursor: pointer;
+}
+.mini-card-img {
+  width: 140px;
+  height: 130px;
+  background: var(--primary-tint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  position: relative;
+}
+.mini-card-body { padding: 8px 10px 10px; }
+.mini-card-name { font-size: 12px; font-weight: 500; color: var(--black); line-height: 16px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mini-price-row { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.mini-price { font-size: 14px; font-weight: 700; color: var(--error); }
+.mini-price-orig { font-size: 11px; color: var(--muted); text-decoration: line-through; }
+
+/* 2-col grid */
+.grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 0 16px;
+}
+.grid-product {
+  background: var(--surface);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform .15s;
+}
+.grid-product:active { transform: scale(.97); }
+.grid-img {
+  width: 100%;
+  height: 140px;
+  background: var(--primary-tint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  position: relative;
+}
+.grid-body { padding: 10px; }
+
+/* Social proof */
+.social-card {
+  margin: 16px;
+  background: var(--primary-tint);
+  border-radius: var(--r-card);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+}
+.avatar-stack { display: flex; }
+.avatar-stack .av {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid white;
+  margin-left: -8px;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+.avatar-stack .av:first-child { margin-left: 0; }
+
+/* Brands row */
+.brands-row {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px;
+  overflow-x: auto;
+}
+.brands-row::-webkit-scrollbar { display: none; }
+.brand-pill {
+  height: 40px;
+  padding: 0 16px;
+  background: var(--surface);
+  border: 1.5px solid var(--divider);
+  border-radius: var(--r-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   CHAT SCREEN
+   ============================================================ */
+.chat-top-bar {
+  height: 64px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--divider);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.bot-avatar-lg {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.bot-avatar-lg svg { width: 20px; height: 20px; stroke: white; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.chat-title-group { flex: 1; }
+.chat-name { font-size: 15px; font-weight: 600; color: var(--black); }
+.online-dot { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--success); margin-top: 1px; }
+.online-dot::before { content: ''; width: 7px; height: 7px; background: var(--success); border-radius: 50%; }
+
+.chat-area {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.chat-area::-webkit-scrollbar { display: none; }
+
+.msg-row { display: flex; align-items: flex-end; gap: 8px; }
+.msg-row.user { flex-direction: row-reverse; }
+
+.bot-av {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.bot-av svg { width: 14px; height: 14px; stroke: white; fill: none; stroke-width: 2; }
+
+.bubble {
+  max-width: 260px;
+  padding: 11px 14px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--black);
+}
+.bubble.bot {
+  background: var(--surface);
+  border: 1.5px solid var(--divider);
+  border-radius: 16px 16px 16px 4px;
+}
+.bubble.user {
+  background: var(--primary);
+  color: white;
+  border-radius: 16px 16px 4px 16px;
+}
+.msg-time { font-size: 10px; color: var(--muted); }
+
+/* Chat product carousel */
+.chat-products {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 2px 0 4px;
+  margin-top: 4px;
+}
+.chat-products::-webkit-scrollbar { display: none; }
+.chat-prod-card {
+  width: 130px;
+  flex-shrink: 0;
+  background: var(--bg);
+  border-radius: var(--r-input);
+  border: 1px solid var(--divider);
+  overflow: hidden;
+  cursor: pointer;
+}
+.chat-prod-img {
+  width: 130px;
+  height: 110px;
+  background: var(--primary-tint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+}
+.chat-prod-body { padding: 8px; }
+.chat-prod-name { font-size: 11px; font-weight: 500; color: var(--black); line-height: 15px; }
+.chat-prod-price { font-size: 13px; font-weight: 700; color: var(--primary); margin-top: 2px; }
+.chat-prod-btn {
+  width: 100%;
+  margin-top: 6px;
+  padding: 5px 0;
+  background: var(--primary-tint);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Quick replies */
+.quick-replies {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 0 16px 8px;
+  flex-shrink: 0;
+  background: var(--bg);
+}
+.quick-replies::-webkit-scrollbar { display: none; }
+.qr-chip {
+  height: 34px;
+  padding: 0 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--primary);
+  border-radius: var(--r-pill);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--primary);
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  transition: all .15s;
+}
+.qr-chip:active { background: var(--primary-tint); }
+
+/* Chat input */
+.chat-input-bar {
+  height: 64px;
+  background: var(--surface);
+  border-top: 1px solid var(--divider);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.chat-input-bar svg { width: 20px; height: 20px; stroke: var(--muted); fill: none; stroke-width: 2; flex-shrink: 0; }
+.chat-field {
+  flex: 1;
+  height: 40px;
+  background: var(--bg);
+  border: 1.5px solid var(--divider);
+  border-radius: var(--r-pill);
+  padding: 0 16px;
+  font-size: 14px;
+  color: var(--black);
+  font-family: var(--font);
+  outline: none;
+}
+.send-btn {
+  width: 36px;
+  height: 36px;
+  background: var(--primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.send-btn svg { width: 16px; height: 16px; stroke: white; fill: none; stroke-width: 2.5; }
+
+/* Typing indicator */
+.typing-dots {
+  display: flex;
+  gap: 4px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--divider);
+  border-radius: 16px 16px 16px 4px;
+  width: fit-content;
+}
+.typing-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--muted);
+  border-radius: 50%;
+  animation: bounce .9s infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: .15s; }
+.typing-dot:nth-child(3) { animation-delay: .3s; }
+@keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-5px); } }
+
+/* ============================================================
+   PRODUCT DETAIL SCREEN
+   ============================================================ */
+.product-image-area {
+  width: 100%;
+  height: 340px;
+  background: var(--primary-tint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 100px;
+  position: relative;
+  flex-shrink: 0;
+}
+.img-dots { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 5px; }
+.color-swatches {
+  display: flex;
+  gap: 10px;
+  padding: 0 16px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color .15s;
+}
+.swatch.active { border-color: var(--primary); outline: 2px solid var(--primary); outline-offset: 2px; }
+.size-pills { display: flex; gap: 8px; padding: 0 16px; margin-top: 4px; flex-wrap: wrap; }
+.size-pill {
+  height: 36px;
+  padding: 0 16px;
+  background: var(--surface);
+  border: 1.5px solid var(--divider);
+  border-radius: var(--r-pill);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.size-pill.active { background: var(--primary); color: white; border-color: var(--primary); }
+.detail-tabs { display: flex; border-bottom: 1px solid var(--divider); margin-top: 16px; padding: 0 16px; }
+.dtab { flex: 1; text-align: center; padding: 10px 0; font-size: 14px; font-weight: 500; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.dtab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+.qty-stepper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.stepper-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1.5px solid var(--divider);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--black);
+  font-weight: 300;
+  transition: all .15s;
+}
+.stepper-btn:active { background: var(--bg); }
+.qty-val { font-size: 16px; font-weight: 600; color: var(--black); min-width: 24px; text-align: center; }
+.sticky-bottom {
+  height: 88px;
+  background: var(--surface);
+  border-top: 1px solid var(--divider);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   CART SCREEN
+   ============================================================ */
+.cart-item {
+  background: var(--surface);
+  margin: 8px 16px;
+  border-radius: var(--r-card);
+  padding: 14px;
+  display: flex;
+  gap: 12px;
+  box-shadow: var(--shadow);
+}
+.cart-img {
+  width: 72px;
+  height: 72px;
+  background: var(--primary-tint);
+  border-radius: var(--r-input);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  flex-shrink: 0;
+}
+.cart-info { flex: 1; }
+.cart-name { font-size: 14px; font-weight: 500; color: var(--black); }
+.cart-variant { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.cart-price { font-size: 16px; font-weight: 700; color: var(--primary); margin-top: 4px; }
+.cart-actions { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; }
+.delete-btn { color: var(--error); font-size: 11px; font-weight: 500; cursor: pointer; }
+
+.promo-box {
+  margin: 8px 16px;
+  background: var(--surface);
+  border-radius: var(--r-card);
+  padding: 14px;
+  display: flex;
+  gap: 10px;
+  box-shadow: var(--shadow);
+}
+.promo-input {
+  flex: 1;
+  height: 40px;
+  background: var(--bg);
+  border: 1.5px solid var(--divider);
+  border-radius: var(--r-input);
+  padding: 0 14px;
+  font-size: 14px;
+  font-family: var(--font);
+  color: var(--black);
+  outline: none;
+}
+
+.summary-card {
+  margin: 8px 16px 16px;
+  background: var(--surface);
+  border-radius: var(--r-card);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+.summary-row.divider { border-top: 1px solid var(--divider); margin-top: 4px; padding-top: 12px; }
+.summary-label { font-size: 14px; color: var(--text); }
+.summary-val { font-size: 14px; font-weight: 500; color: var(--black); }
+.summary-val.primary { color: var(--primary); }
+.summary-val.discount { color: var(--success); }
+.summary-total { font-size: 17px; font-weight: 700; color: var(--black); }
+
+/* ============================================================
+   ORDER SUCCESS SCREEN
+   ============================================================ */
+.success-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  text-align: center;
+  gap: 16px;
+}
+.success-icon {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: #DCFCE7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  animation: pulse-success 2s infinite;
+}
+@keyframes pulse-success {
+  0%,100% { box-shadow: 0 0 0 0 rgba(22,163,74,.3); }
+  50% { box-shadow: 0 0 0 16px rgba(22,163,74,0); }
+}
+.success-icon svg { width: 44px; height: 44px; stroke: var(--success); fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.order-num { font-size: 13px; color: var(--muted); background: var(--bg); padding: 6px 16px; border-radius: var(--r-pill); }
+
+/* ============================================================
+   PROFILE SCREEN
+   ============================================================ */
+.profile-header {
+  background: var(--surface);
+  padding: 24px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--divider);
+}
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #a78bfa, #818cf8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
+  color: white;
+}
+.profile-stats {
+  display: flex;
+  gap: 8px;
+  padding: 16px;
+}
+.stat-pill {
+  flex: 1;
+  background: var(--surface);
+  border-radius: var(--r-input);
+  padding: 12px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.stat-num { font-size: 18px; font-weight: 700; color: var(--black); }
+.stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.menu-list { background: var(--surface); }
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 15px 16px;
+  gap: 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--divider);
+  transition: background .15s;
+}
+.menu-item:active { background: var(--bg); }
+.menu-icon { width: 36px; height: 36px; background: var(--primary-tint); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.menu-icon svg { width: 18px; height: 18px; stroke: var(--primary); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.menu-text { flex: 1; font-size: 15px; font-weight: 500; color: var(--black); }
+.menu-chevron { color: var(--muted); font-size: 18px; }
+.menu-item.destructive .menu-text { color: var(--error); }
+.menu-item.destructive .menu-icon { background: #FEE2E2; }
+.menu-item.destructive .menu-icon svg { stroke: var(--error); }
+
+/* ============================================================
+   SCREEN PICKER (navigation)
+   ============================================================ */
+.screen-nav {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,.85);
+  backdrop-filter: blur(10px);
+  border-radius: var(--r-pill);
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  z-index: 9999;
+}
+.nav-chip {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,.6);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.nav-chip.active { background: var(--primary); color: white; }
+
+/* ============================================================
+   UTILITIES
+   ============================================================ */
+.p-16 { padding: 0 16px; }
+.mt-4 { margin-top: 4px; }
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.mb-16 { margin-bottom: 16px; }
+.pb-16 { padding-bottom: 16px; }
+.flex { display: flex; }
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.text-primary { color: var(--primary); }
+.text-muted { color: var(--muted); }
+.text-success { color: var(--success); }
+.text-error { color: var(--error); }
+.fw-700 { font-weight: 700; }
+
+/* ============================================================
+   SHIMMER / SKELETON
+   ============================================================ */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* Rating row helper */
+.rating-row { display: flex; align-items: center; gap: 6px; }
+.rating-score { font-size: 14px; font-weight: 700; color: var(--black); }
+.rating-count { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- ====================================================
+     PHONE SHELL
+     ==================================================== -->
+<div class="phone-shell">
+  <div class="dynamic-island"></div>
+
+  <div class="phone-screen">
+
+    <!-- STATUS BAR (shared) -->
+    <div class="status-bar">
+      <span class="status-time">9:41</span>
+      <div class="status-icons">
+        <!-- Signal -->
+        <svg viewBox="0 0 17 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="7" width="3" height="5" rx="1" fill="#0B0B0F"/>
+          <rect x="4.5" y="5" width="3" height="7" rx="1" fill="#0B0B0F"/>
+          <rect x="9" y="2.5" width="3" height="9.5" rx="1" fill="#0B0B0F"/>
+          <rect x="13.5" y="0" width="3" height="12" rx="1" fill="#0B0B0F"/>
+        </svg>
+        <!-- WiFi -->
+        <svg viewBox="0 0 16 12" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="#0B0B0F" stroke-width="1.5" stroke-linecap="round">
+          <path d="M1 4.5C3.8 1.8 8 1 11 2.5"/>
+          <path d="M14.5 5C12 2 4.5 1.5 1.5 5"/>
+          <path d="M3.5 7.5C5 6 10.5 5.5 12.5 7.5"/>
+          <circle cx="8" cy="11" r="1" fill="#0B0B0F" stroke="none"/>
+        </svg>
+        <!-- Battery -->
+        <svg viewBox="0 0 25 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="#0B0B0F"/>
+          <rect x="2" y="2" width="16" height="8" rx="2" fill="#0B0B0F"/>
+          <path d="M23 4v4a2 2 0 000-4z" fill="#0B0B0F"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ==================== HOME SCREEN ==================== -->
+    <div class="screen active" id="screen-home">
+
+      <!-- Top Bar -->
+      <div class="home-top-bar">
+        <div class="avatar">A</div>
+        <div class="home-greeting">
+          <div class="name">Hi, Alex 👋</div>
+          <div class="sub">Find your next favorite</div>
+        </div>
+        <button class="icon-btn bell-btn" onclick="goTo('notifications')">
+          <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+          <div class="notif-dot"></div>
+        </button>
+      </div>
+
+      <!-- Search bar -->
+      <div class="search-bar" onclick="goTo('chat')">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <span class="search-placeholder">Search products, brands…</span>
+        <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 013 3v7a3 3 0 01-6 0V5a3 3 0 013-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+        <div class="bot-trigger" onclick="event.stopPropagation();goTo('chat')">
+          <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M12 2a4 4 0 014 4v5H8V6a4 4 0 014-4z"/><circle cx="9" cy="16" r="1" fill="white" stroke="none"/><circle cx="15" cy="16" r="1" fill="white" stroke="none"/></svg>
+        </div>
+      </div>
+
+      <div class="scroll-area">
+
+        <!-- Hero Carousel -->
+        <div class="hero-carousel">
+          <div class="hero-slide">
+            <div>
+              <div class="hero-tag">⚡ Limited time</div>
+              <div class="hero-title">Flash Sale —<br>up to 50% off</div>
+              <div class="hero-sub">Ends in 02:14:37</div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-end">
+              <div class="hero-cta" onclick="goTo('product')">Shop now →</div>
+              <div class="hero-dots">
+                <div class="dot active"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Categories -->
+        <div class="section-header">
+          <span class="section-title">Categories</span>
+          <span class="see-all">See all</span>
+        </div>
+        <div class="categories-row" style="padding:0 16px 8px">
+          <div class="cat-item"><div class="cat-circle">👗</div><div class="cat-label">Fashion</div></div>
+          <div class="cat-item"><div class="cat-circle">📱</div><div class="cat-label">Electronics</div></div>
+          <div class="cat-item"><div class="cat-circle">💄</div><div class="cat-label">Beauty</div></div>
+          <div class="cat-item"><div class="cat-circle">🏠</div><div class="cat-label">Home</div></div>
+          <div class="cat-item"><div class="cat-circle">⚽</div><div class="cat-label">Sports</div></div>
+          <div class="cat-item"><div class="cat-circle">🛒</div><div class="cat-label">Grocery</div></div>
+          <div class="cat-item"><div class="cat-circle">🧸</div><div class="cat-label">Toys</div></div>
+        </div>
+
+        <!-- Flash Deals -->
+        <div class="section-header">
+          <span class="section-title">⚡ Flash Deals</span>
+          <span class="countdown-pill">02:14:37</span>
+        </div>
+        <div class="h-scroll">
+          <div class="mini-card" onclick="goTo('product')">
+            <div class="mini-card-img">📱<div class="discount-badge" style="position:absolute;top:8px;right:8px">-40%</div></div>
+            <div class="mini-card-body">
+              <div class="mini-card-name">Wireless Pro Earbuds</div>
+              <div class="mini-price-row"><span class="mini-price">$29</span><span class="mini-price-orig">$49</span></div>
+            </div>
+          </div>
+          <div class="mini-card" onclick="goTo('product')">
+            <div class="mini-card-img">⌚<div class="discount-badge" style="position:absolute;top:8px;right:8px">-35%</div></div>
+            <div class="mini-card-body">
+              <div class="mini-card-name">Smart Watch Series 5</div>
+              <div class="mini-price-row"><span class="mini-price">$119</span><span class="mini-price-orig">$185</span></div>
+            </div>
+          </div>
+          <div class="mini-card" onclick="goTo('product')">
+            <div class="mini-card-img">👟<div class="discount-badge" style="position:absolute;top:8px;right:8px">-50%</div></div>
+            <div class="mini-card-body">
+              <div class="mini-card-name">Running Sneakers Elite</div>
+              <div class="mini-price-row"><span class="mini-price">$54</span><span class="mini-price-orig">$108</span></div>
+            </div>
+          </div>
+          <div class="mini-card" onclick="goTo('product')">
+            <div class="mini-card-img">🎧<div class="discount-badge" style="position:absolute;top:8px;right:8px">-25%</div></div>
+            <div class="mini-card-body">
+              <div class="mini-card-name">Noise-Cancel Headphones</div>
+              <div class="mini-price-row"><span class="mini-price">$74</span><span class="mini-price-orig">$99</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recommended by EcomerceBot -->
+        <div class="section-header" style="margin-top:8px">
+          <span class="section-title">✨ Bot Picks</span>
+          <span class="see-all" onclick="goTo('chat')">Ask bot</span>
+        </div>
+        <div class="grid-2col">
+          <div class="grid-product" onclick="goTo('product')">
+            <div class="grid-img">💻<div class="ai-tag" style="position:absolute;top:8px;left:8px">✦ AI pick</div></div>
+            <div class="grid-body">
+              <div class="product-name">MacBook Air M3 Sleeve</div>
+              <div class="product-price" style="font-size:14px">$24 <span class="product-price-orig">$38</span></div>
+              <div class="stars">⭐⭐⭐⭐⭐ <span style="font-size:10px;color:var(--muted);margin-left:2px">(342)</span></div>
+            </div>
+          </div>
+          <div class="grid-product" onclick="goTo('product')">
+            <div class="grid-img">🎮<div class="ai-tag" style="position:absolute;top:8px;left:8px">✦ AI pick</div></div>
+            <div class="grid-body">
+              <div class="product-name">Controller Stand RGB</div>
+              <div class="product-price" style="font-size:14px">$18 <span class="product-price-orig">$30</span></div>
+              <div class="stars">⭐⭐⭐⭐ <span style="font-size:10px;color:var(--muted);margin-left:2px">(128)</span></div>
+            </div>
+          </div>
+          <div class="grid-product" onclick="goTo('product')">
+            <div class="grid-img">🎒<div class="ai-tag" style="position:absolute;top:8px;left:8px">✦ AI pick</div></div>
+            <div class="grid-body">
+              <div class="product-name">Urban Backpack 30L</div>
+              <div class="product-price" style="font-size:14px">$65 <span class="product-price-orig">$89</span></div>
+              <div class="stars">⭐⭐⭐⭐⭐ <span style="font-size:10px;color:var(--muted);margin-left:2px">(519)</span></div>
+            </div>
+          </div>
+          <div class="grid-product" onclick="goTo('product')">
+            <div class="grid-img">🕯️<div class="ai-tag" style="position:absolute;top:8px;left:8px">✦ AI pick</div></div>
+            <div class="grid-body">
+              <div class="product-name">Scented Soy Candle Set</div>
+              <div class="product-price" style="font-size:14px">$22 <span class="product-price-orig">$34</span></div>
+              <div class="stars">⭐⭐⭐⭐⭐ <span style="font-size:10px;color:var(--muted);margin-left:2px">(211)</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trending Now -->
+        <div class="section-header" style="margin-top:8px">
+          <span class="section-title">🔥 Trending Now</span>
+          <span class="see-all">See all</span>
+        </div>
+        <div class="h-scroll">
+          <div class="product-card" onclick="goTo('product')" style="width:200px">
+            <div class="product-card-img" style="width:200px;height:160px;font-size:56px">📸
+              <div style="position:absolute;inset:0;background:rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center">
+                <div style="width:44px;height:44px;background:rgba(255,255,255,.9);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px">▶️</div>
+              </div>
+            </div>
+            <div class="product-card-body">
+              <div class="product-name">Polaroid OneStep+</div>
+              <div class="product-price">$99 <span class="product-price-orig">$129</span></div>
+            </div>
+          </div>
+          <div class="product-card" onclick="goTo('product')" style="width:200px">
+            <div class="product-card-img" style="width:200px;height:160px;font-size:56px">🎸
+              <div style="position:absolute;inset:0;background:rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center">
+                <div style="width:44px;height:44px;background:rgba(255,255,255,.9);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px">▶️</div>
+              </div>
+            </div>
+            <div class="product-card-body">
+              <div class="product-name">Fender Mini Amp</div>
+              <div class="product-price">$79 <span class="product-price-orig">$110</span></div>
+            </div>
+          </div>
+          <div class="product-card" onclick="goTo('product')" style="width:200px">
+            <div class="product-card-img" style="width:200px;height:160px;font-size:56px">🏋️
+              <div style="position:absolute;inset:0;background:rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center">
+                <div style="width:44px;height:44px;background:rgba(255,255,255,.9);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px">▶️</div>
+              </div>
+            </div>
+            <div class="product-card-body">
+              <div class="product-name">Resistance Band Pro</div>
+              <div class="product-price">$34 <span class="product-price-orig">$55</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Brands -->
+        <div class="section-header" style="margin-top:8px">
+          <span class="section-title">Top Brands</span>
+        </div>
+        <div class="brands-row" style="padding-bottom:4px">
+          <div class="brand-pill">NIKE</div>
+          <div class="brand-pill">APPLE</div>
+          <div class="brand-pill">SONY</div>
+          <div class="brand-pill">ZARA</div>
+          <div class="brand-pill">SAMSUNG</div>
+        </div>
+
+        <!-- Social Proof -->
+        <div class="social-card">
+          <div class="avatar-stack">
+            <div class="av" style="background:#818cf8">J</div>
+            <div class="av" style="background:#f472b6">S</div>
+            <div class="av" style="background:#34d399">M</div>
+            <div class="av" style="background:#fb923c">K</div>
+            <div class="av" style="background:#60a5fa">R</div>
+          </div>
+          <div style="flex:1">
+            <div class="h3" style="font-size:14px">Join 2M+ happy shoppers</div>
+            <div class="caption text-muted">Trusted worldwide</div>
+          </div>
+          <span style="color:var(--primary);font-size:20px">→</span>
+        </div>
+
+        <div style="height:16px"></div>
+      </div><!-- /scroll-area -->
+
+      <!-- Bottom Tab Bar -->
+      <div class="tab-bar">
+        <div class="tab-item active" onclick="goTo('home')">
+          <svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
+          <span>Home</span>
+        </div>
+        <div class="tab-item" onclick="goTo('home')">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Categories</span>
+        </div>
+        <div class="tab-bot-wrap" onclick="goTo('chat')">
+          <div class="tab-bot">
+            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M12 2a4 4 0 014 4v5H8V6a4 4 0 014-4z"/><circle cx="9" cy="16" r="1" fill="white" stroke="none"/><circle cx="15" cy="16" r="1" fill="white" stroke="none"/></svg>
+          </div>
+          <span>Bot</span>
+        </div>
+        <div class="cart-badge" onclick="goTo('cart')">
+          <div class="badge">3</div>
+          <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+          <span>Cart</span>
+        </div>
+        <div class="tab-item" onclick="goTo('profile')">
+          <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span>Profile</span>
+        </div>
+      </div>
+    </div><!-- /screen-home -->
+
+    <!-- ==================== CHAT SCREEN ==================== -->
+    <div class="screen" id="screen-chat">
+      <div class="chat-top-bar">
+        <button class="icon-btn" onclick="goTo('home')">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="bot-avatar-lg">
+          <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M12 2a4 4 0 014 4v5H8V6a4 4 0 014-4z"/><circle cx="9" cy="16" r="1" fill="white" stroke="none"/><circle cx="15" cy="16" r="1" fill="white" stroke="none"/></svg>
+        </div>
+        <div class="chat-title-group">
+          <div class="chat-name">EcomerceBot</div>
+          <div class="online-dot">Online</div>
+        </div>
+        <button class="icon-btn">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+        </button>
+      </div>
+
+      <div class="chat-area" id="chatArea">
+        <!-- Bot greeting -->
+        <div class="msg-row">
+          <div class="bot-av"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M12 2a4 4 0 014 4v5H8V6a4 4 0 014-4z"/></svg></div>
+          <div>
+            <div class="bubble bot">
+              Hey Alex! 👋 I'm EcomerceBot — your personal shopping assistant. I can help you find deals, track orders, or discover products tailored just for you. What can I help you with today?
+            </div>
+            <div class="msg-time" style="margin-top:4px;padding-left:4px">9:41 AM</div>
+          </div>
+        </div>
+
+        <!-- User message -->
+        <div class="msg-row user">
+          <div>
+            <div class="bubble user">Show me the best wireless earbuds under $50</div>
+            <div class="msg-time" style="margin-top:4px;padding-right:4px;text-align:right">9:42 AM</div>
+          </div>
+        </div>
+
+        <!-- Bot with product cards -->
+        <div class="msg-row">
+          <div class="bot-av"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M12 2a4 4 0 014 4v5H8V6a4 4 0 014-4z"/></svg></div>
+          <div style="max-width:285px">
+            <div class="bubble bot" style="border-radius:16px 16px 4px 16px;max-width:100%">
+              Great choice! Here are my top picks for wireless earbuds under $50 ✨
+              <div class="chat-products">
+                <div class="chat-prod-card" onclick="goTo('product')">
+                  <div class="chat-prod-img">🎵</div>
+                  <div class="chat-prod-body">
+                    <div class="chat-prod-name">SoundCore Life P2</div>
+                    <div class="chat-prod-price">$29.99</div>
+                    <button class="chat-prod-btn">+ Add</button>
+                  </div>
+                </div>
+                <div class="chat-prod-card" onclick="goTo('product')">
+                  <div class="chat-prod-img">🎧</div>
+                  <div class="chat-prod-body">
+                    <div class="chat-prod-name">JLab Go Air Pop</div>
+                    <div class="chat-prod-price">$24.99</div>
+                    <button class="chat-prod-btn">+ Add</button>
+                  </div>
+                </div>
+                <div class="chat-prod-card" onclick="goTo('product')">
+                  <div class="chat-prod-img">📻</div>
+                  <div class="chat-prod-body">
+                    <div class="chat-prod-name">EarFun Air Lite</div>
+                    <div class="chat-prod-price">$39.99</div>
+                    <button class="chat-prod-btn">+ Add</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="msg-time" style="margin-top:4px;padding-left:4px">9:42 AM</div>
+          </div>
+        </div>
+
+        <!-- Typing indicator -->
+        <div class="msg-row" id="typingIndicator" style="display:none">
+          <div class="bot-av"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M12 2a4 4 0 014 4v5H8V6a4 4 0 014-4z"/></svg></div>
+          <div class="typing-dots">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick replies -->
+      <div class="quick-replies">
+        <div class="qr-chip" onclick="sendQuick(this,'Show me flash deals')">⚡ Show deals</div>
+        <div class="qr-chip" onclick="sendQuick(this,'Track my last order')">📦 Track order</div>
+        <div class="qr-chip" onclick="sendQuick(this,'I need help')">🙋 Help me</div>
+        <div class="qr-chip" onclick="sendQuick(this,'Best sellers today')">🔥 Best sellers</div>
+      </div>
+
+      <!-- Input bar -->
+      <div class="chat-input-bar">
+        <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+        <input class="chat-field" id="chatInput" type="text" placeholder="Type a message…" oninput="toggleSend()" onkeydown="if(event.key==='Enter')sendMsg()">
+        <svg viewBox="0 0 24 24" id="micIcon"><path d="M12 2a3 3 0 013 3v7a3 3 0 01-6 0V5a3 3 0 013-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+        <button class="send-btn" id="sendBtn" onclick="sendMsg()">
+          <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div><!-- /screen-chat -->
+
+    <!-- ==================== PRODUCT DETAIL SCREEN ==================== -->
+    <div class="screen" id="screen-product">
+      <!-- Top Bar -->
+      <div class="top-bar" style="background:transparent;border:none;position:absolute;top:54px;left:0;right:0;z-index:10">
+        <button class="icon-btn" style="background:white;box-shadow:0 2px 8px rgba(0,0,0,.1)" onclick="goBack()">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div style="flex:1"></div>
+        <button class="icon-btn" style="background:white;box-shadow:0 2px 8px rgba(0,0,0,.1)">
+          <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+        </button>
+        <button class="icon-btn" style="background:white;box-shadow:0 2px 8px rgba(0,0,0,.1)">
+          <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        </button>
+      </div>
+
+      <div class="scroll-area">
+        <!-- Product image -->
+        <div class="product-image-area">
+          📱
+          <div class="img-dots">
+            <div class="dot active" style="background:var(--black)"></div>
+            <div class="dot" style="background:rgba(0,0,0,.3)"></div>
+            <div class="dot" style="background:rgba(0,0,0,.3)"></div>
+          </div>
+        </div>
+
+        <!-- Product info -->
+        <div style="padding:16px">
+          <!-- Brand & Title -->
+          <div class="caption text-muted">APPLE</div>
+          <div class="h2 mt-4">AirPods Pro (2nd Gen) — USB-C</div>
+
+          <!-- Price row -->
+          <div style="display:flex;align-items:baseline;gap:10px;margin-top:8px">
+            <span style="font-size:26px;font-weight:700;color:var(--primary)">$179</span>
+            <span style="font-size:16px;color:var(--muted);text-decoration:line-through">$249</span>
+            <span style="background:var(--error);color:white;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px">-28%</span>
+          </div>
+
+          <!-- Rating -->
+          <div class="rating-row mt-8">
+            <span class="star">⭐</span><span class="star">⭐</span><span class="star">⭐</span><span class="star">⭐</span><span class="star">⭐</span>
+            <span class="rating-score">4.9</span>
+            <span class="rating-count">(2,341 reviews)</span>
+          </div>
+        </div>
+
+        <!-- Color swatches -->
+        <div style="padding:0 16px">
+          <div class="label">Color</div>
+          <div class="color-swatches mt-8">
+            <div class="swatch active" style="background:#f5f5f7"></div>
+            <div class="swatch" style="background:#1d1d1f"></div>
+            <div class="swatch" style="background:#1E6BFF"></div>
+            <div class="swatch" style="background:#ff9800"></div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="detail-tabs">
+          <div class="dtab active">Details</div>
+          <div class="dtab">Specs</div>
+          <div class="dtab">Reviews</div>
+        </div>
+
+        <!-- Description -->
+        <div style="padding:16px;color:var(--text);font-size:14px;line-height:22px">
+          Rebuilt from the ground up, AirPods Pro (2nd generation) deliver up to 2x more Active Noise Cancellation. The new H2 chip enables even more powerful computational audio. Personalized Spatial Audio immerses you in sound that's tailored to the unique shape of your ear.
+          <br><br>
+          <strong style="color:var(--black)">What's in the box:</strong><br>
+          AirPods Pro · MagSafe Charging Case with USB-C · Extra ear tips · Documentation
+        </div>
+
+        <!-- Quantity -->
+        <div style="padding:0 16px 16px;display:flex;align-items:center;justify-content:space-between">
+          <div class="label">Quantity</div>
+          <div class="qty-stepper">
+            <div class="stepper-btn" onclick="changeQty(-1)">−</div>
+            <div class="qty-val" id="qtyVal">1</div>
+            <div class="stepper-btn" onclick="changeQty(1)">+</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sticky bottom -->
+      <div class="sticky-bottom">
+        <button class="btn btn-secondary btn-lg" style="flex:1;border-radius:var(--r-input)">Add to cart</button>
+        <button class="btn btn-primary btn-lg" style="flex:1;border-radius:var(--r-input)" onclick="goTo('cart')">Buy now</button>
+      </div>
+    </div><!-- /screen-product -->
+
+    <!-- ==================== CART SCREEN ==================== -->
+    <div class="screen" id="screen-cart">
+      <div class="top-bar">
+        <button class="icon-btn" onclick="goBack()">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span class="top-bar-title">My Cart</span>
+        <span style="font-size:13px;color:var(--muted)">3 items</span>
+      </div>
+
+      <div class="scroll-area">
+        <!-- Cart items -->
+        <div style="height:8px"></div>
+        <div class="cart-item">
+          <div class="cart-img">📱</div>
+          <div class="cart-info">
+            <div class="cart-name">AirPods Pro 2nd Gen</div>
+            <div class="cart-variant">Color: White · USB-C</div>
+            <div class="cart-price">$179.00</div>
+          </div>
+          <div class="cart-actions">
+            <div class="delete-btn">🗑 Remove</div>
+            <div class="qty-stepper">
+              <div class="stepper-btn" style="width:26px;height:26px;font-size:14px">−</div>
+              <div class="qty-val" style="font-size:14px">1</div>
+              <div class="stepper-btn" style="width:26px;height:26px;font-size:14px">+</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cart-item">
+          <div class="cart-img">⌚</div>
+          <div class="cart-info">
+            <div class="cart-name">Smart Watch Series 5</div>
+            <div class="cart-variant">Color: Black · 44mm</div>
+            <div class="cart-price">$119.00</div>
+          </div>
+          <div class="cart-actions">
+            <div class="delete-btn">🗑 Remove</div>
+            <div class="qty-stepper">
+              <div class="stepper-btn" style="width:26px;height:26px;font-size:14px">−</div>
+              <div class="qty-val" style="font-size:14px">2</div>
+              <div class="stepper-btn" style="width:26px;height:26px;font-size:14px">+</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cart-item">
+          <div class="cart-img">👟</div>
+          <div class="cart-info">
+            <div class="cart-name">Running Sneakers Elite</div>
+            <div class="cart-variant">Color: Blue · Size 42</div>
+            <div class="cart-price">$54.00</div>
+          </div>
+          <div class="cart-actions">
+            <div class="delete-btn">🗑 Remove</div>
+            <div class="qty-stepper">
+              <div class="stepper-btn" style="width:26px;height:26px;font-size:14px">−</div>
+              <div class="qty-val" style="font-size:14px">1</div>
+              <div class="stepper-btn" style="width:26px;height:26px;font-size:14px">+</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Promo -->
+        <div class="promo-box">
+          <input class="promo-input" placeholder="🏷 Enter promo code…">
+          <button class="btn btn-primary btn-sm">Apply</button>
+        </div>
+
+        <!-- Summary -->
+        <div class="summary-card">
+          <div class="summary-row">
+            <span class="summary-label">Subtotal (4 items)</span>
+            <span class="summary-val">$471.00</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Shipping</span>
+            <span class="summary-val text-success">Free</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Discount</span>
+            <span class="summary-val discount">−$47.10</span>
+          </div>
+          <div class="summary-row divider">
+            <span class="summary-total">Total</span>
+            <span class="summary-total text-primary">$423.90</span>
+          </div>
+        </div>
+
+        <div style="padding:0 16px 16px">
+          <button class="btn btn-primary btn-lg btn-full" onclick="goTo('success')">
+            Checkout →
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab bar -->
+      <div class="tab-bar">
+        <div class="tab-item" onclick="goTo('home')">
+          <svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
+          <span>Home</span>
+        </div>
+        <div class="tab-item" onclick="goTo('home')">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Categories</span>
+        </div>
+        <div class="tab-bot-wrap" onclick="goTo('chat')">
+          <div class="tab-bot">
+            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M12 2a4 4 0 014 4v5H8V6a4 4 0 014-4z"/><circle cx="9" cy="16" r="1" fill="white" stroke="none"/><circle cx="15" cy="16" r="1" fill="white" stroke="none"/></svg>
+          </div>
+          <span>Bot</span>
+        </div>
+        <div class="cart-badge active" onclick="goTo('cart')">
+          <div class="badge">3</div>
+          <svg viewBox="0 0 24 24" style="stroke:var(--primary)"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+          <span style="color:var(--primary)">Cart</span>
+        </div>
+        <div class="tab-item" onclick="goTo('profile')">
+          <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span>Profile</span>
+        </div>
+      </div>
+    </div><!-- /screen-cart -->
+
+    <!-- ==================== ORDER SUCCESS SCREEN ==================== -->
+    <div class="screen" id="screen-success">
+      <div class="top-bar">
+        <div style="flex:1"></div>
+        <span class="top-bar-title" style="text-align:center">Order Confirmed</span>
+        <div style="flex:1"></div>
+      </div>
+
+      <div class="scroll-area">
+        <div class="success-screen">
+          <div class="success-icon">
+            <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="h1" style="color:var(--black)">Order placed! 🎉</div>
+          <div class="body text-muted" style="max-width:260px">Your order has been placed and is being processed right now.</div>
+          <div class="order-num">Order #EB-20260421-7842</div>
+
+          <!-- Mini tracking preview -->
+          <div style="background:var(--surface);border-radius:var(--r-card);padding:16px;width:100%;margin-top:8px;box-shadow:var(--shadow)">
+            <div style="font-size:13px;font-weight:600;color:var(--black);margin-bottom:12px">Estimated Delivery</div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div style="width:44px;height:44px;background:var(--primary-tint);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px">📦</div>
+              <div>
+                <div style="font-size:15px;font-weight:600;color:var(--black)">Thu, Apr 24</div>
+                <div style="font-size:12px;color:var(--success)">Standard Shipping • Free</div>
+              </div>
+            </div>
+
+            <!-- Timeline mini -->
+            <div style="margin-top:16px;padding-left:8px">
+              <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px">
+                <div style="width:12px;height:12px;border-radius:50%;background:var(--primary);margin-top:3px;flex-shrink:0;box-shadow:0 0 0 4px var(--primary-tint)"></div>
+                <div><div style="font-size:13px;font-weight:600;color:var(--black)">Order Placed</div><div style="font-size:11px;color:var(--muted)">Apr 21, 9:41 AM</div></div>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px">
+                <div style="width:12px;height:12px;border-radius:50%;background:var(--divider);margin-top:3px;flex-shrink:0"></div>
+                <div><div style="font-size:13px;color:var(--muted)">Processing</div></div>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px">
+                <div style="width:12px;height:12px;border-radius:50%;background:var(--divider);margin-top:3px;flex-shrink:0"></div>
+                <div><div style="font-size:13px;color:var(--muted)">Shipped</div></div>
+              </div>
+              <div style="display:flex;align-items:flex-start;gap:12px">
+                <div style="width:12px;height:12px;border-radius:50%;background:var(--divider);margin-top:3px;flex-shrink:0"></div>
+                <div><div style="font-size:13px;color:var(--muted)">Delivered</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px;width:100%;margin-top:8px">
+            <button class="btn btn-primary btn-lg btn-full">Track order 📍</button>
+            <button class="btn btn-ghost btn-lg btn-full" onclick="goTo('home')">Continue shopping</button>
+          </div>
+        </div>
+      </div>
+    </div><!-- /screen-success -->
+
+    <!-- ==================== PROFILE SCREEN ==================== -->
+    <div class="screen" id="screen-profile">
+      <div class="top-bar">
+        <span class="top-bar-title">Profile</span>
+        <button class="icon-btn">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        </button>
+      </div>
+
+      <div class="scroll-area">
+        <div class="profile-header">
+          <div class="profile-avatar">A</div>
+          <div class="h2">Alex Johnson</div>
+          <div class="caption text-muted">alex@email.com</div>
+          <button class="btn btn-secondary btn-sm" style="margin-top:4px">Edit profile</button>
+        </div>
+
+        <div class="profile-stats">
+          <div class="stat-pill">
+            <div class="stat-num">24</div>
+            <div class="stat-lbl">Orders</div>
+          </div>
+          <div class="stat-pill">
+            <div class="stat-num">12</div>
+            <div class="stat-lbl">Wishlist</div>
+          </div>
+          <div class="stat-pill">
+            <div class="stat-num">5</div>
+            <div class="stat-lbl">Coupons</div>
+          </div>
+        </div>
+
+        <div class="menu-list" style="margin-top:8px">
+          <div class="menu-item">
+            <div class="menu-icon"><svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/></svg></div>
+            <span class="menu-text">My Orders</span>
+            <span class="menu-chevron">›</span>
+          </div>
+          <div class="menu-item">
+            <div class="menu-icon"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+            <span class="menu-text">Addresses</span>
+            <span class="menu-chevron">›</span>
+          </div>
+          <div class="menu-item">
+            <div class="menu-icon"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
+            <span class="menu-text">Payment Methods</span>
+            <span class="menu-chevron">›</span>
+          </div>
+          <div class="menu-item">
+            <div class="menu-icon"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></div>
+            <span class="menu-text">Notifications</span>
+            <span class="menu-chevron">›</span>
+          </div>
+          <div class="menu-item">
+            <div class="menu-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg></div>
+            <span class="menu-text">Help & FAQ</span>
+            <span class="menu-chevron">›</span>
+          </div>
+          <div class="menu-item">
+            <div class="menu-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+            <span class="menu-text">About</span>
+            <span class="menu-chevron">›</span>
+          </div>
+          <div class="menu-item destructive">
+            <div class="menu-icon"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg></div>
+            <span class="menu-text">Logout</span>
+            <span class="menu-chevron">›</span>
+          </div>
+        </div>
+
+        <div style="height:16px"></div>
+      </div>
+
+      <!-- Tab bar -->
+      <div class="tab-bar">
+        <div class="tab-item" onclick="goTo('home')">
+          <svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
+          <span>Home</span>
+        </div>
+        <div class="tab-item" onclick="goTo('home')">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Categories</span>
+        </div>
+        <div class="tab-bot-wrap" onclick="goTo('chat')">
+          <div class="tab-bot">
+            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M12 2a4 4 0 014 4v5H8V6a4 4 0 014-4z"/><circle cx="9" cy="16" r="1" fill="white" stroke="none"/><circle cx="15" cy="16" r="1" fill="white" stroke="none"/></svg>
+          </div>
+          <span>Bot</span>
+        </div>
+        <div class="cart-badge" onclick="goTo('cart')">
+          <div class="badge">3</div>
+          <svg viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+          <span>Cart</span>
+        </div>
+        <div class="tab-item active" onclick="goTo('profile')">
+          <svg viewBox="0 0 24 24" style="stroke:var(--primary)"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span style="color:var(--primary)">Profile</span>
+        </div>
+      </div>
+    </div><!-- /screen-profile -->
+
+    <!-- ==================== NOTIFICATIONS SCREEN ==================== -->
+    <div class="screen" id="screen-notifications">
+      <div class="top-bar">
+        <button class="icon-btn" onclick="goBack()">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span class="top-bar-title">Notifications</span>
+      </div>
+      <div class="scroll-area">
+        <div style="padding:8px 0">
+          <!-- Notification items -->
+          <div style="display:flex;gap:12px;padding:14px 16px;background:var(--primary-tint);border-left:3px solid var(--primary)">
+            <div style="width:44px;height:44px;background:var(--primary);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">⚡</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--black)">Flash Sale starts now!</div>
+              <div style="font-size:12px;color:var(--text);margin-top:2px">Up to 50% off on Electronics. Limited time only!</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">2 min ago</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--divider)">
+            <div style="width:44px;height:44px;background:#DCFCE7;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">📦</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--black)">Order Shipped!</div>
+              <div style="font-size:12px;color:var(--text);margin-top:2px">Your order #EB-7821 is on its way. Estimated delivery Thu Apr 24.</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">1 hr ago</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--divider)">
+            <div style="width:44px;height:44px;background:var(--primary-tint);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">✨</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--black)">EcomerceBot found a deal for you</div>
+              <div style="font-size:12px;color:var(--text);margin-top:2px">AirPods Pro are now 28% off — matching your wishlist!</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">3 hr ago</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--divider)">
+            <div style="width:44px;height:44px;background:#FEF9C3;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">⭐</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--black)">Review your purchase</div>
+              <div style="font-size:12px;color:var(--text);margin-top:2px">How was your Urban Backpack 30L? Share your experience!</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">Yesterday</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /phone-screen -->
+</div><!-- /phone-shell -->
+
+<!-- Screen Nav -->
+<div class="screen-nav">
+  <div class="nav-chip active" onclick="goTo('home')" id="nav-home">🏠 Home</div>
+  <div class="nav-chip" onclick="goTo('chat')" id="nav-chat">🤖 Bot</div>
+  <div class="nav-chip" onclick="goTo('product')" id="nav-product">📱 Product</div>
+  <div class="nav-chip" onclick="goTo('cart')" id="nav-cart">🛒 Cart</div>
+  <div class="nav-chip" onclick="goTo('success')" id="nav-success">✅ Success</div>
+  <div class="nav-chip" onclick="goTo('profile')" id="nav-profile">👤 Profile</div>
+</div>
+
+<script>
+// ============================================================
+// NAVIGATION
+// ============================================================
+let history = ['home'];
+let current = 'home';
+
+function goTo(screen) {
+  const prev = document.getElementById('screen-' + current);
+  const next = document.getElementById('screen-' + screen);
+  if (!next || current === screen) return;
+
+  prev.classList.remove('active');
+  next.classList.add('active');
+
+  if (screen !== history[history.length - 1]) history.push(screen);
+  current = screen;
+
+  // Update nav chips
+  document.querySelectorAll('.nav-chip').forEach(c => c.classList.remove('active'));
+  const chip = document.getElementById('nav-' + screen);
+  if (chip) chip.classList.add('active');
+}
+
+function goBack() {
+  if (history.length > 1) {
+    history.pop();
+    const prev = history[history.length - 1];
+    const curr = document.getElementById('screen-' + current);
+    const target = document.getElementById('screen-' + prev);
+    if (curr) curr.classList.remove('active');
+    if (target) target.classList.add('active');
+    current = prev;
+    document.querySelectorAll('.nav-chip').forEach(c => c.classList.remove('active'));
+    const chip = document.getElementById('nav-' + prev);
+    if (chip) chip.classList.add('active');
+  }
+}
+
+// ============================================================
+// QTY STEPPER
+// ============================================================
+let qty = 1;
+function changeQty(delta) {
+  qty = Math.max(1, qty + delta);
+  document.getElementById('qtyVal').textContent = qty;
+}
+
+// ============================================================
+// CHAT
+// ============================================================
+const botReplies = [
+  "Great question! Let me find the best options for you 🔍",
+  "Here are my top picks based on your preferences! ✨",
+  "That's a popular choice! It's currently on sale — grab it before the deal ends ⚡",
+  "I've added it to your cart. Anything else you'd like? 🛒",
+  "Your order #EB-7821 is on its way! Expected delivery by Thu, Apr 24 📦",
+  "I'd recommend checking the Flash Deals section — there are some amazing discounts right now! 🔥",
+  "Of course! I'm here to help with anything you need 😊",
+];
+
+let replyIndex = 0;
+
+function toggleSend() {
+  const input = document.getElementById('chatInput');
+  const mic = document.getElementById('micIcon');
+  const send = document.getElementById('sendBtn');
+  if (input.value.trim()) {
+    mic.style.opacity = '0';
+    send.style.opacity = '1';
+  } else {
+    mic.style.opacity = '1';
+    send.style.opacity = '0.4';
+  }
+}
+
+function sendMsg() {
+  const input = document.getElementById('chatInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+  addMessage(msg, 'user');
+  input.value = '';
+  toggleSend();
+  setTimeout(showTyping, 400);
+  setTimeout(() => {
+    hideTyping();
+    const reply = botReplies[replyIndex % botReplies.length];
+    replyIndex++;
+    addMessage(reply, 'bot');
+  }, 1800);
+}
+
+function sendQuick(el, text) {
+  addMessage(text, 'user');
+  setTimeout(showTyping, 400);
+  setTimeout(() => {
+    hideTyping();
+    const reply = botReplies[replyIndex % botReplies.length];
+    replyIndex++;
+    addMessage(reply, 'bot');
+  }, 1800);
+}
+
+function addMessage(text, who) {
+  const area = document.getElementById('chatArea');
+  const now = new Date();
+  const time = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0') + (now.getHours() < 12 ? ' AM' : ' PM');
+
+  const row = document.createElement('div');
+  row.className = 'msg-row' + (who === 'user' ? ' user' : '');
+
+  if (who === 'bot') {
+    row.innerHTML = `
+      <div class="bot-av"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M12 2a4 4 0 014 4v5H8V6a4 4 0 014-4z"/></svg></div>
+      <div>
+        <div class="bubble bot">${text}</div>
+        <div class="msg-time" style="margin-top:4px;padding-left:4px">${time}</div>
+      </div>`;
+  } else {
+    row.innerHTML = `
+      <div>
+        <div class="bubble user">${text}</div>
+        <div class="msg-time" style="margin-top:4px;padding-right:4px;text-align:right">${time}</div>
+      </div>`;
+  }
+
+  const typing = document.getElementById('typingIndicator');
+  area.insertBefore(row, typing);
+  area.scrollTop = area.scrollHeight;
+}
+
+function showTyping() {
+  const t = document.getElementById('typingIndicator');
+  t.style.display = 'flex';
+  const area = document.getElementById('chatArea');
+  area.scrollTop = area.scrollHeight;
+}
+function hideTyping() {
+  document.getElementById('typingIndicator').style.display = 'none';
+}
+
+// ============================================================
+// HERO CAROUSEL AUTO-SCROLL
+// ============================================================
+const heroColors = [
+  'linear-gradient(135deg,#1E6BFF,#1751C4)',
+  'linear-gradient(135deg,#7c3aed,#5b21b6)',
+  'linear-gradient(135deg,#059669,#065f46)',
+];
+const heroTitles = ['Flash Sale —<br>up to 50% off','New Arrivals<br>Just Dropped','Free Shipping<br>on Orders $30+'];
+const heroSubs = ['Ends in 02:14:37','Shop the latest trends','No minimum for members'];
+let heroIdx = 0;
+setInterval(() => {
+  heroIdx = (heroIdx + 1) % 3;
+  const slide = document.querySelector('.hero-slide');
+  if (slide) {
+    slide.style.background = heroColors[heroIdx];
+    slide.querySelector('.hero-title').innerHTML = heroTitles[heroIdx];
+    slide.querySelector('.hero-sub').textContent = heroSubs[heroIdx];
+    document.querySelectorAll('.dot').forEach((d,i) => d.classList.toggle('active', i === heroIdx));
+  }
+}, 4000);
+
+// Init send btn opacity
+document.getElementById('sendBtn').style.opacity = '0.4';
+</script>
+</body>
+</html>

@@ -21,15 +21,16 @@ class RestClient:
     def __init__(self, jwt: str | None = None, *, service_role: bool = False):
         self._base = settings.NEXT_PUBLIC_SUPABASE_URL.rstrip("/") + "/rest/v1"
         if service_role:
-            key = settings.SUPABASE_SERVICE_ROLE_KEY
+            key = settings.SUPABASE_SERVICE_ROLE_KEY.strip()
             self._headers = {
                 "apikey": key,
                 "Authorization": f"Bearer {key}",
                 "Content-Type": "application/json",
             }
         else:
+            anon = settings.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY.strip()
             self._headers = {
-                "apikey": settings.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY,
+                "apikey": anon,
                 "Authorization": f"Bearer {jwt}",
                 "Content-Type": "application/json",
             }
@@ -49,8 +50,14 @@ class RestClient:
             async with session.request(
                 method, url, params=params, json=json_body, headers=headers
             ) as resp:
-                resp.raise_for_status()
                 text = await resp.text()
+                if resp.status >= 400:
+                    import logging
+                    logging.getLogger(__name__).error(
+                        "PostgREST %s %s → %s: %s",
+                        method, path, resp.status, text[:300],
+                    )
+                    resp.raise_for_status()
                 if not text:
                     return None
                 return await resp.json(content_type=None)

@@ -2,7 +2,7 @@ import logging
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from app.config import settings
 
-from bot.handlers.start import start_command, main_menu_callback
+from bot.handlers.start import start_command, main_menu_callback, dash_role_callback
 from bot.handlers.browse import browse_shops, view_shop, view_category_products, view_all_products, view_product
 from bot.handlers.cart import (
     add_to_cart, view_cart, remove_from_cart, clear_cart,
@@ -26,6 +26,9 @@ def create_bot_app():
     app.add_handler(CommandHandler("start", start_command))
 
     # === Callback Query Handlers (order matters for pattern matching!) ===
+
+    # Dashboard role selection (must be before main_menu)
+    app.add_handler(CallbackQueryHandler(dash_role_callback, pattern=r"^dash_role_"))
 
     # Main Menu
     app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^main_menu$"))

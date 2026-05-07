@@ -1,28 +1,49 @@
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
-from contextlib import asynccontextmanager
-from app.config import settings
-from app.routes import telegram_auth, admin_link, admin_auth, db_proxy, miniapp_api
-import logging, os
+"""FastAPI application factory.
 
+Registers all route modules and middleware. This is the single entry point
+for the API — no more monolith route files.
+"""
+
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from slowapi.errors import RateLimitExceeded
+
+from app.config import settings
+from app.core.exceptions import register_exception_handlers
+from app.core.rate_limit import limiter, rate_limit_handler
+from app.routes import (
+    ai,
+    analytics,
+    auth,
+    cart,
+    loyalty,
+    merchants,
+    notifications,
+    orders,
+    products,
+    promos,
+    reviews,
+    support,
+    users,
+)
 
 logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL, logging.INFO))
 logger = logging.getLogger(__name__)
 
 _DEFAULT_DEV_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:5174",
     "http://localhost:3000",
     "http://localhost:3001",
+    "http://localhost:5173",
+    "http://localhost:5174",
 ]
 
 ALLOWED_ORIGINS = settings.CORS_ORIGINS if settings.CORS_ORIGINS else _DEFAULT_DEV_ORIGINS
-
-# Ensure upload directories exist
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
-os.makedirs(os.path.join(UPLOAD_DIR, "images"), exist_ok=True)
 
 
 @asynccontextmanager
@@ -34,12 +55,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Favourite of Shop API",
-    description="Multi-Tenant Telegram E-Commerce Bot Platform API",
-    version="1.0.0",
+    description="Multi-Tenant Telegram E-Commerce Platform",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
-# CORS Middleware
+# ── Middleware ───────────────────────────────────────────────────
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -49,46 +71,79 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+# ── Exception handlers ──────────────────────────────────────────
 
-# Catch ALL unhandled errors and still return CORS headers
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled error: {exc}", exc_info=True)
-    origin = request.headers.get("origin", "")
-    headers = {}
-    if origin in ALLOWED_ORIGINS:
-        headers = {
-            "Access-Control-Allow-Origin": origin,
-            "Access-Control-Allow-Credentials": "true",
-        }
-    detail = str(exc) if settings.DEBUG else "Internal server error"
-    return JSONResponse(
-        status_code=500,
-        content={"detail": detail},
-        headers=headers,
-    )
+register_exception_handlers(app)
+
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_handler)  # type: ignore[arg-type]
+
+# ── Routes ──────────────────────────────────────────────────────
+
+# Auth (Telegram + admin login + profile + password)
+app.include_router(auth.router, prefix="/api")
+
+# Users (self-service + admin listing)
+app.include_router(users.router, prefix="/api")
+
+# Merchants (browse + admin CRUD)
+app.include_router(merchants.router, prefix="/api")
+
+# Products & categories (browse + admin CRUD + image upload)
+app.include_router(products.router, prefix="/api")
+
+# Cart
+app.include_router(cart.router, prefix="/api")
+
+# Orders (user placement + admin management)
+app.include_router(orders.router, prefix="/api")
+
+# Promos
+app.include_router(promos.router, prefix="/api")
+
+# Reviews
+app.include_router(reviews.router, prefix="/api")
+
+# Support tickets
+app.include_router(support.router, prefix="/api")
+
+# Loyalty program
+app.include_router(loyalty.router, prefix="/api")
+
+# Notifications
+app.include_router(notifications.router, prefix="/api")
+
+# AI assistant
+app.include_router(ai.router, prefix="/api")
+
+# Analytics (admin dashboard stats)
+app.include_router(analytics.router, prefix="/api")
 
 
-# Register Routes (only Supabase-backed routes remain)
-app.include_router(telegram_auth.router, prefix="/api")
-app.include_router(admin_link.router, prefix="/api")
-app.include_router(admin_auth.router, prefix="/api")
+# ── Backwards-compatible Edge Function routes ───────────────────
+# The miniapp currently calls /functions/v1/* endpoints.
+# Mount auth and user endpoints under that prefix too for migration.
 
-# Miniapp API (replaces Supabase Edge Functions)
-app.include_router(miniapp_api.router)
+app.include_router(auth.router, prefix="/functions/v1", tags=["Legacy Miniapp"])
+app.include_router(cart.router, prefix="/functions/v1", tags=["Legacy Miniapp"])
+app.include_router(orders.router, prefix="/functions/v1", tags=["Legacy Miniapp"])
+app.include_router(promos.router, prefix="/functions/v1", tags=["Legacy Miniapp"])
+app.include_router(reviews.router, prefix="/functions/v1", tags=["Legacy Miniapp"])
+app.include_router(support.router, prefix="/functions/v1", tags=["Legacy Miniapp"])
+app.include_router(loyalty.router, prefix="/functions/v1", tags=["Legacy Miniapp"])
+app.include_router(ai.router, prefix="/functions/v1", tags=["Legacy Miniapp"])
+app.include_router(notifications.router, prefix="/functions/v1", tags=["Legacy Miniapp"])
 
-# PostgREST + Storage proxy (must be BEFORE static files mount)
-app.include_router(db_proxy.router)
 
-# Serve uploaded images at /uploads/images/filename.jpg
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+# ── Health / root ───────────────────────────────────────────────
 
 
 @app.get("/")
 async def root():
     return {
         "name": "Favourite of Shop API",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "status": "running",
         "docs": "/docs",
     }

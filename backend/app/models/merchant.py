@@ -1,44 +1,48 @@
-from pydantic import BaseModel
-from typing import Optional, List
+"""Merchant schemas."""
+
+from __future__ import annotations
+
 from datetime import datetime
+
+from pydantic import BaseModel, Field
 
 
 class MerchantCreate(BaseModel):
-    name: str
-    slug: str
-    owner_name: str
-    email: str
-    phone: Optional[str] = None
-    tagline: Optional[str] = None
-    description: Optional[str] = None
-    story: Optional[str] = None
-    location: Optional[str] = None
-    icon_emoji: Optional[str] = None
-    accent_color: Optional[str] = None
-    plan: Optional[str] = "Basic"
-    telegram_token: Optional[str] = None
-    deep_link_code: Optional[str] = None
-    fb_page: Optional[str] = None
-    instagram: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=200)
+    slug: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-z0-9-]+$")
+    owner_name: str = Field(..., min_length=1, max_length=200)
+    email: str = Field(..., min_length=3, max_length=254)
+    phone: str | None = Field(None, max_length=20)
+    tagline: str | None = Field(None, max_length=300)
+    description: str | None = Field(None, max_length=2000)
+    icon_emoji: str | None = None
+    accent_color: str | None = Field(None, max_length=7)
+    plan: str = "Basic"
+    telegram_token: str | None = None
+    deep_link_code: str | None = None
+    fb_page: str | None = Field(None, max_length=300)
+    instagram: str | None = Field(None, max_length=300)
+    logo_url: str | None = Field(None, max_length=500)
+    is_featured: bool = False
 
 
 class MerchantUpdate(BaseModel):
-    name: Optional[str] = None
-    owner_name: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    tagline: Optional[str] = None
-    description: Optional[str] = None
-    story: Optional[str] = None
-    location: Optional[str] = None
-    icon_emoji: Optional[str] = None
-    accent_color: Optional[str] = None
-    plan: Optional[str] = None
-    telegram_token: Optional[str] = None
-    deep_link_code: Optional[str] = None
-    status: Optional[str] = None
-    fb_page: Optional[str] = None
-    instagram: Optional[str] = None
+    name: str | None = Field(None, min_length=1, max_length=200)
+    owner_name: str | None = Field(None, min_length=1, max_length=200)
+    email: str | None = Field(None, min_length=3, max_length=254)
+    phone: str | None = Field(None, max_length=20)
+    tagline: str | None = Field(None, max_length=300)
+    description: str | None = Field(None, max_length=2000)
+    icon_emoji: str | None = None
+    accent_color: str | None = Field(None, max_length=7)
+    plan: str | None = None
+    telegram_token: str | None = None
+    deep_link_code: str | None = None
+    status: str | None = Field(None, pattern=r"^(active|suspended|pending)$")
+    fb_page: str | None = Field(None, max_length=300)
+    instagram: str | None = Field(None, max_length=300)
+    logo_url: str | None = Field(None, max_length=500)
+    is_featured: bool | None = None
 
 
 class MerchantResponse(BaseModel):
@@ -47,26 +51,18 @@ class MerchantResponse(BaseModel):
     slug: str
     owner_name: str
     email: str
-    phone: Optional[str] = None
-    tagline: Optional[str] = None
-    description: Optional[str] = None
-    story: Optional[str] = None
-    location: Optional[str] = None
-    icon_emoji: Optional[str] = None
-    accent_color: Optional[str] = None
+    phone: str | None = None
+    tagline: str | None = None
+    description: str | None = None
+    icon_emoji: str | None = None
+    accent_color: str | None = None
     plan: str
-    deep_link_code: Optional[str] = None
+    deep_link_code: str | None = None
     status: str
-    fb_page: Optional[str] = None
-    instagram: Optional[str] = None
-    product_count: Optional[int] = 0
-    order_count: Optional[int] = 0
-    created_at: Optional[datetime] = None
-
-
-class MerchantAdminCreate(BaseModel):
-    merchant_id: int
-    full_name: str
-    email: str
-    password: str
-    role: str = "staff"
+    fb_page: str | None = None
+    instagram: str | None = None
+    logo_url: str | None = None
+    is_featured: bool = False
+    product_count: int = 0
+    order_count: int = 0
+    created_at: datetime | None = None
