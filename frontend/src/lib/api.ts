@@ -8,7 +8,9 @@
  * - Client-side business logic
  */
 
-const API_BASE = "/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL
+  ? `${process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "")}/api`
+  : "/api";
 
 type Method = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
