@@ -2,6 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from bot.supabase_helpers import sb_get, sb_get_one, sb_post, sb_patch, sb_delete
 from bot.keyboards.inline import cart_keyboard, back_to_menu_keyboard, checkout_confirm_keyboard
+from bot.handlers._shared import ack_if_callback, send_or_edit
 import logging
 import uuid
 
@@ -78,24 +79,26 @@ async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def view_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show cart contents."""
-    query = update.callback_query
-    await query.answer()
+    await ack_if_callback(update)
+
+    empty_cart_markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Browse Shops", callback_data="browse_shops")],
+        [InlineKeyboardButton("Main Menu", callback_data="main_menu")],
+    ])
 
     telegram_id = update.effective_user.id
     user = await sb_get_one("users", f"select=id&telegram_id=eq.{telegram_id}")
     if not user:
-        await query.edit_message_text("Please /start first.", reply_markup=back_to_menu_keyboard())
+        await send_or_edit(update, "Please /start first.", reply_markup=back_to_menu_keyboard())
         return
 
     # Get all carts for user
     carts = await sb_get("cart", f"select=id,merchant_id&user_id=eq.{user['id']}")
     if not carts:
-        await query.edit_message_text(
+        await send_or_edit(
+            update,
             "Your cart is empty!\n\nBrowse shops to add products.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("Browse Shops", callback_data="browse_shops")],
-                [InlineKeyboardButton("Main Menu", callback_data="main_menu")],
-            ])
+            reply_markup=empty_cart_markup,
         )
         return
 
@@ -104,12 +107,10 @@ async def view_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cart_items = await sb_get("cart_items", f"select=id,cart_id,product_id,quantity,unit_price&cart_id=in.({cart_ids_str})&order=created_at.desc")
 
     if not cart_items:
-        await query.edit_message_text(
+        await send_or_edit(
+            update,
             "Your cart is empty!\n\nBrowse shops to add products.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("Browse Shops", callback_data="browse_shops")],
-                [InlineKeyboardButton("Main Menu", callback_data="main_menu")],
-            ])
+            reply_markup=empty_cart_markup,
         )
         return
 
@@ -144,7 +145,7 @@ async def view_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"  _from {item['merchant_name']}_\n"
     text += f"\n**Total: ${total:.2f}**"
 
-    await query.edit_message_text(text, parse_mode="Markdown", reply_markup=cart_keyboard(items))
+    await send_or_edit(update, text, parse_mode="Markdown", reply_markup=cart_keyboard(items))
 
 
 async def remove_from_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):

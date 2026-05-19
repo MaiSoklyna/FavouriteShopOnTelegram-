@@ -25,8 +25,10 @@ function LoginContent() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [tgSessionId, setTgSessionId] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const redirect = searchParams.get("redirect") || "/dashboard";
+  const tgUrl = tgSessionId ? `https://t.me/${BOT_USERNAME}?start=${tgSessionId}` : "";
 
   // Redirect if already logged in
   useEffect(() => {
@@ -50,14 +52,27 @@ function LoginContent() {
 
   async function handleTelegramLogin() {
     setError("");
+    setCopied(false);
     try {
       const sessionId = await startTgSession();
       setTgSessionId(sessionId);
       pollSession(sessionId);
-      window.open(`https://t.me/${BOT_USERNAME}?start=${sessionId}`, "_blank");
+      // Best-effort popup; users can also click the visible link below if blocked.
+      window.open(`https://t.me/${BOT_USERNAME}?start=${sessionId}`, "_blank", "noopener");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to create session";
       setError(msg);
+    }
+  }
+
+  async function copyTgUrl() {
+    if (!tgUrl) return;
+    try {
+      await navigator.clipboard.writeText(tgUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard blocked — user can still long-press the link */
     }
   }
 
@@ -150,12 +165,47 @@ function LoginContent() {
           {loginPending ? "Waiting for Telegram..." : "Login with Telegram"}
         </button>
 
-        {loginPending && (
-          <div style={{ textAlign: "center", marginTop: 12, fontSize: 12, color: "var(--text-muted)" }}>
-            Open the bot in Telegram and tap the login button.
-            <button onClick={() => { stopPolling(); setTgSessionId(""); }} style={{ display: "block", margin: "8px auto 0", background: "none", border: "none", color: "var(--danger)", cursor: "pointer", fontSize: 12 }}>
-              Cancel
-            </button>
+        {loginPending && tgUrl && (
+          <div style={{ marginTop: 12, padding: 12, background: "var(--bg-secondary)", borderRadius: 8, border: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 8, lineHeight: 1.5 }}>
+              A new Telegram tab should have opened. If not, tap the link below — then tap <b>START</b> in the bot chat to finish signing in.
+            </div>
+            <a
+              href={tgUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "block", padding: "8px 10px", borderRadius: 6,
+                background: "var(--bg)", border: "1px solid var(--border)",
+                color: "var(--accent, #0088cc)", fontSize: 12, fontFamily: "monospace",
+                wordBreak: "break-all", textDecoration: "none", marginBottom: 8,
+              }}
+            >
+              {tgUrl}
+            </a>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                onClick={copyTgUrl}
+                style={{
+                  flex: 1, padding: "6px 10px", borderRadius: 6, fontSize: 12, cursor: "pointer",
+                  background: copied ? "var(--success-light, #DCFCE7)" : "var(--bg)",
+                  color: copied ? "var(--success, #16A34A)" : "var(--text-secondary)",
+                  border: "1px solid var(--border)", fontWeight: 600,
+                }}
+              >
+                {copied ? "Copied!" : "Copy link"}
+              </button>
+              <button
+                onClick={() => { stopPolling(); setTgSessionId(""); setCopied(false); }}
+                style={{
+                  flex: 1, padding: "6px 10px", borderRadius: 6, fontSize: 12, cursor: "pointer",
+                  background: "var(--bg)", border: "1px solid var(--border)",
+                  color: "var(--danger)", fontWeight: 600,
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
       </div>

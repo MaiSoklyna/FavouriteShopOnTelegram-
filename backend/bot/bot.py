@@ -24,6 +24,10 @@ def create_bot_app():
 
     # === Command Handlers ===
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("orders", my_orders))
+    app.add_handler(CommandHandler("cart", view_cart))
+    app.add_handler(CommandHandler("profile", my_profile))
+    app.add_handler(CommandHandler("support", support))
 
     # === Callback Query Handlers (order matters for pattern matching!) ===
 

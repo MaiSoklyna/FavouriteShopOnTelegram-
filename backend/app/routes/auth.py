@@ -40,6 +40,7 @@ from app.core.security import (
     hash_password,
     is_telegram_auth_fresh,
     mint_jwt,
+    verify_jwt,
     verify_password,
     verify_telegram_hash,
 )
@@ -319,12 +320,60 @@ async def poll_tg_session(request: Request, session_id: str):
 
 
 async def _resolve_admin_user(db, session_row: dict) -> Optional[dict]:
-    """Look up admin profile from a completed login session."""
+    """Look up admin profile from a completed login session.
+
+    super_admins.id and merchant_admins.id are independent SERIAL sequences,
+    so the numeric id alone is ambiguous when both tables hold a row with
+    the same id. The bot wrote the correct role into the JWT it stored on
+    this session — decode it to pick the right table.
+    """
     user_id = session_row.get("user_id")
-    if not user_id:
+    token = session_row.get("jwt_token")
+    if not user_id or not token:
         return None
 
-    # Try super_admin first
+    # Trust the role baked into the JWT we just minted.
+    minted_role: Role | None = None
+    try:
+        claims = verify_jwt(token)
+        minted_role = claims.role
+    except Exception:
+        # Token expired or unsigned — fall back to the legacy behaviour but
+        # log loudly so the failure mode is visible.
+        logger.warning("Could not decode session jwt_token; falling back to id-only lookup")
+
+    if minted_role == Role.MERCHANT_ADMIN:
+        admin = await db.from_("merchant_admins").eq("id", user_id).select_one(
+            "id,merchant_id,full_name,email,role"
+        )
+        if not admin:
+            return None
+        merchant_name = None
+        if admin.get("merchant_id"):
+            m = await db.from_("merchants").eq("id", admin["merchant_id"]).select_one("name")
+            if m:
+                merchant_name = m["name"]
+        return {
+            "id": admin["id"],
+            "email": admin["email"],
+            "name": admin["full_name"],
+            "role": "merchant",
+            "merchant_id": admin["merchant_id"],
+            "merchant_name": merchant_name,
+        }
+
+    if minted_role == Role.SUPER_ADMIN:
+        sa = await db.from_("super_admins").eq("id", user_id).select_one("id,full_name,email")
+        if not sa:
+            return None
+        return {
+            "id": sa["id"],
+            "email": sa["email"],
+            "name": sa["full_name"],
+            "role": "super_admin",
+        }
+
+    # Legacy fallback (only reached if JWT couldn't be decoded).
     sa = await db.from_("super_admins").eq("id", user_id).select_one("id,full_name,email")
     if sa:
         return {
@@ -333,8 +382,6 @@ async def _resolve_admin_user(db, session_row: dict) -> Optional[dict]:
             "name": sa["full_name"],
             "role": "super_admin",
         }
-
-    # Then merchant_admin
     admin = await db.from_("merchant_admins").eq("id", user_id).select_one(
         "id,merchant_id,full_name,email,role"
     )
@@ -352,7 +399,6 @@ async def _resolve_admin_user(db, session_row: dict) -> Optional[dict]:
             "merchant_id": admin["merchant_id"],
             "merchant_name": merchant_name,
         }
-
     return None
 
 

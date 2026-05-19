@@ -30,6 +30,7 @@ from app.routes import (
     promos,
     reviews,
     support,
+    telegram_webhook,
     users,
 )
 
@@ -119,6 +120,9 @@ app.include_router(ai.router, prefix="/api")
 
 # Analytics (admin dashboard stats)
 app.include_router(analytics.router, prefix="/api")
+
+# Telegram webhook (replaces polling on Railway)
+app.include_router(telegram_webhook.router, prefix="/api")
 
 
 # ── Backwards-compatible Edge Function routes ───────────────────

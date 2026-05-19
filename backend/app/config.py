@@ -27,6 +27,10 @@ class Settings(BaseModel):
     # ── Telegram ────────────────────────────────────────────────
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_BOT_USERNAME: str = ""
+    # Optional shared secret echoed by Telegram in the
+    # X-Telegram-Bot-Api-Secret-Token header. Lets the webhook reject
+    # forged requests from anyone who isn't Telegram.
+    TELEGRAM_WEBHOOK_SECRET: str = ""
 
     # ── Supabase ────────────────────────────────────────────────
     SUPABASE_URL: str = ""
@@ -134,7 +138,7 @@ def _load_settings() -> Settings:
 
     # Simple string/int/bool env vars — pydantic handles type coercion
     simple_keys = [
-        "TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_USERNAME",
+        "TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_USERNAME", "TELEGRAM_WEBHOOK_SECRET",
         "SUPABASE_JWT_SECRET", "SUPABASE_SERVICE_ROLE_KEY",
         "ALGORITHM", "ENVIRONMENT", "LOG_LEVEL", "CURRENCY",
         "API_HOST", "WEB_APP_URL", "ADMIN_PANEL_URL",

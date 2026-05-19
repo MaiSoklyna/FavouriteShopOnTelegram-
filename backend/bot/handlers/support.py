@@ -2,6 +2,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from bot.supabase_helpers import sb_get, sb_get_one
 from bot.keyboards.inline import back_to_menu_keyboard
+from bot.handlers._shared import ack_if_callback, send_or_edit
 import logging
 
 logger = logging.getLogger(__name__)
@@ -9,8 +10,7 @@ logger = logging.getLogger(__name__)
 
 async def my_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show user profile."""
-    query = update.callback_query
-    await query.answer()
+    await ack_if_callback(update)
 
     telegram_id = update.effective_user.id
     user = await sb_get_one(
@@ -18,7 +18,7 @@ async def my_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"select=id,telegram_id,username,first_name,last_name,phone,address,created_at&telegram_id=eq.{telegram_id}"
     )
     if not user:
-        await query.edit_message_text("Please /start first.", reply_markup=back_to_menu_keyboard())
+        await send_or_edit(update, "Please /start first.", reply_markup=back_to_menu_keyboard())
         return
 
     orders = await sb_get("orders", f"select=id&user_id=eq.{user['id']}")
@@ -43,13 +43,12 @@ async def my_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         created = created[:10]
     text += f"Joined: {created}"
 
-    await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_to_menu_keyboard())
+    await send_or_edit(update, text, parse_mode="Markdown", reply_markup=back_to_menu_keyboard())
 
 
 async def support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show support info."""
-    query = update.callback_query
-    await query.answer()
+    await ack_if_callback(update)
 
     text = (
         "**Customer Support**\n\n"
@@ -59,4 +58,4 @@ async def support(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Our team will respond as soon as possible!"
     )
 
-    await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_to_menu_keyboard())
+    await send_or_edit(update, text, parse_mode="Markdown", reply_markup=back_to_menu_keyboard())

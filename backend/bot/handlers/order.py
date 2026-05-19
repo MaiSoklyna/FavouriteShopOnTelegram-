@@ -2,6 +2,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from bot.supabase_helpers import sb_get, sb_get_one, sb_patch
 from bot.keyboards.inline import order_list_keyboard, order_detail_keyboard, back_to_menu_keyboard
+from bot.handlers._shared import ack_if_callback, send_or_edit
 import logging
 
 logger = logging.getLogger(__name__)
@@ -9,13 +10,12 @@ logger = logging.getLogger(__name__)
 
 async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show user's order history."""
-    query = update.callback_query
-    await query.answer()
+    await ack_if_callback(update)
 
     telegram_id = update.effective_user.id
     user = await sb_get_one("users", f"select=id&telegram_id=eq.{telegram_id}")
     if not user:
-        await query.edit_message_text("Please /start first.", reply_markup=back_to_menu_keyboard())
+        await send_or_edit(update, "Please /start first.", reply_markup=back_to_menu_keyboard())
         return
 
     orders = await sb_get(
@@ -24,9 +24,10 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if not orders:
-        await query.edit_message_text(
+        await send_or_edit(
+            update,
             "No orders yet!\n\nStart shopping to see your orders here.",
-            reply_markup=back_to_menu_keyboard()
+            reply_markup=back_to_menu_keyboard(),
         )
         return
 
@@ -40,10 +41,11 @@ async def my_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
         o["merchant_name"] = merchant_map.get(o["merchant_id"], "Unknown")
         o["total"] = float(o["total"])
 
-    await query.edit_message_text(
+    await send_or_edit(
+        update,
         "**Your Orders**\nTap an order to see details:",
         parse_mode="Markdown",
-        reply_markup=order_list_keyboard(orders)
+        reply_markup=order_list_keyboard(orders),
     )
 
 
