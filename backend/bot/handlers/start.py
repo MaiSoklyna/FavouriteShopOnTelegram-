@@ -203,7 +203,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Regular /start — show menu
     token = _make_user_token(db_user["id"], telegram_id)
-    miniapp_url = f"{settings.WEB_APP_URL}?auth={token}"
+    miniapp_url = f"{settings.web_app_base}/shop?auth={token}"
     text = f"{'Welcome to <b>Favourite of Shop</b>' if is_new else 'Welcome back'}, {first_name or 'friend'}!"
     if _is_https(miniapp_url):
         text += "\n\nTap <b>Open Shop</b> to start!"
@@ -265,9 +265,10 @@ async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     tg_user = update.effective_user
     db_user = await sb_get_one("users", f"select=id&telegram_id=eq.{tg_user.id}")
+    base = settings.web_app_base
     miniapp_url = (
-        f"{settings.WEB_APP_URL}?auth={_make_user_token(db_user['id'], tg_user.id)}"
-        if db_user else settings.WEB_APP_URL
+        f"{base}/shop?auth={_make_user_token(db_user['id'], tg_user.id)}"
+        if db_user else f"{base}/shop"
     )
 
     text = f"Hey {tg_user.first_name}! What would you like to do?"

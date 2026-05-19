@@ -127,6 +127,20 @@ class Settings(BaseModel):
         """JWT issuer claim matching Supabase's own tokens."""
         return f"{self.SUPABASE_URL}/auth/v1"
 
+    @property
+    def web_app_base(self) -> str:
+        """WEB_APP_URL with any trailing slash or ``/shop`` suffix removed.
+
+        Lets WEB_APP_URL be configured as either the bare domain
+        (``https://example.com``) or the shop entry point
+        (``https://example.com/shop``) without producing ``/shop/shop/...``
+        when callers append a path of their own.
+        """
+        url = self.WEB_APP_URL.rstrip("/")
+        if url.endswith("/shop"):
+            url = url[: -len("/shop")]
+        return url
+
 
 def _load_settings() -> Settings:
     """Build Settings from environment variables.

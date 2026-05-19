@@ -109,9 +109,10 @@ Status: {order['payment_status'].upper()}
 Thank you for shopping with us!
 """
 
+        base = settings.web_app_base
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Write a Review", url=f"{settings.WEB_APP_URL}/shop/order/{order['id']}")],
-            [InlineKeyboardButton("Shop Again", url=f"{settings.WEB_APP_URL}/shop")],
+            [InlineKeyboardButton("Write a Review", url=f"{base}/shop/order/{order['id']}")],
+            [InlineKeyboardButton("Shop Again", url=f"{base}/shop")],
             [InlineKeyboardButton("Contact Support", callback_data="support")],
         ])
 

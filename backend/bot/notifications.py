@@ -68,10 +68,11 @@ async def send_order_placed_to_customer(
     text += f"Payment: {payment_method.upper()}\n"
     text += f"Delivery to: {delivery_address}\n"
 
-    review_url = f"{settings.WEB_APP_URL}/shop/order/{order_id}"
+    base = settings.web_app_base
+    review_url = f"{base}/shop/order/{order_id}"
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("View Order", url=review_url)],
-        [InlineKeyboardButton("Shop Again", url=f"{settings.WEB_APP_URL}/shop")],
+        [InlineKeyboardButton("Shop Again", url=f"{base}/shop")],
     ])
 
     try:
