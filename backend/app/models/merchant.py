@@ -24,6 +24,7 @@ class MerchantCreate(BaseModel):
     instagram: str | None = Field(None, max_length=300)
     logo_url: str | None = Field(None, max_length=500)
     is_featured: bool = False
+    telegram_group_id: int | None = None
 
 
 class MerchantUpdate(BaseModel):
@@ -43,6 +44,7 @@ class MerchantUpdate(BaseModel):
     instagram: str | None = Field(None, max_length=300)
     logo_url: str | None = Field(None, max_length=500)
     is_featured: bool | None = None
+    telegram_group_id: int | None = None
 
 
 class MerchantResponse(BaseModel):
@@ -63,6 +65,7 @@ class MerchantResponse(BaseModel):
     instagram: str | None = None
     logo_url: str | None = None
     is_featured: bool = False
+    telegram_group_id: int | None = None
     product_count: int = 0
     order_count: int = 0
     created_at: datetime | None = None

@@ -188,6 +188,51 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
         except Exception:
             logger.debug("Loyalty points not awarded (service may not be configured)")
 
+        # ── Telegram notifications (best-effort) ────────────────
+        try:
+            merchant_row = await db.from_("merchants").eq("id", merchant_id).select_one(
+                "name,telegram_group_id"
+            )
+            merchant_name = merchant_row["name"] if merchant_row else "Shop"
+            merchant_group_id = merchant_row.get("telegram_group_id") if merchant_row else None
+            order_items_for_dm = await db.from_("order_items").eq("order_id", order_id).select(
+                "product_name,quantity,unit_price,subtotal"
+            )
+
+            from bot.notifications import (
+                send_order_placed_to_customer,
+                send_order_placed_to_merchant_group,
+            )
+            await send_order_placed_to_customer(
+                db_user.get("telegram_id") or user.telegram_id,
+                order_id=order_id,
+                order_code=order_code,
+                merchant_name=merchant_name,
+                items=order_items_for_dm,
+                subtotal=subtotal,
+                discount=discount,
+                delivery_fee=delivery_fee,
+                total=total,
+                payment_method=order_data["payment_method"],
+                delivery_address=delivery_address,
+            )
+
+            if merchant_group_id:
+                await send_order_placed_to_merchant_group(
+                    merchant_group_id,
+                    order_id=order_id,
+                    order_code=order_code,
+                    merchant_name=merchant_name,
+                    items=order_items_for_dm,
+                    total=total,
+                    payment_method=order_data["payment_method"],
+                    delivery_address=delivery_address,
+                    customer_name=order_data.get("customer_name") or order_data.get("delivery_name"),
+                    customer_phone=order_data.get("customer_phone") or order_data.get("delivery_phone"),
+                )
+        except Exception:
+            logger.exception("Order notification dispatch failed (non-fatal)")
+
     return {
         "success": True,
         "data": {

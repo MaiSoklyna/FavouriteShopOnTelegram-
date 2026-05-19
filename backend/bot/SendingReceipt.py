@@ -110,8 +110,8 @@ Thank you for shopping with us!
 """
 
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Write a Review", url=f"{settings.WEB_APP_URL}/order/{order['id']}")],
-            [InlineKeyboardButton("Shop Again", url=f"{settings.WEB_APP_URL}")],
+            [InlineKeyboardButton("Write a Review", url=f"{settings.WEB_APP_URL}/shop/order/{order['id']}")],
+            [InlineKeyboardButton("Shop Again", url=f"{settings.WEB_APP_URL}/shop")],
             [InlineKeyboardButton("Contact Support", callback_data="support")],
         ])
 

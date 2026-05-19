@@ -128,8 +128,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     first_name = tg_user.first_name or ""
     last_name = tg_user.last_name or ""
 
-    db_user, is_new = await _upsert_user(telegram_id, username, first_name, last_name)
-    token = _make_user_token(db_user["id"], telegram_id)
+    try:
+        db_user, is_new = await _upsert_user(telegram_id, username, first_name, last_name)
+    except Exception as e:
+        logger.exception("User upsert failed for telegram_id=%s: %s", telegram_id, e)
+        await update.message.reply_text(
+            "Couldn't reach the server. Please try /start again in a moment."
+        )
+        return
 
     session_id = context.args[0] if context.args else None
 
@@ -189,12 +195,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Miniapp customer login
     if session_id:
+        token = _make_user_token(db_user["id"], telegram_id)
         await _complete_login_session(session_id, db_user["id"], token)
         msg = f"Welcome{' to Favourite of Shop' if is_new else ' back'}, {first_name or 'friend'}! Go back to your browser."
         await update.message.reply_text(msg, parse_mode="HTML")
         return
 
     # Regular /start — show menu
+    token = _make_user_token(db_user["id"], telegram_id)
     miniapp_url = f"{settings.WEB_APP_URL}?auth={token}"
     text = f"{'Welcome to <b>Favourite of Shop</b>' if is_new else 'Welcome back'}, {first_name or 'friend'}!"
     if _is_https(miniapp_url):
