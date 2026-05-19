@@ -2,31 +2,93 @@
 
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-import type { PromoCode } from "@/types";
+import { useAuth } from "@/providers/AuthProvider";
+import type { PromoCode, Merchant } from "@/types";
 
 export default function PromotionsPage() {
+  const { isSuperAdmin } = useAuth();
   const [promos, setPromos] = useState<PromoCode[]>([]);
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState({ code: "", type: "percent" as "percent" | "fixed", value: 0, min_order: 0, max_uses: 0, expires_at: "", is_active: true });
+  const [form, setForm] = useState({
+    code: "",
+    type: "percent" as "percent" | "fixed",
+    value: 0,
+    min_order: 0,
+    max_uses: 0,
+    expires_at: "",
+    is_active: true,
+    merchant_id: 0,
+  });
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState({ show: false, msg: "", ok: true });
 
   const flash = (msg: string, ok = true) => { setToast({ show: true, msg, ok }); setTimeout(() => setToast(t => ({ ...t, show: false })), 3000); };
 
-  async function load() { try { setPromos(await api.get<PromoCode[]>("/promos")); } catch { /* */ } finally { setLoading(false); } }
-  useEffect(() => { load(); }, []);
+  async function load() {
+    try {
+      const [p, m] = await Promise.all([
+        api.get<PromoCode[]>("/promos"),
+        isSuperAdmin ? api.get<Merchant[]>("/merchants") : Promise.resolve([] as Merchant[]),
+      ]);
+      setPromos(p);
+      setMerchants(m);
+    } catch { /* */ } finally { setLoading(false); }
+  }
+  useEffect(() => { load(); }, [isSuperAdmin]);
 
-  function openCreate() { setEditId(null); setForm({ code: "", type: "percent", value: 0, min_order: 0, max_uses: 0, expires_at: "", is_active: true }); setModal(true); }
-  function openEdit(p: PromoCode) { setEditId(p.id); setForm({ code: p.code, type: p.type, value: p.value, min_order: p.min_order || 0, max_uses: p.max_uses || 0, expires_at: p.expires_at ? p.expires_at.slice(0, 16) : "", is_active: p.is_active }); setModal(true); }
+  const merchantName = (id: number) => merchants.find(m => m.id === id)?.name || `#${id}`;
+
+  function openCreate() {
+    setEditId(null);
+    setForm({
+      code: "", type: "percent", value: 0,
+      min_order: 0, max_uses: 0, expires_at: "",
+      is_active: true, merchant_id: 0,
+    });
+    setModal(true);
+  }
+  function openEdit(p: PromoCode) {
+    setEditId(p.id);
+    setForm({
+      code: p.code,
+      type: p.type,
+      value: p.value,
+      min_order: p.min_order || 0,
+      max_uses: p.max_uses || 0,
+      expires_at: p.expires_at ? p.expires_at.slice(0, 16) : "",
+      is_active: p.is_active,
+      merchant_id: p.merchant_id || 0,
+    });
+    setModal(true);
+  }
 
   async function save() {
     if (!form.code.trim()) { flash("Code required", false); return; }
+    if (!editId && isSuperAdmin && !form.merchant_id) {
+      flash("Please pick a merchant for this promo", false);
+      return;
+    }
     setSaving(true);
     try {
-      const data = { ...form, max_uses: form.max_uses || null, expires_at: form.expires_at || null, min_order: form.min_order || null };
-      if (editId) { await api.patch(`/promos/${editId}`, data); } else { await api.post("/promos", data); }
+      const base: Record<string, unknown> = {
+        code: form.code,
+        type: form.type,
+        value: form.value,
+        max_uses: form.max_uses || null,
+        expires_at: form.expires_at || null,
+        min_order: form.min_order || null,
+        is_active: form.is_active,
+      };
+      if (editId) {
+        await api.patch(`/promos/${editId}`, base);
+      } else {
+        // Super admin must include merchant_id; merchant admin's id is set server-side
+        if (isSuperAdmin) base.merchant_id = form.merchant_id;
+        await api.post("/promos", base);
+      }
       flash(editId ? "Updated!" : "Created!"); setModal(false); load();
     } catch (e: any) { flash(e.detail || "Error", false); }
     setSaving(false);
@@ -45,12 +107,19 @@ export default function PromotionsPage() {
       <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Loading...</div> : (
           <table className="admin-table">
-            <thead><tr><th>Code</th><th>Type</th><th>Value</th><th>Min Order</th><th>Used</th><th>Expires</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Code</th>
+                {isSuperAdmin && <th>Merchant</th>}
+                <th>Type</th><th>Value</th><th>Min Order</th><th>Used</th><th>Expires</th><th>Status</th><th>Actions</th>
+              </tr>
+            </thead>
             <tbody>
-              {promos.length === 0 ? <tr><td colSpan={8} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>No promo codes</td></tr> :
+              {promos.length === 0 ? <tr><td colSpan={isSuperAdmin ? 9 : 8} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>No promo codes</td></tr> :
               promos.map(p => (
                 <tr key={p.id}>
                   <td style={{ fontWeight: 600, fontFamily: "monospace" }}>{p.code}</td>
+                  {isSuperAdmin && <td style={{ fontSize: 12, color: "var(--text-muted)" }}>{merchantName(p.merchant_id)}</td>}
                   <td><span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 8, background: "var(--bg-secondary)" }}>{p.type}</span></td>
                   <td style={{ fontWeight: 600 }}>{p.type === "percent" ? `${p.value}%` : `$${p.value}`}</td>
                   <td>{p.min_order ? `$${p.min_order}` : "—"}</td>
@@ -70,6 +139,21 @@ export default function PromotionsPage() {
           <div className="modal-content" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
             <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", marginBottom: 16 }}>{editId ? "Edit Promo" : "New Promo Code"}</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {isSuperAdmin && !editId && (
+                <div>
+                  <label style={lbl}>Merchant *</label>
+                  <select
+                    className="admin-input"
+                    value={form.merchant_id || ""}
+                    onChange={e => setForm({ ...form, merchant_id: +e.target.value })}
+                  >
+                    <option value="">— Select a shop —</option>
+                    {merchants.map(m => (
+                      <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div><label style={lbl}>Code *</label><input className="admin-input" style={{ fontFamily: "monospace", textTransform: "uppercase" }} value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="SUMMER20" /></div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 <div><label style={lbl}>Type</label><select className="admin-input" value={form.type} onChange={e => setForm({ ...form, type: e.target.value as any })}><option value="percent">Percent (%)</option><option value="fixed">Fixed ($)</option></select></div>

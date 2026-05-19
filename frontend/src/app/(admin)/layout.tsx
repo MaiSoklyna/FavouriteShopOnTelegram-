@@ -67,19 +67,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
       {/* Sidebar */}
       <aside
+        className={`admin-sidebar${sidebarOpen ? " admin-sidebar--open" : ""}`}
         style={{
           width: collapsed ? 64 : 240,
           background: "var(--sidebar-bg)",
           borderRight: "1px solid var(--border)",
           display: "flex",
           flexDirection: "column",
-          transition: "width 0.2s",
+          transition: "width 0.2s, transform 0.2s",
           position: "fixed",
           top: 0,
           left: 0,
           bottom: 0,
           zIndex: 40,
-          transform: sidebarOpen || !isMobile() ? "translateX(0)" : "translateX(-100%)",
         }}
       >
         {/* Logo */}
@@ -157,15 +157,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         @keyframes spin{to{transform:rotate(360deg)}}
         @media(max-width:768px){
           .mobile-header{display:flex!important}
-          aside{transform:translateX(-100%)!important}
+          .admin-sidebar{transform:translateX(-100%)}
+          .admin-sidebar.admin-sidebar--open{transform:translateX(0)}
           main{margin-left:0!important;padding:16px!important}
         }
       `}</style>
     </div>
   );
-}
-
-function isMobile(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.innerWidth < 768;
 }

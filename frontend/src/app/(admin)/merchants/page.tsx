@@ -23,6 +23,7 @@ const EMPTY_FORM = {
   confirm: "",
   telegram_id: "",
   is_featured: false,
+  telegram_group_id: "",
 };
 
 type MerchantAdminRow = {
@@ -106,6 +107,7 @@ export default function MerchantsPage() {
       fb_page: m.fb_page || "",
       instagram: m.instagram || "",
       is_featured: !!m.is_featured,
+      telegram_group_id: m.telegram_group_id != null ? String(m.telegram_group_id) : "",
     });
     setLogoFile(null);
     setLogoPreview("");
@@ -142,6 +144,18 @@ export default function MerchantsPage() {
     }
     // Boolean fields go through unmodified (super-admin-only on the backend side)
     merchantPayload.is_featured = !!form.is_featured;
+
+    // Telegram group id — parse to BIGINT or null
+    if (form.telegram_group_id.trim() === "") {
+      merchantPayload.telegram_group_id = null;
+    } else {
+      const parsed = Number(form.telegram_group_id.trim());
+      if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+        flash("Telegram group id must be an integer (e.g. -1001234567890)", false);
+        return;
+      }
+      merchantPayload.telegram_group_id = parsed;
+    }
 
     if (isEditMode) {
       // ── EDIT path ──
@@ -594,6 +608,20 @@ export default function MerchantsPage() {
                   <label style={lbl}>FB / IG</label>
                   <input className="admin-input" value={form.fb_page} onChange={e => setForm({ ...form, fb_page: e.target.value })} placeholder="facebook.com/..." />
                 </div>
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <label style={lbl}>Telegram group chat id (optional)</label>
+                <input
+                  className="admin-input"
+                  value={form.telegram_group_id}
+                  onChange={e => setForm({ ...form, telegram_group_id: e.target.value })}
+                  placeholder="-1001234567890"
+                  inputMode="numeric"
+                />
+                <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                  Add @{process.env.NEXT_PUBLIC_BOT_USERNAME || "FavouriteOfShop_bot"} as an admin to your group, then forward any message from the group to @userinfobot to get the id (it starts with -100…). New orders will be posted there.
+                </p>
               </div>
             </div>
 

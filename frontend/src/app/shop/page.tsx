@@ -6,7 +6,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { CategoryIcon } from "@/components/shop";
-import type { Product, Category, Merchant, PromoCode } from "@/types";
+import type { Product, Category, Merchant, PromoCode, Notification } from "@/types";
 
 export default function ShopHomePage() {
   const router = useRouter();
@@ -19,8 +19,24 @@ export default function ShopHomePage() {
   const [loadError, setLoadError] = useState(false);
   const [copiedPromo, setCopiedPromo] = useState("");
   const [heroIndex, setHeroIndex] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => { fetchData(); }, []);
+
+  // Load unread notifications count (auth-gated; quietly ignore failures)
+  useEffect(() => {
+    if (!user) { setUnreadCount(0); return; }
+    let cancelled = false;
+    async function loadUnread() {
+      try {
+        const list = await api.get<Notification[]>("/notifications");
+        if (!cancelled) setUnreadCount(list.filter(n => !n.is_read).length);
+      } catch { /* not logged in or endpoint unavailable */ }
+    }
+    loadUnread();
+    const id = setInterval(loadUnread, 30000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [user]);
 
   // Auto-rotate hero carousel
   useEffect(() => {
@@ -173,16 +189,33 @@ export default function ShopHomePage() {
           </div>
         </div>
         {/* Bell icon */}
-        <div style={{ position: "relative", cursor: "pointer" }}>
+        <button
+          type="button"
+          onClick={() => router.push("/shop/notifications")}
+          aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : "Notifications"}
+          style={{
+            position: "relative", cursor: "pointer",
+            background: "none", border: "none", padding: 8,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--shop-black)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
             <path d="M13.73 21a2 2 0 0 1-3.46 0" />
           </svg>
-          <span style={{
-            position: "absolute", top: 0, right: 0, width: 8, height: 8,
-            background: "#EF4444", borderRadius: "50%", border: "2px solid var(--shop-surface)",
-          }} />
-        </div>
+          {unreadCount > 0 && (
+            <span style={{
+              position: "absolute", top: 4, right: 4,
+              minWidth: 16, height: 16, padding: "0 4px",
+              background: "#EF4444", color: "#fff",
+              borderRadius: 999, border: "2px solid var(--shop-surface)",
+              fontSize: 10, fontWeight: 700, lineHeight: "12px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* ── Search Bar ── */}
@@ -464,14 +497,26 @@ export default function ShopHomePage() {
                         FEATURED
                       </span>
                     )}
-                    <div style={{
-                      width: 44, height: 44, borderRadius: 12,
-                      background: "var(--shop-primary-tint)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      marginBottom: 10,
-                    }}>
-                      <CategoryIcon icon={m.icon_emoji} size={24} fallback="shop" alt={m.name} />
-                    </div>
+                    {m.logo_url ? (
+                      <img
+                        src={m.logo_url}
+                        alt={m.name}
+                        style={{
+                          width: 44, height: 44, borderRadius: 12,
+                          objectFit: "cover", marginBottom: 10,
+                          background: "var(--shop-primary-tint)",
+                        }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: 44, height: 44, borderRadius: 12,
+                        background: "var(--shop-primary-tint)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        marginBottom: 10,
+                      }}>
+                        <CategoryIcon icon={m.icon_emoji} size={24} fallback="shop" alt={m.name} />
+                      </div>
+                    )}
                     <p style={{
                       fontSize: 14, fontWeight: 700, color: "var(--shop-black)",
                       marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
@@ -505,7 +550,15 @@ export default function ShopHomePage() {
             <section key={m.id} style={{ marginTop: 24 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                 <h2 style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black)", display: "flex", alignItems: "center", gap: 8 }}>
-                  <CategoryIcon icon={m.icon_emoji} size={20} fallback="shop" alt={m.name} />
+                  {m.logo_url ? (
+                    <img
+                      src={m.logo_url}
+                      alt={m.name}
+                      style={{ width: 24, height: 24, borderRadius: 6, objectFit: "cover" }}
+                    />
+                  ) : (
+                    <CategoryIcon icon={m.icon_emoji} size={20} fallback="shop" alt={m.name} />
+                  )}
                   {m.name}
                 </h2>
                 <Link href={`/shop/merchant/${m.id}`} style={{ fontSize: 13, fontWeight: 600, color: "var(--shop-primary)", textDecoration: "none" }}>

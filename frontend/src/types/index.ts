@@ -44,6 +44,7 @@ export interface Merchant {
   instagram?: string;
   logo_url?: string | null;
   is_featured?: boolean;
+  telegram_group_id?: number | null;
   product_count?: number;
   order_count?: number;
   created_at?: string;
