@@ -21,6 +21,7 @@ function SearchContent() {
   const [categoryId, setCategoryId] = useState(searchParams.get("category") || "");
   const [merchantId, setMerchantId] = useState(searchParams.get("merchant") || "");
   const [results, setResults] = useState<Product[]>([]);
+  const [suggested, setSuggested] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -30,6 +31,11 @@ function SearchContent() {
     inputRef.current?.focus();
     try { setRecentSearches(JSON.parse(localStorage.getItem("recentSearches") || "[]")); } catch { /* ignore */ }
     api.get<Category[]>("/categories").then(setCategories).catch(() => {});
+    // Pre-load a batch of products so the empty state isn't blank
+    api
+      .get<Product[]>("/products", { params: { page_size: 16 } })
+      .then(setSuggested)
+      .catch(() => {});
   }, []);
 
   // Auto-search on query change
@@ -39,6 +45,8 @@ function SearchContent() {
     const timer = setTimeout(() => performSearch(), 350);
     return () => clearTimeout(timer);
   }, [query, categoryId, merchantId]);
+
+  const isEmptyFilters = !query.trim() && !categoryId && !merchantId;
 
   async function performSearch() {
     try {
@@ -178,6 +186,31 @@ function SearchContent() {
                     color: "var(--shop-muted, #8A8F9C)", fontSize: 11, fontWeight: 600,
                   }}>&#10005;</button>
                 </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Empty state — show suggested products so the page isn't blank */}
+        {!searching && isEmptyFilters && suggested.length > 0 && (
+          <div>
+            <h3 style={{
+              fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)",
+              marginBottom: 4,
+            }}>
+              Suggested for you
+            </h3>
+            <p style={{ fontSize: 12, color: "var(--shop-muted, #8A8F9C)", marginBottom: 12 }}>
+              Type to search or tap a product below
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
+              {suggested.map(p => (
+                <MiniProductCard
+                  key={p.id}
+                  product={p}
+                  onClick={() => router.push(`/shop/product/${p.id}`)}
+                  onAddToCart={() => addToCart(p.id)}
+                />
               ))}
             </div>
           </div>

@@ -8,14 +8,17 @@ from pydantic import BaseModel, Field
 
 
 class ProfileUpdate(BaseModel):
-    """Fields a user can update on their own profile."""
+    """Fields a user can update on their own profile.
 
-    phone_number: str | None = Field(None, max_length=20)
+    Field names mirror columns in the ``users`` table verbatim — the route
+    forwards model_dump() straight to PostgREST.
+    """
+
     first_name: str | None = Field(None, max_length=100)
     last_name: str | None = Field(None, max_length=100)
-    delivery_address: str | None = Field(None, max_length=500)
-    delivery_province: str | None = Field(None, max_length=100)
-    bio: str | None = Field(None, max_length=500)
+    phone: str | None = Field(None, max_length=20)
+    email: str | None = Field(None, max_length=150)
+    address: str | None = Field(None, max_length=500)
 
 
 class UserResponse(BaseModel):

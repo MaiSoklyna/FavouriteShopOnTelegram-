@@ -38,12 +38,11 @@ export default function ShopHomePage() {
     return () => { cancelled = true; clearInterval(id); };
   }, [user]);
 
-  // Auto-rotate hero carousel
+  // Auto-rotate hero carousel — 3 fixed slides, independent of promos count
   useEffect(() => {
-    if (promos.length <= 1) return;
-    const timer = setInterval(() => setHeroIndex(i => (i + 1) % Math.min(promos.length, 3)), 4000);
+    const timer = setInterval(() => setHeroIndex(i => (i + 1) % 3), 4000);
     return () => clearInterval(timer);
-  }, [promos.length]);
+  }, []);
 
   async function fetchData() {
     setLoadError(false);
@@ -147,6 +146,44 @@ export default function ShopHomePage() {
     ? explicitlyFeatured
     : [...merchants].sort((a, b) => (b.product_count ?? 0) - (a.product_count ?? 0)).slice(0, 3);
   const featuredIds = new Set(featuredShops.map(m => m.id));
+
+  // Hero carousel slides — three distinct cards that auto-rotate.
+  function scrollTo(id: string) {
+    if (typeof document !== "undefined") {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+  const heroSlides = [
+    {
+      badge: "New Arrivals",
+      title: "Discover Top Picks",
+      subtitle: `${products.length} products from ${merchants.length} ${merchants.length === 1 ? "shop" : "shops"}`,
+      cta: "Shop Now",
+      bg: "linear-gradient(135deg, var(--shop-primary), var(--shop-primary-dark, #0040c0))",
+      textAccent: "var(--shop-primary)",
+      onClick: () => scrollTo("products-section"),
+    },
+    {
+      badge: "Featured Shops",
+      title: "Hand-Picked Sellers",
+      subtitle: `${featuredShops.length} ${featuredShops.length === 1 ? "shop" : "shops"} curated for you`,
+      cta: "Browse Shops",
+      bg: "linear-gradient(135deg, #EC4899, #BE185D)",
+      textAccent: "#BE185D",
+      onClick: () => scrollTo("featured-shops"),
+    },
+    {
+      badge: "Hot Deals",
+      title: promos.length > 0 ? "Grab a Promo Code" : "Stay Tuned",
+      subtitle: promos.length > 0
+        ? `${promos.length} active promo${promos.length === 1 ? "" : "s"} — tap to copy`
+        : "New deals are added every week",
+      cta: promos.length > 0 ? "See Promos" : "Browse Now",
+      bg: "linear-gradient(135deg, #F59E0B, #B45309)",
+      textAccent: "#B45309",
+      onClick: () => scrollTo(promos.length > 0 ? "promos-section" : "products-section"),
+    },
+  ];
 
   // Extract real user name from DB user record (first_name, username) or admin name
   const userName = (() => {
@@ -256,9 +293,10 @@ export default function ShopHomePage() {
         {/* ── Hero Carousel ── */}
         <div style={{
           marginTop: 16, height: 180, borderRadius: "var(--shop-r-card)",
-          background: "linear-gradient(135deg, var(--shop-primary), var(--shop-primary-dark))",
+          background: heroSlides[heroIndex % 3].bg,
           position: "relative", overflow: "hidden", padding: 24,
           display: "flex", flexDirection: "column", justifyContent: "center",
+          transition: "background 0.6s ease",
         }}>
           {/* Decorative circles */}
           <div style={{ position: "absolute", top: -30, right: -30, width: 120, height: 120, borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
@@ -270,32 +308,32 @@ export default function ShopHomePage() {
             background: "rgba(255,255,255,0.2)", color: "#fff",
             fontSize: 11, fontWeight: 600, marginBottom: 10,
           }}>
-            New Arrivals
+            {heroSlides[heroIndex % 3].badge}
           </span>
           <h2 style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 4, lineHeight: 1.2 }}>
-            Discover Top Picks
+            {heroSlides[heroIndex % 3].title}
           </h2>
           <p style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginBottom: 16 }}>
-            {products.length} products from {merchants.length} shops
+            {heroSlides[heroIndex % 3].subtitle}
           </p>
           <button
-            onClick={() => router.push("/shop/search")}
+            onClick={heroSlides[heroIndex % 3].onClick}
             style={{
               width: "fit-content", padding: "10px 24px",
-              background: "#fff", color: "var(--shop-primary)",
+              background: "#fff", color: heroSlides[heroIndex % 3].textAccent,
               border: "none", borderRadius: "var(--shop-r-pill)",
               fontWeight: 700, fontSize: 13, cursor: "pointer",
             }}
           >
-            Shop Now
+            {heroSlides[heroIndex % 3].cta}
           </button>
-          {/* Dots */}
+          {/* Dots — also clickable to jump */}
           <div style={{ position: "absolute", bottom: 14, right: 20, display: "flex", gap: 6 }}>
             {[0, 1, 2].map(i => (
-              <span key={i} style={{
+              <button key={i} onClick={() => setHeroIndex(i)} aria-label={`Slide ${i + 1}`} style={{
                 width: i === heroIndex % 3 ? 18 : 6, height: 6,
                 borderRadius: 3, background: i === heroIndex % 3 ? "#fff" : "rgba(255,255,255,0.4)",
-                transition: "all 0.3s ease",
+                transition: "all 0.3s ease", border: "none", padding: 0, cursor: "pointer",
               }} />
             ))}
           </div>
@@ -351,40 +389,54 @@ export default function ShopHomePage() {
 
         {/* ── Promo Codes ── */}
         {promos.length > 0 && (
-          <section style={{ marginTop: 24 }}>
+          <section id="promos-section" style={{ marginTop: 24, scrollMarginTop: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <h2 style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black)" }}>
                 🎁 Active Promos
               </h2>
             </div>
             <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
-              {promos.slice(0, 5).map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => copyPromo(p.code)}
-                  style={{
-                    flexShrink: 0, padding: "14px 18px", borderRadius: "var(--shop-r-card)",
-                    background: copiedPromo === p.code ? "var(--shop-primary-tint)" : "var(--shop-surface)",
-                    border: `1.5px dashed ${copiedPromo === p.code ? "var(--shop-primary)" : "var(--shop-divider)"}`,
-                    cursor: "pointer", textAlign: "left" as const, minWidth: 150,
-                    boxShadow: "var(--shop-shadow)", transition: "all 0.2s ease",
-                  }}
-                >
-                  <p style={{ fontSize: 16, fontWeight: 700, fontFamily: "monospace", color: "var(--shop-primary)", letterSpacing: 1 }}>
-                    {p.code}
-                  </p>
-                  <p style={{ fontSize: 12, color: "var(--shop-muted)", marginTop: 4 }}>
-                    {p.type === "percent" ? `${p.value}% off` : `$${p.value} off`}
-                    {p.min_order ? ` (min $${p.min_order})` : ""}
-                  </p>
-                  <p style={{
-                    fontSize: 11, marginTop: 6, fontWeight: 600,
-                    color: copiedPromo === p.code ? "var(--shop-primary)" : "var(--shop-muted)",
-                  }}>
-                    {copiedPromo === p.code ? "Copied!" : "Tap to copy"}
-                  </p>
-                </button>
-              ))}
+              {promos.slice(0, 5).map(p => {
+                const shop = merchants.find(m => m.id === p.merchant_id);
+                const shopName = shop?.name || "All shops";
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      copyPromo(p.code);
+                      if (shop) router.push(`/shop/merchant/${shop.id}`);
+                    }}
+                    style={{
+                      flexShrink: 0, padding: "14px 18px", borderRadius: "var(--shop-r-card)",
+                      background: copiedPromo === p.code ? "var(--shop-primary-tint)" : "var(--shop-surface)",
+                      border: `1.5px dashed ${copiedPromo === p.code ? "var(--shop-primary)" : "var(--shop-divider)"}`,
+                      cursor: "pointer", textAlign: "left" as const, minWidth: 180,
+                      boxShadow: "var(--shop-shadow)", transition: "all 0.2s ease",
+                    }}
+                  >
+                    <p style={{
+                      fontSize: 10, fontWeight: 700, color: "var(--shop-muted)",
+                      textTransform: "uppercase", letterSpacing: 0.6,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>
+                      🏪 {shopName}
+                    </p>
+                    <p style={{ fontSize: 16, fontWeight: 700, fontFamily: "monospace", color: "var(--shop-primary)", letterSpacing: 1, marginTop: 4 }}>
+                      {p.code}
+                    </p>
+                    <p style={{ fontSize: 12, color: "var(--shop-muted)", marginTop: 4 }}>
+                      {p.type === "percent" ? `${p.value}% off` : `$${p.value} off`}
+                      {p.min_order ? ` (min $${p.min_order})` : ""}
+                    </p>
+                    <p style={{
+                      fontSize: 11, marginTop: 6, fontWeight: 600,
+                      color: copiedPromo === p.code ? "var(--shop-primary)" : "var(--shop-muted)",
+                    }}>
+                      {copiedPromo === p.code ? "Copied! Tap card to open shop" : "Tap to copy + open shop"}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
           </section>
         )}
@@ -461,7 +513,7 @@ export default function ShopHomePage() {
 
         {/* ── Featured Shops ── */}
         {featuredShops.length > 0 && (
-          <section className="shop-fade-up" style={{ marginTop: 24 }}>
+          <section id="featured-shops" className="shop-fade-up" style={{ marginTop: 24, scrollMarginTop: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div>
                 <h2 style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black)" }}>
@@ -543,6 +595,7 @@ export default function ShopHomePage() {
         )}
 
         {/* ── Products by Merchant ── */}
+        <div id="products-section" style={{ scrollMarginTop: 16 }} />
         {merchants.map(m => {
           const mProducts = productsByMerchant[m.id];
           if (!mProducts || mProducts.length === 0) return null;

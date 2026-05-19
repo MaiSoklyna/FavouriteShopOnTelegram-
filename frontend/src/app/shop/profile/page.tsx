@@ -58,8 +58,10 @@ export default function ProfilePage() {
   async function handleSave() {
     setSaving(true);
     try {
-      await api.patch("/users/me", { first_name: form.name, phone_number: form.phone });
+      await api.patch("/users/me", { first_name: form.name, phone: form.phone });
       setEditing(false);
+      // Refresh so the header reflects the new name/phone immediately.
+      if (typeof window !== "undefined") window.location.reload();
     } catch (e: any) { alert(e.detail || "Failed to update"); }
     finally { setSaving(false); }
   }

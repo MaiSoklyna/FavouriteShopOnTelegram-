@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Favourite of Shop — Shop & Product Cockpit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #F4F6FB;
+    --surface: #FFFFFF;
+    --ink: #0F172A;
+    --ink-2: #475569;
+    --ink-3: #94A3B8;
+    --border: #E5E7EB;
+    --shadow: 0 1px 2px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.04);
+    --r: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg); color: var(--ink); line-height: 1.5;
+    padding: 32px 16px 80px;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--ink-2); font-size: 14px; }
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px; margin: 20px 0 28px;
+  }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; box-shadow: var(--shadow);
+  }
+  .stat .k { font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; }
+  .stat .v { font-size: 22px; font-weight: 700; margin-top: 4px; }
+
+  .shop {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r); margin-bottom: 22px; overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .shop header {
+    padding: 22px 24px 18px; color: #fff;
+    display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start;
+  }
+  .shop header .emoji {
+    font-size: 38px; width: 64px; height: 64px;
+    background: rgba(255,255,255,0.22);
+    border-radius: 14px; display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(8px);
+  }
+  .shop header h2 {
+    margin: 0; font-size: 20px; line-height: 1.2; font-weight: 700;
+  }
+  .shop header .tag {
+    font-size: 13px; margin-top: 4px; opacity: .92;
+  }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    padding: 3px 8px; border-radius: 999px;
+    background: rgba(255,255,255,0.25); letter-spacing: .04em;
+    margin-left: 8px; vertical-align: 1px;
+  }
+  .body { padding: 18px 24px 22px; }
+  .meta {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px 18px; margin-bottom: 14px;
+  }
+  .meta .row { display: flex; gap: 8px; font-size: 13px; }
+  .meta .row .l { color: var(--ink-3); width: 88px; flex-shrink: 0; }
+  .meta .row .r { color: var(--ink); word-break: break-word; }
+  .meta .row .r a { color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--ink-3); }
+  .desc {
+    background: #FAFBFC; border-left: 3px solid var(--accent, #888);
+    padding: 10px 14px; border-radius: 6px; font-size: 13px; color: var(--ink-2);
+    margin-bottom: 16px;
+  }
+  .products { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .product {
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; background: #FDFEFF; position: relative;
+  }
+  .product .pe {
+    font-size: 22px; margin-bottom: 6px;
+  }
+  .product .pn {
+    font-size: 13.5px; font-weight: 600; margin: 0 0 4px;
+    overflow-wrap: anywhere;
+  }
+  .product .pd {
+    font-size: 11.5px; color: var(--ink-3); margin: 0 0 8px; line-height: 1.4;
+  }
+  .product .pr {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 12px; color: var(--ink-2);
+  }
+  .product .pp {
+    font-size: 15px; font-weight: 700; color: var(--ink);
+  }
+  .product .ps {
+    font-size: 11px; color: var(--ink-3);
+  }
+  .product .sku {
+    position: absolute; top: 10px; right: 12px;
+    font-size: 9.5px; color: var(--ink-3); font-family: ui-monospace, SFMono-Regular, monospace;
+  }
+
+  @media print {
+    body { background: #fff; padding: 0; }
+    .shop { break-inside: avoid; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>Favourite of Shop — Cockpit</h1>
+  <div class="sub">Seed plan for 7 merchants and their products. Use the dashboard or paste the values into Supabase.</div>
+
+  <div class="stats">
+    <div class="stat"><div class="k">Merchants</div><div class="v">7</div></div>
+    <div class="stat"><div class="k">Products</div><div class="v">55</div></div>
+    <div class="stat"><div class="k">Featured shops</div><div class="v">3</div></div>
+    <div class="stat"><div class="k">Telegram-linked</div><div class="v">1</div></div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- 1) Skin Care By Lyna — existing -->
+  <!-- ================================================================ -->
+  <div class="shop" style="--accent:#A855F7;">
+    <header style="background: linear-gradient(135deg,#A855F7,#7C3AED);">
+      <div class="emoji">🌿</div>
+      <div style="flex:1; min-width:0;">
+        <h2>Skin Care By Lyna <span class="badge">EXISTING</span> <span class="badge">★ FEATURED</span></h2>
+        <div class="tag">K-beauty + Khmer skincare for radiant glow</div>
+      </div>
+    </header>
+    <div class="body">
+      <div class="meta">
+        <div class="row"><div class="l">Slug</div><div class="r"><code>skin-care-by-lyna</code></div></div>
+        <div class="row"><div class="l">Owner</div><div class="r">Lyna Sok</div></div>
+        <div class="row"><div class="l">Email</div><div class="r"><a href="mailto:lyna.sok@favouriteofshop.com">lyna.sok@favouriteofshop.com</a></div></div>
+        <div class="row"><div class="l">Phone</div><div class="r">+855 12 345 678</div></div>
+        <div class="row"><div class="l">Facebook</div><div class="r">facebook.com/skincarebylyna</div></div>
+        <div class="row"><div class="l">Instagram</div><div class="r">@skincare.bylyna</div></div>
+        <div class="row"><div class="l">Plan</div><div class="r">Premium</div></div>
+        <div class="row"><div class="l">TG group id</div><div class="r"><code>-4820112044</code></div></div>
+      </div>
+      <div class="desc">Hand-picked skincare from Korean and local Khmer brands. Cruelty-free, dermatologist-tested, no parabens. Free delivery in Phnom Penh on orders over $30.</div>
+
+      <div class="products">
+        <div class="product"><span class="sku">SCBL-VITC-20</span><div class="pe">🍊</div><p class="pn">Vitamin C Serum 20%</p><p class="pd">Brightens dark spots, even tone in 4 weeks.</p><div class="pr"><span class="pp">$24.00</span><span class="ps">25 in stock</span></div></div>
+        <div class="product"><span class="sku">SCBL-NIA-10</span><div class="pe">💧</div><p class="pn">Niacinamide Toner 10%</p><p class="pd">Pore-refining, oil-balancing daily toner.</p><div class="pr"><span class="pp">$15.00</span><span class="ps">40 in stock</span></div></div>
+        <div class="product"><span class="sku">SCBL-SNAIL-NC</span><div class="pe">🌙</div><p class="pn">Snail Repair Night Cream</p><p class="pd">Korean snail mucin, restores overnight.</p><div class="pr"><span class="pp">$32.00</span><span class="ps">15 in stock</span></div></div>
+        <div class="product"><span class="sku">SCBL-MASK-5P</span><div class="pe">🎴</div><p class="pn">Hydrating Sheet Mask (5 pack)</p><p class="pd">Hyaluronic-acid soaked sheets. Variety pack.</p><div class="pr"><span class="pp">$12.50</span><span class="ps">60 in stock</span></div></div>
+        <div class="product"><span class="sku">SCBL-CENT-GEL</span><div class="pe">🍃</div><p class="pn">Centella Soothing Gel</p><p class="pd">For sensitive, acne-prone skin.</p><div class="pr"><span class="pp">$18.00</span><span class="ps">22 in stock</span></div></div>
+        <div class="product"><span class="sku">SCBL-TINT-COR</span><div class="pe">💋</div><p class="pn">Lip &amp; Cheek Tint (Coral)</p><p class="pd">Buildable color, all-day wear.</p><div class="pr"><span class="pp">$9.50</span><span class="ps">35 in stock</span></div></div>
+        <div class="product"><span class="sku">SCBL-HA-SER</span><div class="pe">✨</div><p class="pn">Hyaluronic Acid Serum</p><p class="pd">5-layer hydration boost.</p><div class="pr"><span class="pp">$19.99</span><span class="ps">30 in stock</span></div></div>
+        <div class="product"><span class="sku">SCBL-SPF-50</span><div class="pe">🌞</div><p class="pn">Sunscreen SPF50 PA++++</p><p class="pd">Lightweight, no white cast.</p><div class="pr"><span class="pp">$22.00</span><span class="ps">18 in stock</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- 2) ChhayCha Coffee -->
+  <!-- ================================================================ -->
+  <div class="shop" style="--accent:#6F4E37;">
+    <header style="background: linear-gradient(135deg,#8B5E3C,#4A2C20);">
+      <div class="emoji">☕</div>
+      <div style="flex:1; min-width:0;">
+        <h2>ChhayCha Coffee <span class="badge">★ FEATURED</span></h2>
+        <div class="tag">Mondulkiri beans, brewed with love</div>
+      </div>
+    </header>
+    <div class="body">
+      <div class="meta">
+        <div class="row"><div class="l">Slug</div><div class="r"><code>chhaycha-coffee</code></div></div>
+        <div class="row"><div class="l">Owner</div><div class="r">Vichea Phon</div></div>
+        <div class="row"><div class="l">Email</div><div class="r"><a href="mailto:vichea@chhaycha.com">vichea@chhaycha.com</a></div></div>
+        <div class="row"><div class="l">Phone</div><div class="r">+855 87 456 789</div></div>
+        <div class="row"><div class="l">Facebook</div><div class="r">facebook.com/chhaycha</div></div>
+        <div class="row"><div class="l">Instagram</div><div class="r">@chhaycha.coffee</div></div>
+        <div class="row"><div class="l">Plan</div><div class="r">Standard</div></div>
+        <div class="row"><div class="l">TG group id</div><div class="r"><span style="color:var(--ink-3);">(not set yet)</span></div></div>
+      </div>
+      <div class="desc">Specialty Cambodian coffee, fresh-roasted weekly in Phnom Penh. Single-origin beans from Mondulkiri and Ratanakiri provinces. Subscriptions and one-time bags available.</div>
+      <div class="products">
+        <div class="product"><span class="sku">CHC-MDK-250</span><div class="pe">🫘</div><p class="pn">Mondulkiri Single-Origin 250g</p><p class="pd">Light roast, notes of jasmine and orange.</p><div class="pr"><span class="pp">$14.00</span><span class="ps">50 in stock</span></div></div>
+        <div class="product"><span class="sku">CHC-RTK-250</span><div class="pe">☕</div><p class="pn">Ratanakiri Dark Roast 250g</p><p class="pd">Bold, chocolatey, low-acid finish.</p><div class="pr"><span class="pp">$13.50</span><span class="ps">35 in stock</span></div></div>
+        <div class="product"><span class="sku">CHC-CB-1L</span><div class="pe">🧊</div><p class="pn">Cold Brew Concentrate 1L</p><p class="pd">Makes 8 cups. Refrigerate after opening.</p><div class="pr"><span class="pp">$11.00</span><span class="ps">20 in stock</span></div></div>
+        <div class="product"><span class="sku">CHC-LATTE</span><div class="pe">🥛</div><p class="pn">Iced Latte (Ready-to-Drink)</p><p class="pd">350ml, delivered chilled in Phnom Penh.</p><div class="pr"><span class="pp">$3.50</span><span class="ps">100 in stock</span></div></div>
+        <div class="product"><span class="sku">CHC-PHIN</span><div class="pe">🫖</div><p class="pn">Vietnamese Phin Filter</p><p class="pd">Stainless steel, single-serve.</p><div class="pr"><span class="pp">$6.00</span><span class="ps">25 in stock</span></div></div>
+        <div class="product"><span class="sku">CHC-TUMB-12</span><div class="pe">🧉</div><p class="pn">Reusable Tumbler 12oz</p><p class="pd">Insulated, ChhayCha branded.</p><div class="pr"><span class="pp">$9.50</span><span class="ps">40 in stock</span></div></div>
+        <div class="product"><span class="sku">CHC-CARDA</span><div class="pe">🍂</div><p class="pn">Cardamom Cinnamon Blend 200g</p><p class="pd">Pre-spiced, brew like regular coffee.</p><div class="pr"><span class="pp">$12.00</span><span class="ps">18 in stock</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- 3) Sokunthea Boutique -->
+  <!-- ================================================================ -->
+  <div class="shop" style="--accent:#EC4899;">
+    <header style="background: linear-gradient(135deg,#EC4899,#BE185D);">
+      <div class="emoji">👗</div>
+      <div style="flex:1; min-width:0;">
+        <h2>Sokunthea Boutique</h2>
+        <div class="tag">Modern Khmer silhouettes for every occasion</div>
+      </div>
+    </header>
+    <div class="body">
+      <div class="meta">
+        <div class="row"><div class="l">Slug</div><div class="r"><code>sokunthea-boutique</code></div></div>
+        <div class="row"><div class="l">Owner</div><div class="r">Sokunthea Chan</div></div>
+        <div class="row"><div class="l">Email</div><div class="r"><a href="mailto:contact@sokunthea.shop">contact@sokunthea.shop</a></div></div>
+        <div class="row"><div class="l">Phone</div><div class="r">+855 96 712 345</div></div>
+        <div class="row"><div class="l">Facebook</div><div class="r">facebook.com/sokunthea.boutique</div></div>
+        <div class="row"><div class="l">Instagram</div><div class="r">@sokunthea.shop</div></div>
+        <div class="row"><div class="l">Plan</div><div class="r">Standard</div></div>
+        <div class="row"><div class="l">TG group id</div><div class="r"><span style="color:var(--ink-3);">(not set yet)</span></div></div>
+      </div>
+      <div class="desc">Contemporary women's apparel mixing traditional Cambodian silk with modern cuts. Made-to-order alterations available. Sizes XS–XL.</div>
+      <div class="products">
+        <div class="product"><span class="sku">SKB-SAMP-HOL</span><div class="pe">🧵</div><p class="pn">Sampot Hol Wrap Skirt</p><p class="pd">Hand-loomed silk, ankle length.</p><div class="pr"><span class="pp">$48.00</span><span class="ps">12 in stock</span></div></div>
+        <div class="product"><span class="sku">SKB-KRAMA</span><div class="pe">🧣</div><p class="pn">Silk Krama Scarf</p><p class="pd">Classic Khmer check, 70 × 200cm.</p><div class="pr"><span class="pp">$22.00</span><span class="ps">30 in stock</span></div></div>
+        <div class="product"><span class="sku">SKB-LINP-W</span><div class="pe">👖</div><p class="pn">Linen Wide-Leg Pants</p><p class="pd">Breathable, with side pockets. Beige.</p><div class="pr"><span class="pp">$36.00</span><span class="ps">18 in stock</span></div></div>
+        <div class="product"><span class="sku">SKB-EMB-WHT</span><div class="pe">👚</div><p class="pn">Embroidered White Blouse</p><p class="pd">Cotton voile, floral embroidery at neckline.</p><div class="pr"><span class="pp">$42.00</span><span class="ps">14 in stock</span></div></div>
+        <div class="product"><span class="sku">SKB-PRL-DRP</span><div class="pe">💎</div><p class="pn">Pearl Drop Earrings</p><p class="pd">Freshwater pearls, gold-plated hooks.</p><div class="pr"><span class="pp">$18.00</span><span class="ps">25 in stock</span></div></div>
+        <div class="product"><span class="sku">SKB-FL-MIDI</span><div class="pe">🌺</div><p class="pn">Floral Midi Dress</p><p class="pd">Cap sleeves, hidden zip, mid-calf.</p><div class="pr"><span class="pp">$55.00</span><span class="ps">10 in stock</span></div></div>
+        <div class="product"><span class="sku">SKB-BELT-BR</span><div class="pe">🪢</div><p class="pn">Leather Belt with Brass Buckle</p><p class="pd">Veg-tanned, full grain, 32mm.</p><div class="pr"><span class="pp">$24.00</span><span class="ps">22 in stock</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- 4) Bayon Eats -->
+  <!-- ================================================================ -->
+  <div class="shop" style="--accent:#F59E0B;">
+    <header style="background: linear-gradient(135deg,#F59E0B,#B45309);">
+      <div class="emoji">🍜</div>
+      <div style="flex:1; min-width:0;">
+        <h2>Bayon Eats <span class="badge">★ FEATURED</span></h2>
+        <div class="tag">Homemade Khmer snacks, delivered hot</div>
+      </div>
+    </header>
+    <div class="body">
+      <div class="meta">
+        <div class="row"><div class="l">Slug</div><div class="r"><code>bayon-eats</code></div></div>
+        <div class="row"><div class="l">Owner</div><div class="r">Sopheap Kim</div></div>
+        <div class="row"><div class="l">Email</div><div class="r"><a href="mailto:orders@bayoneats.kh">orders@bayoneats.kh</a></div></div>
+        <div class="row"><div class="l">Phone</div><div class="r">+855 78 901 234</div></div>
+        <div class="row"><div class="l">Facebook</div><div class="r">facebook.com/bayon.eats</div></div>
+        <div class="row"><div class="l">Instagram</div><div class="r">@bayon.eats</div></div>
+        <div class="row"><div class="l">Plan</div><div class="r">Standard</div></div>
+        <div class="row"><div class="l">TG group id</div><div class="r"><span style="color:var(--ink-3);">(not set yet)</span></div></div>
+      </div>
+      <div class="desc">Authentic street snacks made fresh daily by Phnom Penh aunties. Same-day delivery 10:00 – 20:00. No MSG; gluten-free options on request.</div>
+      <div class="products">
+        <div class="product"><span class="sku">BAY-NBC</span><div class="pe">🍝</div><p class="pn">Num Banh Chok (Khmer Noodles)</p><p class="pd">Rice noodles, fish gravy, fresh herbs.</p><div class="pr"><span class="pp">$4.50</span><span class="ps">50 / day</span></div></div>
+        <div class="product"><span class="sku">BAY-BSC</span><div class="pe">🍚</div><p class="pn">Bai Sach Chrouk (Pork &amp; Rice)</p><p class="pd">Grilled marinated pork, broken rice.</p><div class="pr"><span class="pp">$3.50</span><span class="ps">60 / day</span></div></div>
+        <div class="product"><span class="sku">BAY-AMOK</span><div class="pe">🐟</div><p class="pn">Amok Trey (Fish Curry)</p><p class="pd">Steamed in banana leaf, coconut curry.</p><div class="pr"><span class="pp">$7.00</span><span class="ps">35 / day</span></div></div>
+        <div class="product"><span class="sku">BAY-LRTCH</span><div class="pe">🥢</div><p class="pn">Lort Cha (Stir-fried Pin Noodles)</p><p class="pd">Wok-fried with bean sprouts &amp; egg.</p><div class="pr"><span class="pp">$4.00</span><span class="ps">40 / day</span></div></div>
+        <div class="product"><span class="sku">BAY-LOKLAK</span><div class="pe">🥩</div><p class="pn">Beef Lok Lak</p><p class="pd">Cubed beef, pepper-lime sauce, rice.</p><div class="pr"><span class="pp">$6.50</span><span class="ps">30 / day</span></div></div>
+        <div class="product"><span class="sku">BAY-SR-6</span><div class="pe">🥟</div><p class="pn">Fried Spring Rolls (6 pcs)</p><p class="pd">Pork &amp; glass-noodle filling.</p><div class="pr"><span class="pp">$3.00</span><span class="ps">80 / day</span></div></div>
+        <div class="product"><span class="sku">BAY-STK-MNG</span><div class="pe">🥭</div><p class="pn">Sweet Sticky Rice with Mango</p><p class="pd">Coconut-cream glaze, seasonal.</p><div class="pr"><span class="pp">$4.50</span><span class="ps">25 / day</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- 5) Angkor Tech -->
+  <!-- ================================================================ -->
+  <div class="shop" style="--accent:#2563EB;">
+    <header style="background: linear-gradient(135deg,#3B82F6,#1E40AF);">
+      <div class="emoji">💻</div>
+      <div style="flex:1; min-width:0;">
+        <h2>Angkor Tech</h2>
+        <div class="tag">Smart gadgets for the Khmer hustle</div>
+      </div>
+    </header>
+    <div class="body">
+      <div class="meta">
+        <div class="row"><div class="l">Slug</div><div class="r"><code>angkor-tech</code></div></div>
+        <div class="row"><div class="l">Owner</div><div class="r">Pisey Tep</div></div>
+        <div class="row"><div class="l">Email</div><div class="r"><a href="mailto:hello@angkortech.kh">hello@angkortech.kh</a></div></div>
+        <div class="row"><div class="l">Phone</div><div class="r">+855 11 234 567</div></div>
+        <div class="row"><div class="l">Facebook</div><div class="r">facebook.com/angkortech</div></div>
+        <div class="row"><div class="l">Instagram</div><div class="r">@angkor.tech</div></div>
+        <div class="row"><div class="l">Plan</div><div class="r">Premium</div></div>
+        <div class="row"><div class="l">TG group id</div><div class="r"><span style="color:var(--ink-3);">(not set yet)</span></div></div>
+      </div>
+      <div class="desc">Curated electronics — phone accessories, smart home, audio, ergonomic peripherals. Every item is QC-checked before shipping. 14-day return policy.</div>
+      <div class="products">
+        <div class="product"><span class="sku">AGT-USC-65W</span><div class="pe">🔌</div><p class="pn">USB-C Fast Charger 65W</p><p class="pd">GaN tech, charges MacBook + phone.</p><div class="pr"><span class="pp">$28.00</span><span class="ps">35 in stock</span></div></div>
+        <div class="product"><span class="sku">AGT-BT-SPK</span><div class="pe">🔊</div><p class="pn">Bluetooth Speaker (Waterproof)</p><p class="pd">IPX7, 12-hour battery, deep bass.</p><div class="pr"><span class="pp">$45.00</span><span class="ps">20 in stock</span></div></div>
+        <div class="product"><span class="sku">AGT-AB-PRO</span><div class="pe">🎧</div><p class="pn">AirBuds Pro (Wireless Earbuds)</p><p class="pd">ANC, transparency mode, USB-C case.</p><div class="pr"><span class="pp">$38.00</span><span class="ps">25 in stock</span></div></div>
+        <div class="product"><span class="sku">AGT-PB-20K</span><div class="pe">🔋</div><p class="pn">Power Bank 20000mAh</p><p class="pd">22.5W PD, dual output, LED display.</p><div class="pr"><span class="pp">$24.00</span><span class="ps">40 in stock</span></div></div>
+        <div class="product"><span class="sku">AGT-IP-CS</span><div class="pe">📱</div><p class="pn">iPhone Silicone Case</p><p class="pd">10 colors, soft-touch, MagSafe-ready.</p><div class="pr"><span class="pp">$12.00</span><span class="ps">60 in stock</span></div></div>
+        <div class="product"><span class="sku">AGT-HUB-HDMI</span><div class="pe">🔗</div><p class="pn">USB-C Hub (HDMI + USB-A ×3 + SD)</p><p class="pd">4K@60Hz output, 100W passthrough.</p><div class="pr"><span class="pp">$18.00</span><span class="ps">18 in stock</span></div></div>
+        <div class="product"><span class="sku">AGT-LED-5M</span><div class="pe">💡</div><p class="pn">Smart LED Strip 5m</p><p class="pd">App-controlled, music-sync, 16M colors.</p><div class="pr"><span class="pp">$22.00</span><span class="ps">15 in stock</span></div></div>
+        <div class="product"><span class="sku">AGT-MS-ERG</span><div class="pe">🖱️</div><p class="pn">Wireless Mouse Ergonomic</p><p class="pd">Silent click, 2.4GHz + Bluetooth.</p><div class="pr"><span class="pp">$19.00</span><span class="ps">28 in stock</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- 6) Sanchey Books & Stationery -->
+  <!-- ================================================================ -->
+  <div class="shop" style="--accent:#16A34A;">
+    <header style="background: linear-gradient(135deg,#22C55E,#14532D);">
+      <div class="emoji">📚</div>
+      <div style="flex:1; min-width:0;">
+        <h2>Sanchey Books</h2>
+        <div class="tag">Read more. Write better. Live curious.</div>
+      </div>
+    </header>
+    <div class="body">
+      <div class="meta">
+        <div class="row"><div class="l">Slug</div><div class="r"><code>sanchey-books</code></div></div>
+        <div class="row"><div class="l">Owner</div><div class="r">Channary Ouk</div></div>
+        <div class="row"><div class="l">Email</div><div class="r"><a href="mailto:shop@sancheybooks.kh">shop@sancheybooks.kh</a></div></div>
+        <div class="row"><div class="l">Phone</div><div class="r">+855 17 345 678</div></div>
+        <div class="row"><div class="l">Facebook</div><div class="r">facebook.com/sanchey.books</div></div>
+        <div class="row"><div class="l">Instagram</div><div class="r">@sanchey.books</div></div>
+        <div class="row"><div class="l">Plan</div><div class="r">Standard</div></div>
+        <div class="row"><div class="l">TG group id</div><div class="r"><span style="color:var(--ink-3);">(not set yet)</span></div></div>
+      </div>
+      <div class="desc">Khmer and English titles, plus planners and art supplies — curated for thinkers and makers. Local-author shelf restocked monthly.</div>
+      <div class="products">
+        <div class="product"><span class="sku">SAN-PP-STR</span><div class="pe">📖</div><p class="pn">Khmer Novel "Phnom Penh Stories"</p><p class="pd">Modern fiction by Pen Sokuntheary.</p><div class="pr"><span class="pp">$9.00</span><span class="ps">30 in stock</span></div></div>
+        <div class="product"><span class="sku">SAN-NB-A5</span><div class="pe">📓</div><p class="pn">Hardcover Notebook A5</p><p class="pd">240 pages, ivory dot grid, ribbon marker.</p><div class="pr"><span class="pp">$7.50</span><span class="ps">60 in stock</span></div></div>
+        <div class="product"><span class="sku">SAN-FP-SET</span><div class="pe">🖋️</div><p class="pn">Fountain Pen Set (3 colors)</p><p class="pd">Refillable, with starter ink cartridges.</p><div class="pr"><span class="pp">$14.00</span><span class="ps">20 in stock</span></div></div>
+        <div class="product"><span class="sku">SAN-WC-PAD</span><div class="pe">🎨</div><p class="pn">Watercolor Pad 12 sheets</p><p class="pd">300gsm cold-pressed, A4.</p><div class="pr"><span class="pp">$11.00</span><span class="ps">18 in stock</span></div></div>
+        <div class="product"><span class="sku">SAN-PLN-26</span><div class="pe">📅</div><p class="pn">Daily Planner 2026</p><p class="pd">Weekly spread, habit tracker, undated.</p><div class="pr"><span class="pp">$13.00</span><span class="ps">40 in stock</span></div></div>
+        <div class="product"><span class="sku">SAN-RUL-WD</span><div class="pe">📏</div><p class="pn">Wooden Ruler &amp; Pencil Set</p><p class="pd">2H/HB pencils, beech ruler, eraser.</p><div class="pr"><span class="pp">$5.50</span><span class="ps">80 in stock</span></div></div>
+        <div class="product"><span class="sku">SAN-DIC-KE</span><div class="pe">🔤</div><p class="pn">Khmer–English Dictionary</p><p class="pd">28,000 entries, hardcover.</p><div class="pr"><span class="pp">$16.00</span><span class="ps">15 in stock</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- 7) Pteah Style -->
+  <!-- ================================================================ -->
+  <div class="shop" style="--accent:#A78BFA;">
+    <header style="background: linear-gradient(135deg,#C084FC,#7C3AED);">
+      <div class="emoji">🪴</div>
+      <div style="flex:1; min-width:0;">
+        <h2>Pteah Style</h2>
+        <div class="tag">Beautiful Khmer homes, one piece at a time</div>
+      </div>
+    </header>
+    <div class="body">
+      <div class="meta">
+        <div class="row"><div class="l">Slug</div><div class="r"><code>pteah-style</code></div></div>
+        <div class="row"><div class="l">Owner</div><div class="r">Sreyleak Meas</div></div>
+        <div class="row"><div class="l">Email</div><div class="r"><a href="mailto:home@pteah.style">home@pteah.style</a></div></div>
+        <div class="row"><div class="l">Phone</div><div class="r">+855 81 567 890</div></div>
+        <div class="row"><div class="l">Facebook</div><div class="r">facebook.com/pteah.style</div></div>
+        <div class="row"><div class="l">Instagram</div><div class="r">@pteah.style</div></div>
+        <div class="row"><div class="l">Plan</div><div class="r">Standard</div></div>
+        <div class="row"><div class="l">TG group id</div><div class="r"><span style="color:var(--ink-3);">(not set yet)</span></div></div>
+      </div>
+      <div class="desc">Rattan, ceramics, and textiles handmade by local artisans across Cambodia. Pieces are one-of-a-kind; small variations are part of the charm.</div>
+      <div class="products">
+        <div class="product"><span class="sku">PTH-RAT-LMP</span><div class="pe">🪔</div><p class="pn">Rattan Pendant Lamp (Medium)</p><p class="pd">Hand-woven, ⌀ 35cm, E27 socket.</p><div class="pr"><span class="pp">$58.00</span><span class="ps">8 in stock</span></div></div>
+        <div class="product"><span class="sku">PTH-BOWL-4</span><div class="pe">🥣</div><p class="pn">Ceramic Bowl Set (4 pcs)</p><p class="pd">Hand-thrown stoneware, dishwasher-safe.</p><div class="pr"><span class="pp">$32.00</span><span class="ps">12 in stock</span></div></div>
+        <div class="product"><span class="sku">PTH-THR-IND</span><div class="pe">🧶</div><p class="pn">Cotton Throw Blanket (Indigo)</p><p class="pd">Natural dye, fringed edges, 130×170cm.</p><div class="pr"><span class="pp">$26.00</span><span class="ps">18 in stock</span></div></div>
+        <div class="product"><span class="sku">PTH-MIR-BAM</span><div class="pe">🪞</div><p class="pn">Bamboo Wall Mirror</p><p class="pd">Round, ⌀ 50cm, with hanging hook.</p><div class="pr"><span class="pp">$44.00</span><span class="ps">6 in stock</span></div></div>
+        <div class="product"><span class="sku">PTH-CND-LG</span><div class="pe">🕯️</div><p class="pn">Beeswax Candle (Lemongrass)</p><p class="pd">100% beeswax, 45h burn time.</p><div class="pr"><span class="pp">$9.50</span><span class="ps">35 in stock</span></div></div>
+        <div class="product"><span class="sku">PTH-BSK-WC</span><div class="pe">🧺</div><p class="pn">Wicker Storage Basket</p><p class="pd">Lined, with cotton handles, 28×40cm.</p><div class="pr"><span class="pp">$19.00</span><span class="ps">22 in stock</span></div></div>
+        <div class="product"><span class="sku">PTH-CSH-LN</span><div class="pe">🛋️</div><p class="pn">Linen Cushion Cover</p><p class="pd">45×45cm, hidden zip, cover only.</p><div class="pr"><span class="pp">$14.00</span><span class="ps">28 in stock</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <p style="font-size:12px; color:var(--ink-3); text-align:center; margin-top:32px;">
+    Generated on 19 May 2026 · Save as PDF via your browser's Print menu.
+  </p>
+</div>
+</body>
+</html>
