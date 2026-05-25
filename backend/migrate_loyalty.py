@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from app.config import settings
 
 
-SUPABASE_URL = settings.NEXT_PUBLIC_SUPABASE_URL.rstrip("/")
+SUPABASE_URL = settings.SUPABASE_URL.rstrip("/")
 SERVICE_KEY = settings.SUPABASE_SERVICE_ROLE_KEY.strip()
 
 HEADERS = {

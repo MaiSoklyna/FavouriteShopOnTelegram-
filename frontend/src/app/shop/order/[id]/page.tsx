@@ -53,15 +53,24 @@ function OrderDetailContent() {
     finally { setCancelling(false); }
   }
 
+  const [reviewProductId, setReviewProductId] = useState<number | null>(null);
+
+  function openReview(productId?: number) {
+    const pid = productId || order?.items?.[0]?.product_id;
+    if (!pid) { alert("No product found to review"); return; }
+    setReviewProductId(pid);
+    setReviewRating(5);
+    setReviewComment("");
+    setShowReview(true);
+  }
+
   async function handleReview() {
+    if (!reviewProductId) { alert("No product selected"); return; }
     setSubmittingReview(true);
     try {
-      const productId = order?.items?.[0]?.product_id;
-      if (productId) {
-        await api.post("/reviews", { product_id: productId, order_id: order!.id, rating: reviewRating, comment: reviewComment });
-        setShowReview(false);
-        alert("Review submitted! Thank you.");
-      }
+      await api.post("/reviews", { product_id: reviewProductId, order_id: order!.id, rating: reviewRating, comment: reviewComment });
+      setShowReview(false);
+      alert("Review submitted! Thank you.");
     } catch (e: any) { alert(e.detail || "Failed to submit review"); }
     finally { setSubmittingReview(false); }
   }
@@ -284,16 +293,38 @@ function OrderDetailContent() {
             </button>
           )}
           {order.status === "delivered" && (
-            <button onClick={() => setShowReview(true)}
-              style={{
-                width: "100%", padding: 14,
-                borderRadius: "var(--shop-r-input, 12px)",
-                border: "none",
-                background: "var(--shop-primary, #1E6BFF)", color: "#FFFFFF",
-                fontWeight: 600, fontSize: 14, cursor: "pointer",
-              }}>
-              Write Review
-            </button>
+            (order.items?.length || 0) <= 1 ? (
+              <button onClick={() => openReview()}
+                style={{
+                  width: "100%", padding: 14,
+                  borderRadius: 8,
+                  border: "none",
+                  background: "var(--shop-primary)", color: "#FFFFFF",
+                  fontWeight: 500, fontSize: 14, cursor: "pointer",
+                  fontFamily: "'Kantumruy Pro', sans-serif",
+                }}>
+                Write Review
+              </button>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--shop-text)", fontFamily: "'Kantumruy Pro', sans-serif" }}>
+                  Review your items:
+                </p>
+                {order.items?.map(item => (
+                  <button key={item.id} onClick={() => openReview(item.product_id)}
+                    style={{
+                      width: "100%", padding: "10px 14px",
+                      borderRadius: 8, border: "1px solid var(--shop-divider)",
+                      background: "var(--shop-surface)", color: "var(--shop-primary)",
+                      fontWeight: 500, fontSize: 13, cursor: "pointer",
+                      fontFamily: "'Kantumruy Pro', sans-serif",
+                      textAlign: "left",
+                    }}>
+                    Review: {item.product_name}
+                  </button>
+                ))}
+              </div>
+            )
           )}
           <button onClick={() => router.push("/shop/support")}
             style={{

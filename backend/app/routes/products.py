@@ -19,7 +19,7 @@ from app.core.dependencies import (
     require_any_admin,
     require_role,
 )
-from app.core.exceptions import ForbiddenError, NotFoundError
+from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import StorageClient, SupabaseClient
 from app.models.product import (
@@ -378,13 +378,23 @@ async def list_categories(
         categories = await q.select()
 
         for c in categories:
-            products = await (
+            prods = await (
                 db.from_("products")
                 .eq("category_id", c["id"])
                 .eq("is_active", True)
                 .select("id")
             )
-            c["product_count"] = len(products)
+            c["product_count"] = len(prods)
+
+        merchant_ids = list({c["merchant_id"] for c in categories if c.get("merchant_id")})
+        if merchant_ids:
+            merch_rows = await db.from_("merchants").in_("id", merchant_ids).select("id,name")
+            m_map = {m["id"]: m["name"] for m in merch_rows}
+            for c in categories:
+                c["merchant_name"] = m_map.get(c.get("merchant_id")) if c.get("merchant_id") else None
+        else:
+            for c in categories:
+                c["merchant_name"] = None
 
         return categories
 
@@ -434,6 +444,38 @@ async def delete_category(category_id: int, user: TokenClaims = require_any_admi
 
         await db.from_("categories").eq("id", category_id).update({"is_active": False})
     return {"success": True}
+
+
+@router.post("/categories/{category_id}/image")
+async def upload_category_image(
+    category_id: int,
+    file: UploadFile = File(...),
+    user: TokenClaims = require_any_admin(),
+):
+    """Upload a category image to Supabase Storage and store the URL."""
+    allowed = {"image/png", "image/jpeg", "image/webp", "image/gif"}
+    if file.content_type not in allowed:
+        raise BadRequestError("Image must be PNG, JPEG, WebP, or GIF")
+
+    content = await file.read()
+    if len(content) > 2 * 1024 * 1024:
+        raise BadRequestError("Image too large (max 2 MB)")
+
+    ext = file.filename.rsplit(".", 1)[-1] if file.filename else "jpg"
+    file_name = f"categories/{category_id}/{int(time.time() * 1000)}.{ext}"
+
+    storage = StorageClient()
+    public_url = await storage.upload(
+        bucket="product-images",
+        path=file_name,
+        content=content,
+        content_type=file.content_type or "application/octet-stream",
+    )
+
+    async with SupabaseClient.service_role() as db:
+        await db.from_("categories").eq("id", category_id).update({"image_url": public_url})
+
+    return {"url": public_url}
 
 
 # ═══════════════════════════════════════════════════════════════

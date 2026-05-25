@@ -12,7 +12,7 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <CartProvider>
-      <div style={{ minHeight: "100vh", paddingBottom: "calc(72px + var(--safe-bottom, 0px))", background: "var(--shop-bg)" }}>
+      <div style={{ minHeight: "100vh", paddingBottom: "calc(64px + var(--safe-bottom, 0px))", background: "var(--shop-bg)" }}>
         {children}
         <BottomNav />
       </div>
@@ -35,6 +35,7 @@ function BottomNav() {
 
   const tabs = [
     { href: "/shop", label: "Home", icon: "M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z|M9 21V12h6v9" },
+    { href: "/shop/categories", label: "Category", icon: "M3 3h7v7H3z|M14 3h7v7h-7z|M3 14h7v7H3z|M14 14h7v7h-7z" },
     { href: "/shop/search", label: "Search", icon: "circle:11,11,8|M21 21l-4.35-4.35" },
     { href: "/shop/cart", label: "Cart", icon: "M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z|M3 6h18|M16 10a4 4 0 01-8 0", badge: true },
     { href: "/shop/profile", label: "Profile", icon: "M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2|circle:12,7,4" },
@@ -43,12 +44,12 @@ function BottomNav() {
   return (
     <nav style={{
       position: "fixed", bottom: 0, left: 0, right: 0,
-      height: `calc(72px + var(--safe-bottom, 0px))`,
+      height: `calc(64px + var(--safe-bottom, 0px))`,
       paddingBottom: "var(--safe-bottom, 0px)",
       background: "var(--shop-surface)",
       borderTop: "1px solid var(--shop-divider)",
       display: "flex", alignItems: "center", justifyContent: "space-around",
-      padding: "0 8px 8px", zIndex: 100,
+      padding: "0 8px", zIndex: 100,
     }}>
       {tabs.map((tab) => {
         const active = isActive(tab.href);
@@ -56,14 +57,15 @@ function BottomNav() {
         return (
           <button key={tab.href} onClick={() => router.push(tab.href)}
             style={{
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
-              cursor: "pointer", flex: 1, padding: "8px 0 0",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+              cursor: "pointer", flex: 1, padding: "8px 0",
               background: "none", border: "none", position: "relative",
             }}>
             {tab.badge && count > 0 && (
               <span style={{
-                position: "absolute", top: 5, right: 18,
-                width: 16, height: 16, background: "var(--danger)", borderRadius: "50%",
+                position: "absolute", top: 2, right: 18,
+                width: 16, height: 16, background: "#71541A",
+                borderRadius: "50%",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 9, color: "white", fontWeight: 700, border: "2px solid var(--shop-surface)",
               }}>
@@ -81,7 +83,11 @@ function BottomNav() {
                 )
               )}
             </svg>
-            <span style={{ fontSize: 10, fontWeight: 500, color: active ? "var(--shop-primary)" : "var(--shop-muted)" }}>
+            <span style={{
+              fontSize: 10, fontWeight: active ? 600 : 500,
+              color: active ? "var(--shop-primary)" : "var(--shop-muted)",
+              fontFamily: "'Kantumruy Pro', sans-serif",
+            }}>
               {tab.label}
             </span>
           </button>

@@ -3,8 +3,8 @@ import "./globals.css";
 import { AuthProvider } from "@/providers/AuthProvider";
 
 export const metadata: Metadata = {
-  title: "Favourite of Shop",
-  description: "Multi-Tenant Telegram E-Commerce Platform",
+  title: "Byme24",
+  description: "Byme24 — Your Favourite Shop",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -14,7 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kantumruy+Pro:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
         {/* Telegram WebApp SDK */}

@@ -81,7 +81,7 @@ function LoginContent() {
       <div style={{ width: "100%", maxWidth: 400, background: "var(--bg-card)", borderRadius: 16, padding: 32, boxShadow: "var(--shadow-xl)", border: "1px solid var(--border)" }}>
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div style={{ fontSize: 28, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>Favourite of Shop</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>Byme24</div>
           <div style={{ color: "var(--text-muted)", fontSize: 14 }}>Admin Dashboard</div>
         </div>
 

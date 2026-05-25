@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useCart } from "@/providers/CartProvider";
-import { CategoryIcon } from "@/components/shop";
 import type { Product, Category } from "@/types";
 
 export default function SearchPage() {
@@ -31,14 +30,12 @@ function SearchContent() {
     inputRef.current?.focus();
     try { setRecentSearches(JSON.parse(localStorage.getItem("recentSearches") || "[]")); } catch { /* ignore */ }
     api.get<Category[]>("/categories").then(setCategories).catch(() => {});
-    // Pre-load a batch of products so the empty state isn't blank
     api
       .get<Product[]>("/products", { params: { page_size: 16 } })
       .then(setSuggested)
       .catch(() => {});
   }, []);
 
-  // Auto-search on query change
   useEffect(() => {
     if (!query.trim() && !categoryId && !merchantId) { setResults([]); setHasSearched(false); return; }
     setSearching(true);
@@ -75,115 +72,141 @@ function SearchContent() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
-      {/* Search Bar Area */}
+    <div style={{ minHeight: "100vh", background: "var(--shop-bg)" }}>
+      {/* Navigation + Search Header */}
       <div style={{
+        background: "#103562",
+        borderRadius: "0 0 20px 20px",
+        padding: "12px 20px",
+        display: "flex", flexDirection: "column", gap: 12,
         position: "sticky", top: 0, zIndex: 10,
-        background: "var(--shop-surface, #FFFFFF)",
-        borderBottom: "1px solid var(--shop-divider, #ECEEF3)",
-        padding: "10px 16px 12px",
       }}>
-        <div style={{ position: "relative" }}>
+        {/* Title row */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            onClick={() => router.back()}
+            style={{
+              width: 36, height: 36, borderRadius: 20,
+              background: "rgba(234, 239, 243, 0.2)",
+              border: "none", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M19 12H5" />
+              <path d="M12 19l-7-7 7-7" />
+            </svg>
+          </button>
           <span style={{
-            position: "absolute", left: 16, top: "50%", transform: "translateY(-50%)",
-            color: "var(--shop-muted, #8A8F9C)", fontSize: 16, pointerEvents: "none",
+            flex: 1, fontSize: 16, fontWeight: 500, color: "#FFFFFF",
+            fontFamily: "'Kantumruy Pro', sans-serif",
           }}>
-            &#128269;
+            Search
           </span>
+        </div>
+
+        {/* Search input */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          background: "#EAEFF3", borderRadius: 20,
+          padding: "8px 12px", height: 36,
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(116, 109, 109, 0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <path d="M21 21l-4.35-4.35" />
+          </svg>
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search products..."
+            placeholder="Search Byme24"
             style={{
-              width: "100%", height: 52, padding: "0 44px 0 44px",
-              borderRadius: "var(--shop-r-input, 12px)",
-              border: "1.5px solid var(--shop-divider, #ECEEF3)",
-              background: "var(--shop-bg, #F7F8FB)",
-              color: "var(--shop-black, #0B0B0F)", fontSize: 15,
-              outline: "none",
-              transition: "border-color 0.2s",
+              flex: 1, border: "none", background: "transparent",
+              color: "#081D3C", fontSize: 14,
+              fontFamily: "'Inter', sans-serif",
+              outline: "none", padding: 0,
             }}
-            onFocus={(e) => { e.currentTarget.style.borderColor = "var(--shop-primary, #1E6BFF)"; }}
-            onBlur={(e) => { e.currentTarget.style.borderColor = "var(--shop-divider, #ECEEF3)"; }}
           />
           {query && (
             <button onClick={() => { setQuery(""); inputRef.current?.focus(); }}
               style={{
-                position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-                background: "var(--shop-divider, #ECEEF3)", border: "none",
-                borderRadius: "50%", width: 24, height: 24, cursor: "pointer",
-                color: "var(--shop-muted, #8A8F9C)", fontSize: 12,
+                background: "rgba(116, 109, 109, 0.3)", border: "none",
+                borderRadius: "50%", width: 20, height: 20, cursor: "pointer",
+                color: "#FFFFFF", fontSize: 10,
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
               &#10005;
             </button>
           )}
         </div>
-
-        {/* Category pills */}
-        {categories.length > 0 && (
-          <div style={{
-            display: "flex", gap: 8, overflowX: "auto", marginTop: 12, paddingBottom: 2,
-          }}>
-            <button onClick={() => setCategoryId("")}
-              style={{
-                flexShrink: 0, padding: "7px 16px",
-                borderRadius: "var(--shop-r-pill, 999px)",
-                border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer",
-                background: !categoryId ? "var(--shop-primary, #1E6BFF)" : "var(--shop-surface, #FFFFFF)",
-                color: !categoryId ? "#FFFFFF" : "var(--shop-text, #4A4E5A)",
-                boxShadow: !categoryId ? "none" : "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-              }}>
-              All
-            </button>
-            {categories.map(cat => {
-              const active = categoryId === String(cat.id);
-              return (
-                <button key={cat.id} onClick={() => setCategoryId(String(cat.id))}
-                  style={{
-                    flexShrink: 0, padding: "7px 14px",
-                    borderRadius: "var(--shop-r-pill, 999px)",
-                    border: "none", fontSize: 13, fontWeight: 600, cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    background: active ? "var(--shop-primary, #1E6BFF)" : "var(--shop-surface, #FFFFFF)",
-                    color: active ? "#FFFFFF" : "var(--shop-text, #4A4E5A)",
-                    boxShadow: active ? "none" : "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-                    display: "inline-flex", alignItems: "center", gap: 6,
-                  }}>
-                  <CategoryIcon icon={cat.icon_emoji} size={16} alt={cat.name} />
-                  {cat.name}
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
 
-      <div style={{ padding: "16px 16px 80px" }}>
+      {/* Category pills */}
+      {categories.length > 0 && (
+        <div style={{
+          display: "flex", gap: 8, overflowX: "auto", padding: "12px 20px 0",
+          scrollbarWidth: "none",
+        }}>
+          <button onClick={() => setCategoryId("")}
+            style={{
+              flexShrink: 0, padding: "6px 14px",
+              borderRadius: 999,
+              border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer",
+              fontFamily: "'Kantumruy Pro', sans-serif",
+              background: !categoryId ? "var(--shop-primary)" : "var(--shop-surface)",
+              color: !categoryId ? "#FFFFFF" : "var(--shop-text)",
+              boxShadow: "var(--shop-shadow)",
+            }}>
+            All
+          </button>
+          {categories.map(cat => {
+            const active = categoryId === String(cat.id);
+            return (
+              <button key={cat.id} onClick={() => setCategoryId(String(cat.id))}
+                style={{
+                  flexShrink: 0, padding: "6px 14px",
+                  borderRadius: 999,
+                  border: "none", fontSize: 12, fontWeight: active ? 600 : 500, cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  fontFamily: "'Kantumruy Pro', sans-serif",
+                  background: active ? "var(--shop-primary)" : "var(--shop-surface)",
+                  color: active ? "#FFFFFF" : "var(--shop-text)",
+                  boxShadow: "var(--shop-shadow)",
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                }}>
+                {cat.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={{ padding: "16px 20px 80px" }}>
         {/* Recent Searches */}
         {!query && !categoryId && !hasSearched && recentSearches.length > 0 && (
           <div style={{ marginBottom: 24 }}>
             <h3 style={{
-              fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)", marginBottom: 12,
+              fontSize: 16, fontWeight: 500, color: "var(--shop-text)", marginBottom: 12,
+              fontFamily: "'Kantumruy Pro', sans-serif",
             }}>Recent Searches</h3>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {recentSearches.map((s, i) => (
                 <div key={i} style={{
                   display: "flex", alignItems: "center", gap: 8,
-                  background: "var(--shop-surface, #FFFFFF)",
-                  borderRadius: "var(--shop-r-pill, 999px)",
+                  background: "var(--shop-surface)",
+                  borderRadius: 999,
                   padding: "8px 14px", fontSize: 13,
-                  boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
+                  boxShadow: "var(--shop-shadow)",
                 }}>
                   <button onClick={() => setQuery(s)} style={{
                     background: "none", border: "none", cursor: "pointer",
-                    color: "var(--shop-text, #4A4E5A)", fontWeight: 500,
+                    color: "var(--shop-text)", fontWeight: 500,
+                    fontFamily: "'Inter', sans-serif",
                   }}>{s}</button>
                   <button onClick={() => removeRecent(s)} style={{
                     background: "none", border: "none", cursor: "pointer",
-                    color: "var(--shop-muted, #8A8F9C)", fontSize: 11, fontWeight: 600,
+                    color: "var(--shop-muted)", fontSize: 11, fontWeight: 600,
                   }}>&#10005;</button>
                 </div>
               ))}
@@ -191,16 +214,17 @@ function SearchContent() {
           </div>
         )}
 
-        {/* Empty state — show suggested products so the page isn't blank */}
+        {/* Suggested products */}
         {!searching && isEmptyFilters && suggested.length > 0 && (
           <div>
             <h3 style={{
-              fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)",
+              fontSize: 16, fontWeight: 500, color: "var(--shop-text)",
+              fontFamily: "'Kantumruy Pro', sans-serif",
               marginBottom: 4,
             }}>
               Suggested for you
             </h3>
-            <p style={{ fontSize: 12, color: "var(--shop-muted, #8A8F9C)", marginBottom: 12 }}>
+            <p style={{ fontSize: 12, color: "var(--shop-muted)", marginBottom: 12 }}>
               Type to search or tap a product below
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
@@ -221,8 +245,8 @@ function SearchContent() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
             {[1, 2, 3, 4].map(i => (
               <div key={i} style={{
-                height: 220, background: "var(--shop-divider, #ECEEF3)",
-                borderRadius: "var(--shop-r-card, 16px)", animation: "pulse 1.5s infinite",
+                height: 220, background: "var(--shop-surface)",
+                borderRadius: 8, animation: "pulse 1.5s infinite",
               }} />
             ))}
           </div>
@@ -231,9 +255,9 @@ function SearchContent() {
         {/* Results */}
         {!searching && hasSearched && results.length > 0 && (
           <div>
-            <p style={{ fontSize: 13, color: "var(--shop-muted, #8A8F9C)", marginBottom: 12 }}>
-              Found <strong style={{ color: "var(--shop-black, #0B0B0F)" }}>{results.length}</strong> results
-              {query && <> for <strong style={{ color: "var(--shop-black, #0B0B0F)" }}>&apos;{query}&apos;</strong></>}
+            <p style={{ fontSize: 13, color: "var(--shop-muted)", marginBottom: 12, fontFamily: "'Inter', sans-serif" }}>
+              Found <strong style={{ color: "var(--shop-text)" }}>{results.length}</strong> results
+              {query && <> for <strong style={{ color: "var(--shop-text)" }}>&apos;{query}&apos;</strong></>}
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
               {results.map(p => (
@@ -247,16 +271,26 @@ function SearchContent() {
         {/* No results */}
         {!searching && hasSearched && results.length === 0 && (
           <div style={{ textAlign: "center", padding: "60px 0" }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>&#128269;</div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--shop-black, #0B0B0F)", marginBottom: 6 }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: "50%", background: "var(--shop-surface)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              margin: "0 auto 16px",
+            }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--shop-primary)" strokeWidth="1.5">
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.35-4.35" />
+              </svg>
+            </div>
+            <h3 style={{
+              fontSize: 16, fontWeight: 500, color: "var(--shop-text)", marginBottom: 6,
+              fontFamily: "'Kantumruy Pro', sans-serif",
+            }}>
               No products found
             </h3>
-            <p style={{ fontSize: 13, color: "var(--shop-muted, #8A8F9C)" }}>Try different keywords or categories</p>
+            <p style={{ fontSize: 13, color: "var(--shop-muted)" }}>Try different keywords or categories</p>
           </div>
         )}
       </div>
-
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
     </div>
   );
 }
@@ -267,49 +301,65 @@ function MiniProductCard({ product, onClick, onAddToCart }: { product: Product; 
 
   return (
     <div onClick={onClick} style={{
-      background: "var(--shop-surface, #FFFFFF)",
-      borderRadius: "var(--shop-r-card, 16px)", overflow: "hidden",
+      background: "var(--shop-surface)",
+      borderRadius: 8, overflow: "hidden",
       cursor: "pointer",
-      boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
+      boxShadow: "var(--shop-shadow)",
       transition: "transform 0.15s",
     }}>
-      <div style={{ position: "relative", paddingTop: "100%", background: "var(--shop-divider, #ECEEF3)" }}>
+      <div style={{ position: "relative", paddingTop: "100%", background: "var(--shop-divider)" }}>
         {product.primary_image ? (
           <img src={product.primary_image} alt={product.name} loading="lazy"
             style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
           <div style={{
             position: "absolute", top: "50%", left: "50%",
-            transform: "translate(-50%,-50%)", fontSize: 32,
+            transform: "translate(-50%,-50%)",
           }}>
-            {product.icon_emoji || "🛍️"}
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#746D6D" strokeWidth="1.5">
+              <rect x="2" y="2" width="20" height="20" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="M21 15l-5-5L5 21" />
+            </svg>
           </div>
         )}
         {discount > 0 && (
-          <span style={{
-            position: "absolute", top: 8, left: 8,
-            background: "#C62828", color: "#FFFFFF",
-            fontSize: 10, fontWeight: 700, padding: "3px 8px",
-            borderRadius: 8,
-          }}>
-            -{discount}%
-          </span>
+          <div style={{ position: "absolute", top: 8, left: 0 }}>
+            <span className="product-badge product-badge-discount">
+              -{discount}% OFF
+            </span>
+          </div>
         )}
       </div>
-      <div style={{ padding: 12 }}>
+      <div style={{ padding: "8px 10px 12px" }}>
+        {product.merchant_name && (
+          <p style={{
+            fontSize: 10, fontWeight: 600, color: "var(--shop-accent)",
+            fontFamily: "'Kantumruy Pro', sans-serif",
+            textTransform: "uppercase", lineHeight: "12px",
+            marginBottom: 2,
+          }}>
+            {product.merchant_name}
+          </p>
+        )}
         <div style={{
-          fontSize: 13, fontWeight: 600, color: "var(--shop-black, #0B0B0F)",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 6,
+          fontSize: 12, fontWeight: 500, color: "var(--shop-text)",
+          fontFamily: "'Kantumruy Pro', sans-serif",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          marginBottom: 4, lineHeight: "14px",
         }}>
           {product.name}
         </div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--shop-primary, #1E6BFF)" }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+          <span style={{
+            fontSize: 15, fontWeight: 600, color: "var(--shop-accent)",
+            fontFamily: "'Kantumruy Pro', sans-serif",
+          }}>
             ${product.base_price.toFixed(2)}
           </span>
           {discount > 0 && product.compare_price && (
             <span style={{
-              fontSize: 11, color: "var(--shop-muted, #8A8F9C)",
+              fontSize: 10, color: "var(--shop-muted)",
               textDecoration: "line-through",
             }}>
               ${product.compare_price.toFixed(2)}

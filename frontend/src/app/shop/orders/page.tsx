@@ -50,13 +50,17 @@ export default function OrdersPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
-      {/* Top Bar */}
+      {/* Navy header */}
       <div style={{
-        height: 56, display: "flex", alignItems: "center", justifyContent: "center",
-        background: "var(--shop-surface, #FFFFFF)", borderBottom: "1px solid var(--shop-divider, #ECEEF3)",
-        padding: "0 16px", position: "sticky", top: 0, zIndex: 10,
+        background: "#103562",
+        borderRadius: "0 0 20px 20px",
+        padding: "12px 20px",
+        position: "sticky", top: 0, zIndex: 10,
       }}>
-        <h1 style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)", margin: 0 }}>My Orders</h1>
+        <h1 style={{
+          fontSize: 16, fontWeight: 500, color: "#FFFFFF", margin: 0,
+          fontFamily: "'Kantumruy Pro', sans-serif",
+        }}>My Orders</h1>
       </div>
 
       <div style={{ padding: "16px 16px 80px" }}>
@@ -69,12 +73,13 @@ export default function OrdersPage() {
             return (
               <button key={t.key} onClick={() => setTab(t.key)}
                 style={{
-                  flexShrink: 0, padding: "8px 16px", borderRadius: "var(--shop-r-pill, 999px)",
-                  fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer",
+                  flexShrink: 0, padding: "6px 14px", borderRadius: 999,
+                  fontSize: 12, fontWeight: active ? 600 : 500, border: "none", cursor: "pointer",
                   transition: "all 0.2s",
-                  background: active ? "var(--shop-primary, #1E6BFF)" : "var(--shop-surface, #FFFFFF)",
-                  color: active ? "#FFFFFF" : "var(--shop-text, #4A4E5A)",
-                  boxShadow: active ? "none" : "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
+                  fontFamily: "'Kantumruy Pro', sans-serif",
+                  background: active ? "var(--shop-primary)" : "var(--shop-surface)",
+                  color: active ? "#FFFFFF" : "var(--shop-text)",
+                  boxShadow: "var(--shop-shadow)",
                 }}>
                 {t.label} ({tabCount(t.key)})
               </button>

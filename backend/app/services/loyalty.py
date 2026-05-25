@@ -57,10 +57,21 @@ async def earn_points(user_id: int, order_id: int, order_total: float) -> dict |
     new_balance = account["balance"] + points_earned
     new_lifetime = account["lifetime_points"] + points_earned
 
-    # Update account
+    # Calculate new tier based on lifetime points
+    gold_threshold = int(ls.get("gold_threshold", 2000))
+    silver_threshold = int(ls.get("silver_threshold", 500))
+
+    if new_lifetime >= gold_threshold:
+        new_tier = "gold"
+    elif new_lifetime >= silver_threshold:
+        new_tier = "silver"
+    else:
+        new_tier = "bronze"
+
+    # Update account with new balance, lifetime, and tier
     await client.update(
         f"loyalty_accounts?id=eq.{account['id']}",
-        {"balance": new_balance, "lifetime_points": new_lifetime},
+        {"balance": new_balance, "lifetime_points": new_lifetime, "tier": new_tier},
     )
 
     # Record transaction
@@ -73,14 +84,13 @@ async def earn_points(user_id: int, order_id: int, order_total: float) -> dict |
         "description": f"Earned from order (x{multiplier} {account['tier']} bonus)" if multiplier > 1 else "Earned from purchase",
     })
 
-    # Re-fetch to get updated tier
-    updated = await client.get(f"loyalty_accounts?id=eq.{account['id']}&select=*&limit=1")
-    tier = updated[0]["tier"] if updated else account["tier"]
+    if new_tier != account["tier"]:
+        logger.info("User %s upgraded from %s to %s", user_id, account["tier"], new_tier)
 
     return {
         "points_earned": points_earned,
         "new_balance": new_balance,
-        "tier": tier,
+        "tier": new_tier,
         "multiplier": multiplier,
     }
 
@@ -130,13 +140,24 @@ async def adjust_points(user_id: int, points: int, description: str, admin_id: i
     """Manual admin adjustment of points."""
     account = await get_or_create_account(user_id)
     client = RestClient(service_role=True)
+    ls = await get_settings()
 
     new_balance = max(account["balance"] + points, 0)
     new_lifetime = account["lifetime_points"] + points if points > 0 else account["lifetime_points"]
 
+    # Recalculate tier
+    gold_threshold = int(ls.get("gold_threshold", 2000)) if ls else 2000
+    silver_threshold = int(ls.get("silver_threshold", 500)) if ls else 500
+    if new_lifetime >= gold_threshold:
+        new_tier = "gold"
+    elif new_lifetime >= silver_threshold:
+        new_tier = "silver"
+    else:
+        new_tier = "bronze"
+
     await client.update(
         f"loyalty_accounts?id=eq.{account['id']}",
-        {"balance": new_balance, "lifetime_points": new_lifetime},
+        {"balance": new_balance, "lifetime_points": new_lifetime, "tier": new_tier},
     )
 
     await client.insert("points_transactions", {

@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
-import { CategoryIcon } from "@/components/shop";
-import type { Product, Category, Merchant, PromoCode, Notification } from "@/types";
+import type { Product, Category, CategoryBanner, Merchant, PromoCode, Notification } from "@/types";
 
 export default function ShopHomePage() {
   const router = useRouter();
@@ -15,6 +14,7 @@ export default function ShopHomePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [promos, setPromos] = useState<PromoCode[]>([]);
+  const [banners, setBanners] = useState<CategoryBanner[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [copiedPromo, setCopiedPromo] = useState("");
@@ -23,7 +23,6 @@ export default function ShopHomePage() {
 
   useEffect(() => { fetchData(); }, []);
 
-  // Load unread notifications count (auth-gated; quietly ignore failures)
   useEffect(() => {
     if (!user) { setUnreadCount(0); return; }
     let cancelled = false;
@@ -38,7 +37,6 @@ export default function ShopHomePage() {
     return () => { cancelled = true; clearInterval(id); };
   }, [user]);
 
-  // Auto-rotate hero carousel — 3 fixed slides, independent of promos count
   useEffect(() => {
     const timer = setInterval(() => setHeroIndex(i => (i + 1) % 3), 4000);
     return () => clearInterval(timer);
@@ -55,11 +53,14 @@ export default function ShopHomePage() {
       setMerchants(m);
       setCategories(c);
       setProducts(p);
-      // Load public active promos (no auth needed)
       try {
         const promoData = await api.get<PromoCode[]>("/promos/active");
         setPromos(promoData);
       } catch { /* promos endpoint may not exist yet */ }
+      try {
+        const bannerData = await api.get<CategoryBanner[]>("/category-banners", { params: { placement: "home" } });
+        setBanners(bannerData);
+      } catch { /* banners table may not exist yet */ }
     } catch (err) {
       console.error("Load error:", err);
       setLoadError(true);
@@ -78,12 +79,17 @@ export default function ShopHomePage() {
   if (loadError && !loading) {
     return (
       <div style={{ minHeight: "100vh", background: "var(--shop-bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center" }}>
-        <div style={{ fontSize: 56, marginBottom: 12 }}>📡</div>
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--shop-black)", marginBottom: 6 }}>Can’t reach the shop right now</h2>
-        <p style={{ fontSize: 13, color: "var(--shop-muted)", marginBottom: 20 }}>Check your connection and try again.</p>
+        <div style={{ width: 64, height: 64, borderRadius: "50%", background: "var(--h24-cloud)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--h24-blue)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </div>
+        <h2 style={{ fontSize: 20, fontWeight: 600, color: "var(--h24-navy)", marginBottom: 6, fontFamily: "'Kantumruy Pro', sans-serif" }}>Can&apos;t reach the shop</h2>
+        <p style={{ fontSize: 13, color: "var(--h24-grey)", marginBottom: 20 }}>Check your connection and try again.</p>
         <button
           onClick={() => { setLoading(true); fetchData(); }}
-          style={{ padding: "10px 24px", background: "var(--shop-primary)", color: "#fff", border: "none", borderRadius: "var(--shop-r-pill)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+          className="btn-gold"
         >
           Retry
         </button>
@@ -93,74 +99,57 @@ export default function ShopHomePage() {
 
   if (loading) {
     return (
-      <div style={{ padding: 16, background: "var(--shop-bg)", minHeight: "100vh" }}>
-        {/* Top bar skeleton */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-          <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--shop-divider)", animation: "shopPulse 1.5s infinite" }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ height: 14, width: 100, background: "var(--shop-divider)", borderRadius: 6, marginBottom: 6, animation: "shopPulse 1.5s infinite" }} />
-            <div style={{ height: 10, width: 160, background: "var(--shop-divider)", borderRadius: 6, animation: "shopPulse 1.5s infinite" }} />
+      <div style={{ minHeight: "100vh", background: "var(--shop-bg)" }}>
+        <div style={{ height: 108, background: "var(--h24-blue)", borderRadius: "0 0 20px 20px" }} />
+        <div style={{ padding: 16 }}>
+          <div style={{ height: 180, background: "var(--shop-divider)", borderRadius: 8, marginBottom: 20, animation: "pulse 1.5s infinite" }} />
+          <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 64, height: 64, borderRadius: 8, background: "var(--shop-divider)", animation: "pulse 1.5s infinite" }} />
+                <div style={{ width: 48, height: 10, borderRadius: 4, background: "var(--shop-divider)", animation: "pulse 1.5s infinite" }} />
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} style={{ height: 220, background: "var(--shop-divider)", borderRadius: 8, animation: "pulse 1.5s infinite" }} />
+            ))}
           </div>
         </div>
-        {/* Search skeleton */}
-        <div style={{ height: 52, background: "var(--shop-divider)", borderRadius: 12, marginBottom: 20, animation: "shopPulse 1.5s infinite" }} />
-        {/* Hero skeleton */}
-        <div style={{ height: 180, background: "var(--shop-divider)", borderRadius: 16, marginBottom: 20, animation: "shopPulse 1.5s infinite" }} />
-        {/* Category skeleton */}
-        <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
-          {[1, 2, 3, 4, 5].map(i => (
-            <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--shop-divider)", animation: "shopPulse 1.5s infinite" }} />
-              <div style={{ width: 40, height: 10, borderRadius: 4, background: "var(--shop-divider)", animation: "shopPulse 1.5s infinite" }} />
-            </div>
-          ))}
-        </div>
-        {/* Product grid skeleton */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} style={{ height: 220, background: "var(--shop-divider)", borderRadius: "var(--shop-r-card)", animation: "shopPulse 1.5s infinite" }} />
-          ))}
-        </div>
-        <style>{`@keyframes shopPulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
       </div>
     );
   }
 
-  // Group products by merchant
   const productsByMerchant: Record<number, Product[]> = {};
   products.forEach(p => {
     (productsByMerchant[p.merchant_id] ||= []).push(p);
   });
 
-  // Popular categories: sort by product_count desc (fall back to sort_order)
   const popularCategories = [...categories].sort((a, b) =>
     (b.product_count ?? 0) - (a.product_count ?? 0) ||
     (a.sort_order ?? 0) - (b.sort_order ?? 0)
   );
 
-  // Featured shops: super_admin opts shops in via is_featured flag.
-  // If none are flagged yet, fall back to the legacy top-3-by-product_count behavior
-  // so the section never goes empty before the admin curates it.
   const explicitlyFeatured = merchants.filter(m => m.is_featured);
   const featuredShops = explicitlyFeatured.length > 0
     ? explicitlyFeatured
     : [...merchants].sort((a, b) => (b.product_count ?? 0) - (a.product_count ?? 0)).slice(0, 3);
   const featuredIds = new Set(featuredShops.map(m => m.id));
 
-  // Hero carousel slides — three distinct cards that auto-rotate.
   function scrollTo(id: string) {
     if (typeof document !== "undefined") {
       document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }
+
   const heroSlides = [
     {
       badge: "New Arrivals",
       title: "Discover Top Picks",
       subtitle: `${products.length} products from ${merchants.length} ${merchants.length === 1 ? "shop" : "shops"}`,
       cta: "Shop Now",
-      bg: "linear-gradient(135deg, var(--shop-primary), var(--shop-primary-dark, #0040c0))",
-      textAccent: "var(--shop-primary)",
+      bg: "linear-gradient(135deg, #103562, #081D3C)",
       onClick: () => scrollTo("products-section"),
     },
     {
@@ -168,8 +157,7 @@ export default function ShopHomePage() {
       title: "Hand-Picked Sellers",
       subtitle: `${featuredShops.length} ${featuredShops.length === 1 ? "shop" : "shops"} curated for you`,
       cta: "Browse Shops",
-      bg: "linear-gradient(135deg, #EC4899, #BE185D)",
-      textAccent: "#BE185D",
+      bg: "linear-gradient(135deg, #71541A, #D6BA80)",
       onClick: () => scrollTo("featured-shops"),
     },
     {
@@ -179,13 +167,11 @@ export default function ShopHomePage() {
         ? `${promos.length} active promo${promos.length === 1 ? "" : "s"} — tap to copy`
         : "New deals are added every week",
       cta: promos.length > 0 ? "See Promos" : "Browse Now",
-      bg: "linear-gradient(135deg, #F59E0B, #B45309)",
-      textAccent: "#B45309",
+      bg: "linear-gradient(135deg, #081D3C, #103562)",
       onClick: () => scrollTo(promos.length > 0 ? "promos-section" : "products-section"),
     },
   ];
 
-  // Extract real user name from DB user record (first_name, username) or admin name
   const userName = (() => {
     if (!user) return null;
     const u = user as any;
@@ -195,96 +181,92 @@ export default function ShopHomePage() {
     return null;
   })();
 
-  // Flash deal products (ones with compare_price > base_price)
   const flashDeals = products.filter(p => p.compare_price && p.compare_price > p.base_price);
 
   return (
     <div style={{ background: "var(--shop-bg)", minHeight: "100vh", paddingBottom: 80 }}>
 
-      {/* ── Top Bar ── */}
+      {/* ── Navigation Header ── */}
       <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "14px 16px 10px", background: "var(--shop-surface)",
+        background: "#103562",
+        borderRadius: "0 0 20px 20px",
+        padding: "12px 20px",
+        display: "flex", flexDirection: "column", gap: 12,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {/* Avatar */}
-          <div style={{
-            width: 40, height: 40, borderRadius: "50%",
-            background: "linear-gradient(135deg, #7C3AED, #EC4899)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#fff", fontSize: 16, fontWeight: 700,
-          }}>
-            {userName ? userName.charAt(0).toUpperCase() : "G"}
-          </div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--shop-black)" }}>
-              Hi, {userName || "Guest"}
+        {/* Top row: logo/title + bell */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {/* Logo */}
+            <img
+              src="/logo.svg"
+              alt="Byme24"
+              style={{ width: 36, height: 36 }}
+            />
+            <div>
+              <div style={{
+                fontSize: 16, fontWeight: 500, color: "#FFFFFF",
+                fontFamily: "'Kantumruy Pro', sans-serif", lineHeight: "20px",
+              }}>
+                {userName ? `Hi, ${userName}` : "Byme24"}
+              </div>
+              <div style={{
+                fontSize: 12, fontWeight: 400, color: "#D6BA80",
+                fontFamily: "'Kantumruy Pro', sans-serif",
+              }}>
+                Find your favourite products
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: "var(--shop-muted)" }}>
-              Find your favourite products
-            </div>
           </div>
-        </div>
-        {/* Bell icon */}
-        <button
-          type="button"
-          onClick={() => router.push("/shop/notifications")}
-          aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : "Notifications"}
-          style={{
-            position: "relative", cursor: "pointer",
-            background: "none", border: "none", padding: 8,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--shop-black)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-          </svg>
-          {unreadCount > 0 && (
-            <span style={{
-              position: "absolute", top: 4, right: 4,
-              minWidth: 16, height: 16, padding: "0 4px",
-              background: "#EF4444", color: "#fff",
-              borderRadius: 999, border: "2px solid var(--shop-surface)",
-              fontSize: 10, fontWeight: 700, lineHeight: "12px",
+          <button
+            type="button"
+            onClick={() => router.push("/shop/notifications")}
+            aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : "Notifications"}
+            style={{
+              position: "relative", cursor: "pointer",
+              background: "rgba(234, 239, 243, 0.2)",
+              border: "none", padding: 10, borderRadius: 20,
+              width: 36, height: 36,
               display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          )}
-        </button>
-      </div>
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            {unreadCount > 0 && (
+              <span style={{
+                position: "absolute", top: -2, right: -2,
+                minWidth: 16, height: 16, padding: "0 4px",
+                background: "#D6BA80", color: "#081D3C",
+                borderRadius: 999, border: "2px solid #103562",
+                fontSize: 9, fontWeight: 700, lineHeight: "12px",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </button>
+        </div>
 
-      {/* ── Search Bar ── */}
-      <div style={{ padding: "8px 16px 12px", background: "var(--shop-surface)" }}>
+        {/* Search bar */}
         <div
           onClick={() => router.push("/shop/search")}
           style={{
-            height: 52, display: "flex", alignItems: "center", gap: 12,
-            background: "var(--shop-bg)", borderRadius: "var(--shop-r-input)",
-            border: "1.5px solid var(--shop-divider)", padding: "0 6px 0 16px",
-            cursor: "pointer",
+            height: 36, display: "flex", alignItems: "center", gap: 8,
+            background: "#EAEFF3", borderRadius: 20,
+            padding: "8px 12px", cursor: "pointer",
           }}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--shop-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(116, 109, 109, 0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.35-4.35" />
           </svg>
-          <span style={{ flex: 1, fontSize: 14, color: "var(--shop-muted)" }}>
-            Search products, brands...
-          </span>
-          {/* Bot trigger circle */}
-          <div style={{
-            width: 38, height: 38, borderRadius: "50%",
-            background: "var(--shop-primary)", display: "flex",
-            alignItems: "center", justifyContent: "center",
+          <span style={{
+            flex: 1, fontSize: 14, color: "rgba(116, 109, 109, 0.5)",
+            fontFamily: "'Inter', sans-serif", fontWeight: 400,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
-          </div>
+            Search Byme24
+          </span>
         </div>
       </div>
 
@@ -292,95 +274,118 @@ export default function ShopHomePage() {
 
         {/* ── Hero Carousel ── */}
         <div style={{
-          marginTop: 16, height: 180, borderRadius: "var(--shop-r-card)",
+          marginTop: 16, height: 180, borderRadius: 8,
           background: heroSlides[heroIndex % 3].bg,
           position: "relative", overflow: "hidden", padding: 24,
           display: "flex", flexDirection: "column", justifyContent: "center",
           transition: "background 0.6s ease",
         }}>
-          {/* Decorative circles */}
-          <div style={{ position: "absolute", top: -30, right: -30, width: 120, height: 120, borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
-          <div style={{ position: "absolute", bottom: -20, right: 40, width: 80, height: 80, borderRadius: "50%", background: "rgba(255,255,255,0.05)" }} />
+          <div style={{ position: "absolute", top: -30, right: -30, width: 120, height: 120, borderRadius: "50%", background: "rgba(214,186,128,0.1)" }} />
+          <div style={{ position: "absolute", bottom: -20, right: 40, width: 80, height: 80, borderRadius: "50%", background: "rgba(214,186,128,0.06)" }} />
 
           <span style={{
             display: "inline-block", width: "fit-content",
-            padding: "4px 12px", borderRadius: "var(--shop-r-pill)",
-            background: "rgba(255,255,255,0.2)", color: "#fff",
-            fontSize: 11, fontWeight: 600, marginBottom: 10,
+            padding: "4px 12px", borderRadius: "0 6px 6px 0",
+            background: "#D6BA80", color: "#FFFFFF",
+            fontSize: 10, fontWeight: 700, fontFamily: "'Inter', sans-serif",
+            textTransform: "uppercase", letterSpacing: 0.5,
+            marginBottom: 10, marginLeft: -24,
+            paddingLeft: 24,
           }}>
             {heroSlides[heroIndex % 3].badge}
           </span>
-          <h2 style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 4, lineHeight: 1.2 }}>
+          <h2 style={{
+            fontSize: 22, fontWeight: 700, color: "#FFFFFF",
+            marginBottom: 4, lineHeight: "28px",
+            fontFamily: "'Kantumruy Pro', sans-serif",
+          }}>
             {heroSlides[heroIndex % 3].title}
           </h2>
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginBottom: 16 }}>
+          <p style={{
+            fontSize: 13, color: "rgba(255,255,255,0.7)",
+            marginBottom: 16, fontFamily: "'Inter', sans-serif",
+          }}>
             {heroSlides[heroIndex % 3].subtitle}
           </p>
           <button
             onClick={heroSlides[heroIndex % 3].onClick}
             style={{
               width: "fit-content", padding: "10px 24px",
-              background: "#fff", color: heroSlides[heroIndex % 3].textAccent,
-              border: "none", borderRadius: "var(--shop-r-pill)",
-              fontWeight: 700, fontSize: 13, cursor: "pointer",
+              background: "#71541A", color: "#FFFFFF",
+              border: "none", borderRadius: 8,
+              fontWeight: 500, fontSize: 14, cursor: "pointer",
+              fontFamily: "'Kantumruy Pro', sans-serif",
             }}
           >
             {heroSlides[heroIndex % 3].cta}
           </button>
-          {/* Dots — also clickable to jump */}
           <div style={{ position: "absolute", bottom: 14, right: 20, display: "flex", gap: 6 }}>
             {[0, 1, 2].map(i => (
               <button key={i} onClick={() => setHeroIndex(i)} aria-label={`Slide ${i + 1}`} style={{
                 width: i === heroIndex % 3 ? 18 : 6, height: 6,
-                borderRadius: 3, background: i === heroIndex % 3 ? "#fff" : "rgba(255,255,255,0.4)",
+                borderRadius: 3, background: i === heroIndex % 3 ? "#D6BA80" : "rgba(255,255,255,0.3)",
                 transition: "all 0.3s ease", border: "none", padding: 0, cursor: "pointer",
               }} />
             ))}
           </div>
         </div>
 
-        {/* ── Popular Categories ── */}
+        {/* ── Categories (image-based) ── */}
         {popularCategories.length > 0 && (
           <section className="shop-fade-up" style={{ marginTop: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <div>
-                <h2 style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black)" }}>
-                  Popular Categories
-                </h2>
-                <p style={{ fontSize: 12, color: "var(--shop-muted)", marginTop: 2 }}>
-                  Browse what shoppers love most
-                </p>
-              </div>
-              <Link href="/shop/search" style={{ fontSize: 13, fontWeight: 600, color: "var(--shop-primary)", textDecoration: "none" }}>
+              <h2 style={{
+                fontSize: 20, fontWeight: 600, color: "var(--shop-text)",
+                fontFamily: "'Kantumruy Pro', sans-serif", lineHeight: "26px",
+              }}>
+                Popular Categories
+              </h2>
+              <Link href="/shop/categories" style={{
+                fontSize: 12, fontWeight: 500, color: "#D6BA80",
+                textDecoration: "none", fontFamily: "'Kantumruy Pro', sans-serif",
+              }}>
                 See all
               </Link>
             </div>
-            <div style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
+            <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
               {popularCategories.map(cat => (
                 <Link
                   key={cat.id}
-                  href={`/shop/search?category=${cat.id}`}
+                  href={`/shop/category/${cat.id}`}
                   style={{
                     flexShrink: 0, display: "flex", flexDirection: "column",
-                    alignItems: "center", gap: 8, textDecoration: "none",
-                    minWidth: 64,
+                    alignItems: "center", gap: 6, textDecoration: "none",
+                    minWidth: 72,
                   }}
                 >
                   <div className="shop-icon-pop" style={{
-                    width: 56, height: 56, borderRadius: "50%",
-                    background: "var(--shop-primary-tint)",
+                    width: 64, height: 64, borderRadius: 8,
+                    background: "var(--shop-divider)",
                     display: "flex", alignItems: "center", justifyContent: "center",
+                    overflow: "hidden",
                   }}>
-                    <CategoryIcon icon={cat.icon_emoji} size={28} fallback="box" alt={cat.name} />
+                    {(cat.image_url || (cat.icon_emoji && /^https?:\/\//i.test(cat.icon_emoji))) ? (
+                      <img src={cat.image_url || cat.icon_emoji!} alt={cat.name}
+                        style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                    ) : cat.icon_emoji ? (
+                      <span style={{ fontSize: 28, lineHeight: 1 }}>{cat.icon_emoji}</span>
+                    ) : (
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--shop-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="3" width="7" height="7" />
+                        <rect x="14" y="3" width="7" height="7" />
+                        <rect x="3" y="14" width="7" height="7" />
+                        <rect x="14" y="14" width="7" height="7" />
+                      </svg>
+                    )}
                   </div>
-                  <span style={{ fontSize: 12, color: "var(--shop-text)", fontWeight: 500, whiteSpace: "nowrap", textAlign: "center" }}>
+                  <span style={{
+                    fontSize: 12, color: "var(--shop-text)", fontWeight: 500,
+                    fontFamily: "'Kantumruy Pro', sans-serif",
+                    whiteSpace: "nowrap", textAlign: "center",
+                    lineHeight: "14px",
+                  }}>
                     {cat.name}
                   </span>
-                  {(cat.product_count ?? 0) > 0 && (
-                    <span style={{ fontSize: 10, color: "var(--shop-muted)" }}>
-                      {cat.product_count}
-                    </span>
-                  )}
                 </Link>
               ))}
             </div>
@@ -391,8 +396,11 @@ export default function ShopHomePage() {
         {promos.length > 0 && (
           <section id="promos-section" style={{ marginTop: 24, scrollMarginTop: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black)" }}>
-                🎁 Active Promos
+              <h2 style={{
+                fontSize: 20, fontWeight: 600, color: "var(--shop-text)",
+                fontFamily: "'Kantumruy Pro', sans-serif",
+              }}>
+                Active Promos
               </h2>
             </div>
             <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
@@ -407,7 +415,7 @@ export default function ShopHomePage() {
                       if (shop) router.push(`/shop/merchant/${shop.id}`);
                     }}
                     style={{
-                      flexShrink: 0, padding: "14px 18px", borderRadius: "var(--shop-r-card)",
+                      flexShrink: 0, padding: "14px 18px", borderRadius: 8,
                       background: copiedPromo === p.code ? "var(--shop-primary-tint)" : "var(--shop-surface)",
                       border: `1.5px dashed ${copiedPromo === p.code ? "var(--shop-primary)" : "var(--shop-divider)"}`,
                       cursor: "pointer", textAlign: "left" as const, minWidth: 180,
@@ -415,24 +423,26 @@ export default function ShopHomePage() {
                     }}
                   >
                     <p style={{
-                      fontSize: 10, fontWeight: 700, color: "var(--shop-muted)",
+                      fontSize: 10, fontWeight: 600, color: "var(--shop-accent)",
                       textTransform: "uppercase", letterSpacing: 0.6,
+                      fontFamily: "'Kantumruy Pro', sans-serif",
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                     }}>
-                      🏪 {shopName}
+                      {shopName}
                     </p>
                     <p style={{ fontSize: 16, fontWeight: 700, fontFamily: "monospace", color: "var(--shop-primary)", letterSpacing: 1, marginTop: 4 }}>
                       {p.code}
                     </p>
-                    <p style={{ fontSize: 12, color: "var(--shop-muted)", marginTop: 4 }}>
+                    <p style={{ fontSize: 12, color: "var(--shop-muted)", marginTop: 4, fontFamily: "'Inter', sans-serif" }}>
                       {p.type === "percent" ? `${p.value}% off` : `$${p.value} off`}
                       {p.min_order ? ` (min $${p.min_order})` : ""}
                     </p>
                     <p style={{
-                      fontSize: 11, marginTop: 6, fontWeight: 600,
+                      fontSize: 11, marginTop: 6, fontWeight: 500,
                       color: copiedPromo === p.code ? "var(--shop-primary)" : "var(--shop-muted)",
+                      fontFamily: "'Kantumruy Pro', sans-serif",
                     }}>
-                      {copiedPromo === p.code ? "Copied! Tap card to open shop" : "Tap to copy + open shop"}
+                      {copiedPromo === p.code ? "Copied! Tap to open shop" : "Tap to copy + open shop"}
                     </p>
                   </button>
                 );
@@ -441,14 +451,74 @@ export default function ShopHomePage() {
           </section>
         )}
 
+        {/* ── Promotional Banners ── */}
+        {banners.filter(b => b.image_url).length > 0 && (
+          <section style={{ marginTop: 24 }}>
+            <div style={{
+              display: "flex", gap: 12, overflowX: "auto",
+              paddingBottom: 8, scrollbarWidth: "none",
+              scrollSnapType: "x mandatory",
+            }}>
+              {banners.filter(b => b.image_url).map(banner => (
+                <Link
+                  key={banner.id}
+                  href={`/shop/category/${banner.category_id}`}
+                  className="shop-press"
+                  style={{
+                    flexShrink: 0,
+                    width: 320, height: 176, borderRadius: 8,
+                    position: "relative", overflow: "hidden",
+                    textDecoration: "none",
+                    scrollSnapAlign: "start",
+                  }}
+                >
+                  <img
+                    src={banner.image_url!}
+                    alt={banner.title}
+                    loading="lazy"
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                  <div style={{
+                    position: "absolute", inset: 0,
+                    background: "linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.6) 100%)",
+                  }} />
+                  <div style={{ position: "absolute", bottom: 16, left: 16, right: 16 }}>
+                    <h3 style={{
+                      fontSize: 22, fontWeight: 700, color: "#EAEFF3",
+                      fontFamily: "'Kantumruy Pro', sans-serif",
+                      lineHeight: "28px", marginBottom: 4,
+                    }}>
+                      {banner.title}
+                    </h3>
+                    {banner.subtitle && (
+                      <p style={{
+                        fontSize: 13, color: "rgba(255,255,255,0.8)",
+                        fontFamily: "'Inter', sans-serif", lineHeight: "18px",
+                      }}>
+                        {banner.subtitle}
+                      </p>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* ── Flash Deals ── */}
         {flashDeals.length > 0 && (
           <section style={{ marginTop: 24 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black)" }}>
-                ⚡ Flash Deals
+              <h2 style={{
+                fontSize: 20, fontWeight: 600, color: "var(--shop-text)",
+                fontFamily: "'Kantumruy Pro', sans-serif",
+              }}>
+                Flash Deals
               </h2>
-              <Link href="/shop/search" style={{ fontSize: 13, fontWeight: 600, color: "var(--shop-primary)", textDecoration: "none" }}>
+              <Link href="/shop/search" style={{
+                fontSize: 12, fontWeight: 500, color: "#D6BA80",
+                textDecoration: "none", fontFamily: "'Kantumruy Pro', sans-serif",
+              }}>
                 See all
               </Link>
             </div>
@@ -462,43 +532,66 @@ export default function ShopHomePage() {
                     href={`/shop/product/${p.id}`}
                     style={{
                       flexShrink: 0, width: 140, textDecoration: "none",
-                      background: "var(--shop-surface)", borderRadius: "var(--shop-r-card)",
+                      background: "var(--shop-surface)", borderRadius: 8,
                       overflow: "hidden", boxShadow: "var(--shop-shadow)",
                     }}
                   >
-                    <div style={{ position: "relative", width: 140, height: 140, background: "var(--shop-bg)" }}>
+                    <div style={{ position: "relative", width: 140, height: 140, background: "var(--shop-divider)" }}>
                       {p.primary_image ? (
                         <img src={p.primary_image} alt={p.name} loading="lazy"
                           style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       ) : (
-                        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>
-                          {p.icon_emoji || "🛍️"}
+                        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--shop-muted)" strokeWidth="1.5">
+                            <rect x="2" y="2" width="20" height="20" rx="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <path d="M21 15l-5-5L5 21" />
+                          </svg>
                         </div>
                       )}
                       {discount > 0 && (
-                        <span style={{
-                          position: "absolute", top: 8, left: 8,
-                          background: "#EF4444", color: "#fff",
-                          fontSize: 11, fontWeight: 700, padding: "3px 8px",
-                          borderRadius: "var(--shop-r-pill)",
+                        <div style={{
+                          position: "absolute", top: 8, left: 0,
+                          display: "flex", flexDirection: "column", gap: 2,
                         }}>
-                          -{discount}%
-                        </span>
+                          <span className="product-badge product-badge-discount">
+                            -{discount}% OFF
+                          </span>
+                        </div>
                       )}
                     </div>
-                    <div style={{ padding: "10px 12px" }}>
+                    <div style={{ padding: "8px 10px" }}>
+                      {p.merchant_name && (
+                        <p style={{
+                          fontSize: 10, fontWeight: 600, color: "var(--shop-accent)",
+                          fontFamily: "'Kantumruy Pro', sans-serif",
+                          textTransform: "uppercase", lineHeight: "12px",
+                          marginBottom: 2,
+                        }}>
+                          {p.merchant_name}
+                        </p>
+                      )}
                       <p style={{
                         fontSize: 12, color: "var(--shop-text)", fontWeight: 500,
+                        fontFamily: "'Kantumruy Pro', sans-serif",
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        lineHeight: "14px",
                       }}>
                         {p.name}
                       </p>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginTop: 4 }}>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--shop-primary)" }}>
+                        <span style={{
+                          fontSize: 15, fontWeight: 600, color: "var(--shop-accent)",
+                          fontFamily: "'Kantumruy Pro', sans-serif",
+                        }}>
                           ${p.base_price.toFixed(2)}
                         </span>
                         {p.compare_price && (
-                          <span style={{ fontSize: 11, color: "var(--shop-muted)", textDecoration: "line-through" }}>
+                          <span style={{
+                            fontSize: 10, color: "var(--shop-muted)",
+                            textDecoration: "line-through",
+                            fontFamily: "'Kantumruy Pro', sans-serif",
+                          }}>
                             ${p.compare_price.toFixed(2)}
                           </span>
                         )}
@@ -515,14 +608,12 @@ export default function ShopHomePage() {
         {featuredShops.length > 0 && (
           <section id="featured-shops" className="shop-fade-up" style={{ marginTop: 24, scrollMarginTop: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <div>
-                <h2 style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black)" }}>
-                  ⭐ Featured Shops
-                </h2>
-                <p style={{ fontSize: 12, color: "var(--shop-muted)", marginTop: 2 }}>
-                  Hand-picked merchants for you
-                </p>
-              </div>
+              <h2 style={{
+                fontSize: 20, fontWeight: 600, color: "var(--shop-text)",
+                fontFamily: "'Kantumruy Pro', sans-serif",
+              }}>
+                Featured Shops
+              </h2>
             </div>
             <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
               {featuredShops.map(m => {
@@ -534,17 +625,15 @@ export default function ShopHomePage() {
                     className="shop-press"
                     style={{
                       flexShrink: 0, width: 168, padding: 16, position: "relative",
-                      background: "var(--shop-surface)", borderRadius: "var(--shop-r-card)",
+                      background: "var(--shop-surface)", borderRadius: 8,
                       textDecoration: "none", boxShadow: "var(--shop-shadow)",
                       border: "1px solid var(--shop-divider)",
                     }}
                   >
                     {isFeatured && (
-                      <span style={{
+                      <span className="product-badge product-badge-featured" style={{
                         position: "absolute", top: 10, right: 10,
-                        fontSize: 10, fontWeight: 700, color: "#fff",
-                        background: "linear-gradient(135deg, #F59E0B, #EF4444)",
-                        padding: "2px 8px", borderRadius: 999, letterSpacing: 0.4,
+                        borderRadius: "0 6px 6px 0",
                       }}>
                         FEATURED
                       </span>
@@ -554,23 +643,27 @@ export default function ShopHomePage() {
                         src={m.logo_url}
                         alt={m.name}
                         style={{
-                          width: 44, height: 44, borderRadius: 12,
+                          width: 44, height: 44, borderRadius: 8,
                           objectFit: "cover", marginBottom: 10,
-                          background: "var(--shop-primary-tint)",
+                          background: "var(--shop-divider)",
                         }}
                       />
                     ) : (
                       <div style={{
-                        width: 44, height: 44, borderRadius: 12,
-                        background: "var(--shop-primary-tint)",
+                        width: 44, height: 44, borderRadius: 8,
+                        background: "var(--shop-divider)",
                         display: "flex", alignItems: "center", justifyContent: "center",
                         marginBottom: 10,
                       }}>
-                        <CategoryIcon icon={m.icon_emoji} size={24} fallback="shop" alt={m.name} />
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--shop-primary)" strokeWidth="1.5">
+                          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                          <polyline points="9,22 9,12 15,12 15,22" />
+                        </svg>
                       </div>
                     )}
                     <p style={{
-                      fontSize: 14, fontWeight: 700, color: "var(--shop-black)",
+                      fontSize: 14, fontWeight: 700, color: "var(--shop-text)",
+                      fontFamily: "'Kantumruy Pro', sans-serif",
                       marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                     }}>
                       {m.name}
@@ -578,13 +671,17 @@ export default function ShopHomePage() {
                     {m.tagline && (
                       <p style={{
                         fontSize: 12, color: "var(--shop-muted)", lineHeight: 1.4,
+                        fontFamily: "'Inter', sans-serif",
                         overflow: "hidden", textOverflow: "ellipsis",
                         display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as any,
                       }}>
                         {m.tagline}
                       </p>
                     )}
-                    <p style={{ fontSize: 11, color: "var(--shop-muted)", marginTop: 8, fontWeight: 500 }}>
+                    <p style={{
+                      fontSize: 11, color: "var(--shop-muted)", marginTop: 8, fontWeight: 500,
+                      fontFamily: "'Kantumruy Pro', sans-serif",
+                    }}>
                       {m.product_count || 0} products
                     </p>
                   </Link>
@@ -602,7 +699,11 @@ export default function ShopHomePage() {
           return (
             <section key={m.id} style={{ marginTop: 24 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                <h2 style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black)", display: "flex", alignItems: "center", gap: 8 }}>
+                <h2 style={{
+                  fontSize: 20, fontWeight: 600, color: "var(--shop-text)",
+                  fontFamily: "'Kantumruy Pro', sans-serif",
+                  display: "flex", alignItems: "center", gap: 8,
+                }}>
                   {m.logo_url ? (
                     <img
                       src={m.logo_url}
@@ -610,11 +711,17 @@ export default function ShopHomePage() {
                       style={{ width: 24, height: 24, borderRadius: 6, objectFit: "cover" }}
                     />
                   ) : (
-                    <CategoryIcon icon={m.icon_emoji} size={20} fallback="shop" alt={m.name} />
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--shop-primary)" strokeWidth="1.5">
+                      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                      <polyline points="9,22 9,12 15,12 15,22" />
+                    </svg>
                   )}
                   {m.name}
                 </h2>
-                <Link href={`/shop/merchant/${m.id}`} style={{ fontSize: 13, fontWeight: 600, color: "var(--shop-primary)", textDecoration: "none" }}>
+                <Link href={`/shop/merchant/${m.id}`} style={{
+                  fontSize: 12, fontWeight: 500, color: "#D6BA80",
+                  textDecoration: "none", fontFamily: "'Kantumruy Pro', sans-serif",
+                }}>
                   See all
                 </Link>
               </div>
@@ -627,11 +734,19 @@ export default function ShopHomePage() {
           );
         })}
 
-        {/* No products fallback */}
         {products.length === 0 && (
           <div style={{ textAlign: "center", padding: "60px 0" }}>
-            <div style={{ fontSize: 52, marginBottom: 16 }}>🛍️</div>
-            <p style={{ fontSize: 16, fontWeight: 600, color: "var(--shop-black)", marginBottom: 4 }}>No products yet</p>
+            <div style={{
+              width: 64, height: 64, borderRadius: "50%", background: "var(--shop-divider)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              margin: "0 auto 16px",
+            }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--shop-primary)" strokeWidth="1.5">
+                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+                <line x1="3" y1="6" x2="21" y2="6" />
+              </svg>
+            </div>
+            <p style={{ fontSize: 16, fontWeight: 600, color: "var(--shop-text)", marginBottom: 4, fontFamily: "'Kantumruy Pro', sans-serif" }}>No products yet</p>
             <p style={{ fontSize: 13, color: "var(--shop-muted)" }}>Check back soon for new arrivals</p>
           </div>
         )}
@@ -649,12 +764,12 @@ function ProductCard({ product }: { product: Product }) {
       href={`/shop/product/${product.id}`}
       className="shop-press"
       style={{
-        background: "var(--shop-surface)", borderRadius: "var(--shop-r-card)",
+        background: "var(--shop-surface)", borderRadius: 8,
         overflow: "hidden", textDecoration: "none",
         boxShadow: "var(--shop-shadow)",
       }}
     >
-      <div style={{ position: "relative", paddingTop: "100%", background: "var(--shop-bg)" }}>
+      <div style={{ position: "relative", paddingTop: "100%", background: "var(--shop-divider)" }}>
         {product.primary_image ? (
           <img
             src={product.primary_image}
@@ -665,52 +780,87 @@ function ProductCard({ product }: { product: Product }) {
         ) : (
           <div style={{
             position: "absolute", top: "50%", left: "50%",
-            transform: "translate(-50%,-50%)", fontSize: 36,
+            transform: "translate(-50%,-50%)",
           }}>
-            {product.icon_emoji || "🛍️"}
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--shop-muted)" strokeWidth="1.5">
+              <rect x="2" y="2" width="20" height="20" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="M21 15l-5-5L5 21" />
+            </svg>
           </div>
         )}
-        {discount > 0 && (
-          <span style={{
-            position: "absolute", top: 8, left: 8,
-            background: "#EF4444", color: "#fff",
-            fontSize: 11, fontWeight: 700, padding: "3px 8px",
-            borderRadius: "var(--shop-r-pill)",
-          }}>
-            -{discount}%
-          </span>
-        )}
+        {/* Badges */}
+        <div style={{
+          position: "absolute", top: 8, left: 0,
+          display: "flex", flexDirection: "column", gap: 2,
+        }}>
+          {discount > 0 && (
+            <span className="product-badge product-badge-discount">
+              -{discount}% OFF
+            </span>
+          )}
+        </div>
         {product.stock === 0 && (
           <div style={{
             position: "absolute", inset: 0,
-            background: "rgba(11,11,15,0.5)",
+            background: "rgba(8,29,60,0.6)",
             display: "flex", alignItems: "center", justifyContent: "center",
             color: "#fff", fontSize: 13, fontWeight: 600,
+            fontFamily: "'Kantumruy Pro', sans-serif",
             backdropFilter: "blur(2px)",
           }}>
             Out of Stock
           </div>
         )}
       </div>
-      <div style={{ padding: "10px 12px 14px" }}>
+      <div style={{ padding: "8px 10px 12px" }}>
         {product.merchant_name && (
-          <p style={{ fontSize: 11, color: "var(--shop-muted)", marginBottom: 3 }}>
+          <p style={{
+            fontSize: 10, fontWeight: 600, color: "var(--shop-accent)",
+            fontFamily: "'Kantumruy Pro', sans-serif",
+            textTransform: "uppercase", lineHeight: "12px",
+            marginBottom: 2,
+          }}>
             {product.merchant_name}
           </p>
         )}
         <div style={{
-          fontSize: 13, fontWeight: 600, color: "var(--shop-black)",
+          fontSize: 12, fontWeight: 500, color: "var(--shop-text)",
+          fontFamily: "'Kantumruy Pro', sans-serif",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          marginBottom: 6, lineHeight: 1.3,
+          marginBottom: 4, lineHeight: "14px",
         }}>
           {product.name}
         </div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: "var(--shop-primary)" }}>
+        {(product.rating_avg || 0) > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="var(--shop-accent)" stroke="none">
+              <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+            </svg>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--shop-text)", fontFamily: "'Kantumruy Pro', sans-serif" }}>
+              {(product.rating_avg || 0).toFixed(1)}
+            </span>
+            <span style={{ fontSize: 10, color: "var(--shop-muted)" }}>&middot;</span>
+            {(product.review_count || 0) > 0 && (
+              <span style={{ fontSize: 10, color: "var(--shop-muted)", fontFamily: "'Inter', sans-serif" }}>
+                {product.review_count} reviews
+              </span>
+            )}
+          </div>
+        )}
+        <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+          <span style={{
+            fontSize: 15, fontWeight: 600, color: "var(--shop-accent)",
+            fontFamily: "'Kantumruy Pro', sans-serif",
+          }}>
             ${product.base_price.toFixed(2)}
           </span>
           {discount > 0 && product.compare_price && (
-            <span style={{ fontSize: 11, color: "var(--shop-muted)", textDecoration: "line-through" }}>
+            <span style={{
+              fontSize: 10, color: "var(--shop-muted)",
+              textDecoration: "line-through",
+              fontFamily: "'Kantumruy Pro', sans-serif",
+            }}>
               ${product.compare_price.toFixed(2)}
             </span>
           )}

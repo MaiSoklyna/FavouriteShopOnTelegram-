@@ -111,10 +111,25 @@ export interface Category {
   name: string;
   name_kh?: string;
   merchant_id?: number | null;
+  merchant_name?: string | null;
   icon_emoji?: string;
+  image_url?: string | null;
   sort_order?: number;
   is_active?: boolean;
   product_count?: number;
+}
+
+export interface CategoryBanner {
+  id: number;
+  category_id: number;
+  category_name?: string;
+  title: string;
+  subtitle?: string | null;
+  image_url?: string | null;
+  placement: "home" | "category";
+  sort_order: number;
+  is_active: boolean;
+  created_at?: string;
 }
 
 // ── Order ──────────────────────────────────────────────────────

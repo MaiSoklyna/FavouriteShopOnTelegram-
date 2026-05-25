@@ -19,7 +19,7 @@ class RestClient:
     """
 
     def __init__(self, jwt: str | None = None, *, service_role: bool = False):
-        self._base = settings.NEXT_PUBLIC_SUPABASE_URL.rstrip("/") + "/rest/v1"
+        self._base = settings.supabase_rest_url
         if service_role:
             key = settings.SUPABASE_SERVICE_ROLE_KEY.strip()
             self._headers = {
@@ -28,7 +28,7 @@ class RestClient:
                 "Content-Type": "application/json",
             }
         else:
-            anon = settings.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY.strip()
+            anon = settings.SUPABASE_ANON_KEY.strip()
             self._headers = {
                 "apikey": anon,
                 "Authorization": f"Bearer {jwt}",

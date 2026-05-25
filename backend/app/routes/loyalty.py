@@ -224,3 +224,34 @@ async def _get_db_user(db, user: TokenClaims) -> dict:
         if row:
             return row
     raise NotFoundError("User")
+
+
+@router.post("/admin/backfill")
+async def backfill_loyalty_points(user: TokenClaims = require_any_admin()):
+    """Backfill loyalty points for all past delivered/confirmed orders that have no points_transaction."""
+    from app.services.loyalty import earn_points
+
+    async with SupabaseClient.service_role() as db:
+        settings_row = await db.from_("loyalty_settings").select_one()
+        if not settings_row or not settings_row.get("is_enabled"):
+            raise BadRequestError("Loyalty program is not enabled")
+
+        orders = await db.from_("orders").in_("status", ["delivered", "confirmed", "processing", "shipped"]).select("id,user_id,total")
+        existing_txns = await db.from_("points_transactions").eq("type", "earn").select("order_id")
+        existing_order_ids = {t["order_id"] for t in existing_txns if t.get("order_id")}
+
+        backfilled = 0
+        errors = 0
+        for order in orders:
+            if order["id"] in existing_order_ids:
+                continue
+            try:
+                result = await earn_points(order["user_id"], order["id"], float(order["total"]))
+                if result:
+                    backfilled += 1
+                    logger.info("Backfilled %d pts for order %d (user %d)", result["points_earned"], order["id"], order["user_id"])
+            except Exception as e:
+                logger.error("Backfill failed for order %d: %s", order["id"], e)
+                errors += 1
+
+    return {"backfilled": backfilled, "skipped": len(existing_order_ids), "errors": errors}

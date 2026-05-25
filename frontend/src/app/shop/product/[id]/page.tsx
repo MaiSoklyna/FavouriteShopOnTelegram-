@@ -22,6 +22,10 @@ export default function ProductDetailPage() {
   const [imgIdx, setImgIdx] = useState(0);
   const [wishlisted, setWishlisted] = useState(false);
   const [activeTab, setActiveTab] = useState<"details" | "specs" | "reviews">("details");
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
   // variant_id -> option_id
   const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({});
   const touchStart = useRef<number | null>(null);
@@ -61,6 +65,28 @@ export default function ProductDetailPage() {
     touchStart.current = null;
     setTimeout(() => { pauseRef.current = false; }, 4000);
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "reviews") {
+      api.get<any[]>("/reviews", { params: { product_id: Number(id) } })
+        .then(setReviews).catch(() => {});
+    }
+  }, [activeTab, id]);
+
+  async function submitReview() {
+    setSubmittingReview(true);
+    try {
+      await api.post("/reviews", { product_id: Number(id), rating: reviewRating, comment: reviewComment });
+      setReviewComment("");
+      setReviewRating(5);
+      const updated = await api.get<any[]>("/reviews", { params: { product_id: Number(id) } });
+      setReviews(updated);
+      const refreshed = await api.get<Product>(`/products/${id}`);
+      setProduct(refreshed);
+      alert("Review submitted!");
+    } catch (e: any) { alert(e.detail || "Failed to submit review"); }
+    finally { setSubmittingReview(false); }
+  }
 
   async function handleAddToCart() {
     if (!user || !product) return;
@@ -404,11 +430,66 @@ export default function ProductDetailPage() {
             </div>
           )}
           {activeTab === "reviews" && (
-            <p style={{ fontSize: 14, color: "var(--shop-muted)", fontStyle: "italic" }}>
-              {(product.review_count || 0) > 0
-                ? `${product.review_count} review${product.review_count === 1 ? "" : "s"} - full list coming soon.`
-                : "No reviews yet."}
-            </p>
+            <div>
+              {/* Review list */}
+              {reviews.length > 0 ? reviews.map(r => (
+                <div key={r.id} style={{
+                  padding: "12px 0", borderBottom: "1px solid var(--shop-divider, #ECEEF3)",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--shop-black)" }}>
+                      {r.user_name || "Anonymous"}
+                    </span>
+                    <span style={{ fontSize: 12, color: "#D6BA80" }}>
+                      {"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}
+                    </span>
+                  </div>
+                  {r.comment && (
+                    <p style={{ fontSize: 13, color: "var(--shop-text)", lineHeight: 1.5 }}>{r.comment}</p>
+                  )}
+                  <p style={{ fontSize: 11, color: "var(--shop-muted)", marginTop: 4 }}>
+                    {r.created_at ? new Date(r.created_at).toLocaleDateString() : ""}
+                  </p>
+                </div>
+              )) : (
+                <p style={{ fontSize: 13, color: "var(--shop-muted)", marginBottom: 16 }}>No reviews yet. Be the first!</p>
+              )}
+
+              {/* Write review form */}
+              {user && (
+                <div style={{ marginTop: 16, padding: 16, background: "var(--shop-bg, #F7F8FB)", borderRadius: 8 }}>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: "var(--shop-black)", marginBottom: 8, fontFamily: "'Kantumruy Pro', sans-serif" }}>
+                    Write a Review
+                  </p>
+                  <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+                    {[1, 2, 3, 4, 5].map(s => (
+                      <button key={s} onClick={() => setReviewRating(s)} style={{
+                        fontSize: 24, background: "none", border: "none", cursor: "pointer",
+                        color: s <= reviewRating ? "#D6BA80" : "#D1D5DB",
+                      }}>&#9733;</button>
+                    ))}
+                  </div>
+                  <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)} rows={3}
+                    placeholder="Share your experience..."
+                    style={{
+                      width: "100%", padding: "10px 12px", borderRadius: 8,
+                      border: "1px solid var(--shop-divider, #ECEEF3)",
+                      background: "var(--shop-surface, #FFFFFF)", color: "var(--shop-black)",
+                      fontSize: 13, marginBottom: 12, resize: "vertical",
+                    }} />
+                  <button onClick={submitReview} disabled={submittingReview}
+                    style={{
+                      width: "100%", padding: 12, borderRadius: 8,
+                      border: "none", background: "#71541A", color: "#FFFFFF",
+                      fontWeight: 500, fontSize: 14, cursor: "pointer",
+                      fontFamily: "'Kantumruy Pro', sans-serif",
+                      opacity: submittingReview ? 0.5 : 1,
+                    }}>
+                    {submittingReview ? "Submitting..." : "Submit Review"}
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

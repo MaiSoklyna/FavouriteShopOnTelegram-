@@ -10,6 +10,7 @@ import {
   HiOutlineCog, HiOutlineTicket, HiOutlineStar,
   HiOutlineBell, HiOutlineGift, HiOutlineOfficeBuilding,
   HiOutlineLogout, HiOutlineMenu, HiOutlineX,
+  HiOutlinePhotograph,
 } from "react-icons/hi";
 
 const MENU = [
@@ -17,6 +18,7 @@ const MENU = [
   { href: "/products", label: "Products", icon: HiOutlineShoppingBag },
   { href: "/orders", label: "Orders", icon: HiOutlineClipboardList },
   { href: "/categories", label: "Categories", icon: HiOutlineTag },
+  { href: "/banners", label: "Banners", icon: HiOutlinePhotograph, superOnly: true },
   { href: "/promotions", label: "Promotions", icon: HiOutlineGift },
   { href: "/analytics", label: "Analytics", icon: HiOutlineChartBar },
   { href: "/support", label: "Support", icon: HiOutlineTicket },
@@ -42,7 +44,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (loading || !user || !isAdmin) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#EAEFF3" }}>
         <div className="spinner" />
       </div>
     );
@@ -69,9 +71,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <aside
         className={`admin-sidebar${sidebarOpen ? " admin-sidebar--open" : ""}`}
         style={{
-          width: collapsed ? 64 : 240,
-          background: "var(--sidebar-bg)",
-          borderRight: "1px solid var(--border)",
+          width: collapsed ? 72 : 250,
+          background: "#081D3C",
           display: "flex",
           flexDirection: "column",
           transition: "width 0.2s, transform 0.2s",
@@ -82,16 +83,36 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           zIndex: 40,
         }}
       >
-        {/* Logo */}
-        <div style={{ padding: "16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
-          {!collapsed && <span style={{ fontWeight: 700, fontSize: 16, color: "var(--text)" }}>Favourite of Shop</span>}
-          <button onClick={() => setCollapsed(!collapsed)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 4 }}>
-            {collapsed ? <HiOutlineMenu size={18} /> : <HiOutlineX size={14} />}
+        {/* Logo area */}
+        <div style={{
+          padding: collapsed ? "16px 12px" : "20px 20px 16px",
+          borderBottom: "1px solid rgba(234, 239, 243, 0.1)",
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <img src="/logo.svg" alt="Logo" style={{ width: 32, height: 32, flexShrink: 0 }} />
+          {!collapsed && (
+            <span style={{
+              fontWeight: 700, fontSize: 15, color: "#FFFFFF",
+              fontFamily: "'Kantumruy Pro', sans-serif",
+              lineHeight: "18px",
+            }}>
+              Byme24
+            </span>
+          )}
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            style={{
+              marginLeft: "auto", background: "rgba(234, 239, 243, 0.1)",
+              border: "none", cursor: "pointer", color: "rgba(234, 239, 243, 0.6)",
+              padding: 6, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            {collapsed ? <HiOutlineMenu size={16} /> : <HiOutlineX size={14} />}
           </button>
         </div>
 
         {/* Nav */}
-        <nav style={{ flex: 1, padding: "8px", overflowY: "auto" }}>
+        <nav style={{ flex: 1, padding: collapsed ? "8px 6px" : "8px 12px", overflowY: "auto" }}>
           {visibleMenu.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + "/");
             const Icon = item.icon;
@@ -101,10 +122,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 href={item.href}
                 onClick={(e) => { e.preventDefault(); router.push(item.href); setSidebarOpen(false); }}
                 style={{
-                  display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
-                  borderRadius: 8, marginBottom: 2, textDecoration: "none", fontSize: 14,
-                  color: active ? "var(--sidebar-active)" : "var(--sidebar-text)",
-                  background: active ? "var(--accent-light)" : "transparent",
+                  display: "flex", alignItems: "center",
+                  gap: 10,
+                  padding: collapsed ? "10px" : "10px 14px",
+                  justifyContent: collapsed ? "center" : "flex-start",
+                  borderRadius: 8, marginBottom: 2, textDecoration: "none",
+                  fontSize: 14,
+                  fontFamily: "'Kantumruy Pro', sans-serif",
+                  color: active ? "#D6BA80" : "rgba(234, 239, 243, 0.6)",
+                  background: active ? "rgba(214, 186, 128, 0.12)" : "transparent",
                   fontWeight: active ? 600 : 400,
                   transition: "all 0.15s",
                 }}
@@ -117,43 +143,121 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
 
         {/* User + actions */}
-        <div style={{ padding: "12px", borderTop: "1px solid var(--border)" }}>
+        <div style={{ padding: collapsed ? "12px 8px" : "16px", borderTop: "1px solid rgba(234, 239, 243, 0.1)" }}>
           {!collapsed && (
-            <div style={{ fontSize: 13, marginBottom: 8 }}>
-              <div style={{ fontWeight: 600, color: "var(--text)" }}>{adminUser.name}</div>
-              <div style={{ color: "var(--text-muted)", fontSize: 11 }}>{adminUser.role === "super_admin" ? "Super Admin" : adminUser.merchant_name || "Admin"}</div>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{
+                fontWeight: 600, color: "#FFFFFF", fontSize: 13,
+                fontFamily: "'Kantumruy Pro', sans-serif",
+              }}>
+                {adminUser.name}
+              </div>
+              <div style={{
+                color: "#D6BA80", fontSize: 11,
+                fontFamily: "'Kantumruy Pro', sans-serif",
+              }}>
+                {adminUser.role === "super_admin" ? "Super Admin" : adminUser.merchant_name || "Admin"}
+              </div>
             </div>
           )}
-          <div style={{ display: "flex", gap: 4 }}>
-            <button onClick={toggleTheme} style={{ flex: 1, padding: "6px", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 6, cursor: "pointer", fontSize: 12, color: "var(--text-secondary)" }}>
-              Theme
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              onClick={toggleTheme}
+              title="Toggle theme"
+              style={{
+                flex: collapsed ? undefined : 1,
+                width: collapsed ? "100%" : undefined,
+                padding: "8px",
+                background: "rgba(234, 239, 243, 0.1)",
+                border: "none", borderRadius: 6, cursor: "pointer",
+                fontSize: 12, color: "rgba(234, 239, 243, 0.6)",
+                fontFamily: "'Kantumruy Pro', sans-serif",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="23" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                <line x1="1" y1="12" x2="3" y2="12" />
+                <line x1="21" y1="12" x2="23" y2="12" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+              </svg>
+              {!collapsed && "Theme"}
             </button>
-            <button onClick={handleLogout} style={{ flex: 1, padding: "6px", background: "var(--danger-light)", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12, color: "var(--danger)", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-              <HiOutlineLogout size={14} /> {!collapsed && "Logout"}
-            </button>
+            {!collapsed && (
+              <button
+                onClick={handleLogout}
+                style={{
+                  flex: 1, padding: "8px",
+                  background: "rgba(239, 68, 68, 0.15)",
+                  border: "none", borderRadius: 6, cursor: "pointer",
+                  fontSize: 12, color: "#EF4444",
+                  fontFamily: "'Kantumruy Pro', sans-serif",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                }}
+              >
+                <HiOutlineLogout size={14} /> Logout
+              </button>
+            )}
+            {collapsed && (
+              <button
+                onClick={handleLogout}
+                title="Logout"
+                style={{
+                  width: "100%", padding: "8px",
+                  background: "rgba(239, 68, 68, 0.15)",
+                  border: "none", borderRadius: 6, cursor: "pointer",
+                  color: "#EF4444",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <HiOutlineLogout size={14} />
+              </button>
+            )}
           </div>
         </div>
       </aside>
 
       {/* Mobile overlay */}
       {sidebarOpen && (
-        <div onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)", zIndex: 30 }} />
+        <div onClick={() => setSidebarOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(8, 29, 60, 0.6)", zIndex: 30 }} />
       )}
 
       {/* Main content */}
-      <main style={{ flex: 1, marginLeft: collapsed ? 64 : 240, padding: "24px", minHeight: "100vh", transition: "margin-left 0.2s" }}>
+      <main style={{
+        flex: 1,
+        marginLeft: collapsed ? 72 : 250,
+        padding: "24px",
+        minHeight: "100vh",
+        transition: "margin-left 0.2s",
+        background: "var(--bg)",
+      }}>
         {/* Mobile header */}
-        <div style={{ display: "none", marginBottom: 16, alignItems: "center", gap: 8 }} className="mobile-header">
-          <button onClick={() => setSidebarOpen(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text)" }}>
-            <HiOutlineMenu size={24} />
+        <div style={{ display: "none", marginBottom: 16, alignItems: "center", gap: 10 }} className="mobile-header">
+          <button onClick={() => setSidebarOpen(true)} style={{
+            background: "#103562", border: "none", cursor: "pointer",
+            color: "#FFFFFF", padding: 8, borderRadius: 8,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <HiOutlineMenu size={20} />
           </button>
-          <span style={{ fontWeight: 600 }}>Favourite of Shop</span>
+          <img src="/logo.svg" alt="Logo" style={{ width: 24, height: 24 }} />
+          <span style={{
+            fontWeight: 600, color: "#081D3C", fontSize: 15,
+            fontFamily: "'Kantumruy Pro', sans-serif",
+          }}>
+            Byme24
+          </span>
         </div>
         {children}
       </main>
 
       <style>{`
-        .spinner { width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite }
+        .spinner { width:32px;height:32px;border:3px solid rgba(234,239,243,0.3);border-top-color:#103562;border-radius:50%;animation:spin .6s linear infinite }
         @keyframes spin{to{transform:rotate(360deg)}}
         @media(max-width:768px){
           .mobile-header{display:flex!important}

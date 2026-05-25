@@ -51,7 +51,7 @@ function TelegramLoginPrompt() {
       <div style={{ textAlign: "center", maxWidth: 320 }}>
         <div style={{ fontSize: 64, marginBottom: 16 }}>🛍️</div>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--shop-black, #0B0B0F)", marginBottom: 8 }}>
-          Welcome to Favourite of Shop
+          Welcome to Byme24
         </h2>
         <p style={{ fontSize: 14, color: "var(--shop-muted, #8A8F9C)", marginBottom: 24, lineHeight: 1.5 }}>
           Login with your Telegram account to start shopping, track orders, and earn rewards.

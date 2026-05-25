@@ -26,21 +26,24 @@ async def create_review(body: ReviewCreate, user: TokenClaims = require_role(Rol
             raise NotFoundError("User")
 
         # Insert review
-        name = db_user.get("first_name", "")
-        if db_user.get("last_name"):
-            name += f" {db_user['last_name']}"
-
         review_data = {
             "product_id": body.product_id,
             "user_id": db_user["id"],
             "rating": body.rating,
             "comment": body.comment,
-            "user_name": name.strip() or db_user.get("username") or "Anonymous",
         }
         if body.order_id:
             review_data["order_id"] = body.order_id
 
         rows = await db.from_("reviews").insert(review_data)
+
+        # Attach user name for response
+        name = db_user.get("first_name", "")
+        if db_user.get("last_name"):
+            name += f" {db_user['last_name']}"
+        user_name = name.strip() or db_user.get("username") or "Anonymous"
+        if rows and isinstance(rows, list):
+            rows[0]["user_name"] = user_name
 
         # Recalculate product rating
         all_reviews = await db.from_("reviews").eq("product_id", body.product_id).select("rating")
@@ -67,7 +70,16 @@ async def list_reviews(
         if product_id:
             q = q.eq("product_id", product_id)
         q = q.offset((page - 1) * page_size).limit(page_size)
-        return await q.select()
+        reviews = await q.select("*,users!inner(first_name,last_name,username)")
+
+        for r in reviews:
+            u = r.pop("users", None) or {}
+            name = u.get("first_name", "")
+            if u.get("last_name"):
+                name += f" {u['last_name']}"
+            r["user_name"] = name.strip() or u.get("username") or "Anonymous"
+
+        return reviews
 
 
 @router.delete("/{review_id}")

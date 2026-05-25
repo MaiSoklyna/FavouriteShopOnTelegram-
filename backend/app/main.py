@@ -21,6 +21,7 @@ from app.routes import (
     ai,
     analytics,
     auth,
+    banners,
     cart,
     loyalty,
     merchants,
@@ -93,6 +94,7 @@ app.include_router(merchants.router, prefix="/api")
 
 # Products & categories (browse + admin CRUD + image upload)
 app.include_router(products.router, prefix="/api")
+app.include_router(banners.router, prefix="/api")
 
 # Cart
 app.include_router(cart.router, prefix="/api")

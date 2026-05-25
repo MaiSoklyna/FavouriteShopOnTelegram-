@@ -184,9 +184,9 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
         loyalty_result = None
         try:
             from app.services.loyalty import earn_points
-            loyalty_result = await earn_points(user_id, total, order_id)
-        except Exception:
-            logger.debug("Loyalty points not awarded (service may not be configured)")
+            loyalty_result = await earn_points(user_id, order_id, float(total))
+        except Exception as exc:
+            logger.warning("Loyalty points not awarded for order %s: %s", order_id, exc)
 
         # ── Telegram notifications (best-effort) ────────────────
         try:
