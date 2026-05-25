@@ -215,14 +215,13 @@ export default function MerchantDetailPage() {
         )}
       </div>
 
-      {/* Stats card overlapping banner */}
+      {/* Stats card below banner */}
       <div style={{
-        margin: "-40px 16px 0", padding: "16px",
+        margin: "12px 16px 0", padding: "16px",
         background: "var(--shop-surface)", borderRadius: "var(--shop-r-card)",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.15)", border: "1px solid var(--shop-divider)",
+        boxShadow: "var(--shop-shadow)", border: "1px solid var(--shop-divider)",
         display: "grid",
         gridTemplateColumns: "1fr 1fr 1fr", gap: 8, textAlign: "center",
-        position: "relative", zIndex: 3,
       }}>
         <Stat label="Products" value={merchant.product_count ?? products.length} />
         <Divider />
