@@ -217,7 +217,7 @@ export default function MerchantDetailPage() {
 
       {/* Stats card below banner */}
       <div style={{
-        margin: "12px 16px 0", padding: "16px",
+        margin: "32px 16px 0", padding: "16px",
         background: "var(--shop-surface)", borderRadius: "var(--shop-r-card)",
         boxShadow: "var(--shop-shadow)", border: "1px solid var(--shop-divider)",
         display: "grid",
