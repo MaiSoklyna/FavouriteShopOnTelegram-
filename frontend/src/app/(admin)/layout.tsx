@@ -10,7 +10,7 @@ import {
   HiOutlineCog, HiOutlineTicket, HiOutlineStar,
   HiOutlineBell, HiOutlineGift, HiOutlineOfficeBuilding,
   HiOutlineLogout, HiOutlineMenu, HiOutlineX,
-  HiOutlinePhotograph,
+  HiOutlinePhotograph, HiOutlineChatAlt2,
 } from "react-icons/hi";
 
 const MENU = [
@@ -21,6 +21,7 @@ const MENU = [
   { href: "/banners", label: "Banners", icon: HiOutlinePhotograph, superOnly: true },
   { href: "/promotions", label: "Promotions", icon: HiOutlineGift },
   { href: "/analytics", label: "Analytics", icon: HiOutlineChartBar },
+  { href: "/reviews", label: "Reviews", icon: HiOutlineChatAlt2 },
   { href: "/support", label: "Support", icon: HiOutlineTicket },
   { href: "/loyalty", label: "Loyalty", icon: HiOutlineStar },
   { href: "/notifications", label: "Notifications", icon: HiOutlineBell, adminOnly: false },

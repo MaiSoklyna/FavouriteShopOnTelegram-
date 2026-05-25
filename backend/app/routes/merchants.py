@@ -70,6 +70,10 @@ async def get_merchant(merchant_id: int):
         merchant = await db.from_("merchants").eq("id", merchant_id).select_one()
         if not merchant:
             raise NotFoundError("Merchant", merchant_id)
+        products = await db.from_("products").eq("merchant_id", merchant_id).eq("is_active", True).select("id")
+        merchant["product_count"] = len(products)
+        orders = await db.from_("orders").eq("merchant_id", merchant_id).select("id")
+        merchant["order_count"] = len(orders)
     return merchant
 
 

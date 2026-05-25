@@ -70,7 +70,7 @@ function OrderDetailContent() {
     try {
       await api.post("/reviews", { product_id: reviewProductId, order_id: order!.id, rating: reviewRating, comment: reviewComment });
       setShowReview(false);
-      alert("Review submitted! Thank you.");
+      alert("Review submitted! It will appear after admin approval.");
     } catch (e: any) { alert(e.detail || "Failed to submit review"); }
     finally { setSubmittingReview(false); }
   }

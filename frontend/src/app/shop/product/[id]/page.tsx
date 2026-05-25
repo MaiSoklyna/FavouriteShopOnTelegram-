@@ -83,7 +83,7 @@ export default function ProductDetailPage() {
       setReviews(updated);
       const refreshed = await api.get<Product>(`/products/${id}`);
       setProduct(refreshed);
-      alert("Review submitted!");
+      alert("Review submitted! It will appear after admin approval.");
     } catch (e: any) { alert(e.detail || "Failed to submit review"); }
     finally { setSubmittingReview(false); }
   }

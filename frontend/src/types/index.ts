@@ -257,6 +257,8 @@ export interface Review {
   rating: number;
   comment?: string | null;
   user_name?: string;
+  product_name?: string;
+  is_approved?: boolean;
   created_at?: string;
 }
 
