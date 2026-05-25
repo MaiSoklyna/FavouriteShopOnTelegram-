@@ -217,10 +217,12 @@ export default function MerchantDetailPage() {
 
       {/* Stats card overlapping banner */}
       <div style={{
-        margin: "-40px 16px 0", padding: "14px 16px",
+        margin: "-40px 16px 0", padding: "16px",
         background: "var(--shop-surface)", borderRadius: "var(--shop-r-card)",
-        boxShadow: "var(--shop-shadow)", display: "grid",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.15)", border: "1px solid var(--shop-divider)",
+        display: "grid",
         gridTemplateColumns: "1fr 1fr 1fr", gap: 8, textAlign: "center",
+        position: "relative", zIndex: 3,
       }}>
         <Stat label="Products" value={merchant.product_count ?? products.length} />
         <Divider />
@@ -299,8 +301,8 @@ export default function MerchantDetailPage() {
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div>
-      <div style={{ fontSize: 16, fontWeight: 800, color: "var(--shop-black)" }}>{value}</div>
-      <div style={{ fontSize: 11, color: "var(--shop-muted)", marginTop: 2 }}>{label}</div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: "var(--shop-primary)", lineHeight: "24px" }}>{value}</div>
+      <div style={{ fontSize: 11, fontWeight: 600, color: "var(--shop-text)", marginTop: 4 }}>{label}</div>
     </div>
   );
 }
