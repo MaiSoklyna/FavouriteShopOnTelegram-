@@ -198,9 +198,9 @@ export default function ShopHomePage() {
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {/* Logo */}
             <img
-              src="/logo.svg"
+              src="/image.png"
               alt="Byme24"
-              style={{ width: 36, height: 36 }}
+              style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover" }}
             />
             <div>
               <div style={{

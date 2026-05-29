@@ -90,7 +90,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           borderBottom: "1px solid rgba(234, 239, 243, 0.1)",
           display: "flex", alignItems: "center", gap: 10,
         }}>
-          <img src="/logo.svg" alt="Logo" style={{ width: 32, height: 32, flexShrink: 0 }} />
+          <img src="/image.png" alt="Logo" style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 6, objectFit: "cover" }} />
           {!collapsed && (
             <span style={{
               fontWeight: 700, fontSize: 15, color: "#FFFFFF",
@@ -246,7 +246,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           }}>
             <HiOutlineMenu size={20} />
           </button>
-          <img src="/logo.svg" alt="Logo" style={{ width: 24, height: 24 }} />
+          <img src="/image.png" alt="Logo" style={{ width: 24, height: 24, borderRadius: 6, objectFit: "cover" }} />
           <span style={{
             fontWeight: 600, color: "#081D3C", fontSize: 15,
             fontFamily: "'Kantumruy Pro', sans-serif",
