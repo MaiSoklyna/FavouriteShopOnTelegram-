@@ -113,13 +113,31 @@ export default function SellerApplicationsPage() {
                 padding: 18, boxShadow: "var(--shadow-sm)",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
-                  <div>
-                    <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", margin: 0, fontFamily: "'Kantumruy Pro', sans-serif" }}>
-                      {a.store_name}
-                    </p>
-                    <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "2px 0 0" }}>
-                      {a.seller_type === "company" ? "🏢 Registered Business" : "👤 Individual Seller"}
-                    </p>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
+                    {a.logo_url ? (
+                      <img
+                        src={a.logo_url}
+                        alt={a.store_name}
+                        style={{ width: 44, height: 44, borderRadius: 10, objectFit: "cover", flexShrink: 0, border: "1px solid var(--border)", background: "var(--bg)" }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: 44, height: 44, borderRadius: 10, flexShrink: 0,
+                        background: "var(--bg)", border: "1px solid var(--border)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 18, color: "var(--text-secondary)", fontWeight: 700,
+                      }}>
+                        {a.store_name?.charAt(0).toUpperCase() || "🏬"}
+                      </div>
+                    )}
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", margin: 0, fontFamily: "'Kantumruy Pro', sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {a.store_name}
+                      </p>
+                      <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "2px 0 0" }}>
+                        {a.seller_type === "company" ? "🏢 Registered Business" : "👤 Individual Seller"}
+                      </p>
+                    </div>
                   </div>
                   <span style={{ background: st.bg, color: st.fg, fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, whiteSpace: "nowrap" }}>
                     {st.label}
