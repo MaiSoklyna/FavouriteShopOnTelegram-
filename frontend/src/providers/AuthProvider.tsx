@@ -14,7 +14,7 @@ interface AuthContextValue {
   isAdmin: boolean;
   isSuperAdmin: boolean;
   isShopUser: boolean;
-  adminLogin: (email: string, password: string, role: string) => Promise<void>;
+  adminLogin: (email: string, password: string) => Promise<void>;
   startTgSession: () => Promise<string>;
   pollSession: (sessionId: string) => void;
   stopPolling: () => void;
@@ -92,10 +92,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   // ── Admin email/password login ───────────────────────────────
-  async function adminLogin(email: string, password: string, role: string) {
+  // Role is detected automatically by the backend from the credentials —
+  // the UI no longer asks the user to pick Merchant / Super Admin.
+  async function adminLogin(email: string, password: string) {
     const resp = await api.post<{ access_token: string; user: AdminUser }>(
       "/auth/admin-login",
-      { email, password, role },
+      { email, password },
       { token: null },
     );
     setToken(resp.access_token);

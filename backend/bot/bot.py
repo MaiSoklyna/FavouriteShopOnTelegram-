@@ -1,8 +1,9 @@
 import logging
+from telegram import BotCommand
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from app.config import settings
 
-from bot.handlers.start import start_command, main_menu_callback, dash_role_callback
+from bot.handlers.start import start_command, help_command, main_menu_callback, dash_role_callback
 from bot.handlers.browse import browse_shops, view_shop, view_category_products, view_all_products, view_product
 from bot.handlers.cart import (
     add_to_cart, view_cart, remove_from_cart, clear_cart,
@@ -18,12 +19,31 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+_BOT_COMMANDS = [
+    BotCommand("start", "Open the main menu"),
+    BotCommand("orders", "View your orders"),
+    BotCommand("cart", "View your cart"),
+    BotCommand("profile", "Your account & addresses"),
+    BotCommand("support", "Contact support"),
+    BotCommand("help", "How to use this bot"),
+]
+
+
+async def _post_init(app):
+    """Register the command menu so commands show in Telegram's '/' list."""
+    try:
+        await app.bot.set_my_commands(_BOT_COMMANDS)
+    except Exception as e:
+        logger.warning("set_my_commands failed: %s", e)
+
+
 def create_bot_app():
     """Create and configure the Telegram bot application."""
-    app = ApplicationBuilder().token(settings.TELEGRAM_BOT_TOKEN).build()
+    app = ApplicationBuilder().token(settings.TELEGRAM_BOT_TOKEN).post_init(_post_init).build()
 
     # === Command Handlers ===
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("orders", my_orders))
     app.add_handler(CommandHandler("cart", view_cart))
     app.add_handler(CommandHandler("profile", my_profile))

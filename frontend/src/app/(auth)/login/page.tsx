@@ -21,7 +21,6 @@ function LoginContent() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("merchant");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [tgSessionId, setTgSessionId] = useState("");
@@ -40,7 +39,7 @@ function LoginContent() {
     setError("");
     setLoading(true);
     try {
-      await adminLogin(email, password, role);
+      await adminLogin(email, password);
       router.replace(redirect);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Login failed";
@@ -81,6 +80,11 @@ function LoginContent() {
       <div style={{ width: "100%", maxWidth: 400, background: "var(--bg-card)", borderRadius: 16, padding: 32, boxShadow: "var(--shadow-xl)", border: "1px solid var(--border)" }}>
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <img
+            src="/image.png"
+            alt="Byme24"
+            style={{ width: 72, height: 72, borderRadius: 16, objectFit: "cover", marginBottom: 12, boxShadow: "var(--shadow)" }}
+          />
           <div style={{ fontSize: 28, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>Byme24</div>
           <div style={{ color: "var(--text-muted)", fontSize: 14 }}>Admin Dashboard</div>
         </div>
@@ -105,7 +109,7 @@ function LoginContent() {
             />
           </div>
 
-          <div style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 4 }}>Password</label>
             <input
               type="password"
@@ -115,18 +119,6 @@ function LoginContent() {
               style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 14 }}
               placeholder="Enter password"
             />
-          </div>
-
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 4 }}>Role</label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 14 }}
-            >
-              <option value="merchant">Merchant Admin</option>
-              <option value="super_admin">Super Admin</option>
-            </select>
           </div>
 
           <button

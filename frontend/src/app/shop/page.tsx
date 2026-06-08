@@ -392,6 +392,61 @@ export default function ShopHomePage() {
           </section>
         )}
 
+        {/* ── Become a Seller CTA ── */}
+        <section className="shop-fade-up" style={{ marginTop: 24 }}>
+          <Link
+            href="/shop/sell"
+            className="shop-press"
+            style={{
+              display: "flex", alignItems: "center", gap: 14,
+              padding: 18, borderRadius: 12, textDecoration: "none",
+              background: "linear-gradient(135deg, #71541A 0%, #D6BA80 100%)",
+              position: "relative", overflow: "hidden",
+              boxShadow: "0 6px 18px rgba(113,84,26,0.28)",
+            }}
+          >
+            <div style={{ position: "absolute", top: -28, right: -28, width: 110, height: 110, borderRadius: "50%", background: "rgba(255,255,255,0.12)" }} />
+            <div style={{ position: "absolute", bottom: -34, right: 44, width: 90, height: 90, borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
+            <div style={{
+              width: 52, height: 52, borderRadius: 12, flexShrink: 0,
+              background: "rgba(255,255,255,0.2)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l1.5-5h15L21 9" />
+                <path d="M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z" />
+                <path d="M5 11v9h14v-9" />
+                <path d="M9 20v-5h6v5" />
+              </svg>
+            </div>
+            <div style={{ flex: 1, position: "relative" }}>
+              <span style={{
+                display: "inline-block", padding: "2px 8px", borderRadius: 999,
+                background: "rgba(255,255,255,0.22)", color: "#FFFFFF",
+                fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase",
+                fontFamily: "'Inter', sans-serif", marginBottom: 6,
+              }}>
+                Start selling
+              </span>
+              <h3 style={{
+                fontSize: 17, fontWeight: 700, color: "#FFFFFF", margin: 0,
+                fontFamily: "'Kantumruy Pro', sans-serif", lineHeight: "22px",
+              }}>
+                Become a Seller on Byme24
+              </h3>
+              <p style={{
+                fontSize: 12, color: "rgba(255,255,255,0.85)", margin: "2px 0 0",
+                fontFamily: "'Inter', sans-serif",
+              }}>
+                Open your shop in minutes — reach thousands of buyers.
+              </p>
+            </div>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, position: "relative" }}>
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </Link>
+        </section>
+
         {/* ── Promo Codes ── */}
         {promos.length > 0 && (
           <section id="promos-section" style={{ marginTop: 24, scrollMarginTop: 16 }}>

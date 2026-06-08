@@ -39,6 +39,14 @@ const MENU = [
       </svg>
     ),
   },
+  {
+    label: "Become a Seller", href: "/shop/sell",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--shop-primary)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 9l1-5h16l1 5"/><path d="M4 9v11a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M3 9h18"/><path d="M9 21v-6h6v6"/>
+      </svg>
+    ),
+  },
 ];
 
 export default function ProfilePage() {

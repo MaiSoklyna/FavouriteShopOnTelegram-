@@ -11,8 +11,8 @@ Automated delivery receipt system that sends formatted order receipts to custome
 
 **Main Function: `send_receipt_to_customer(bot, order_id)`**
 - Fetches order details, items, customer, and merchant information
-- Generates formatted receipt with:
-  - Order code and date
+- Generates formatted receipt with: 
+  - Order code and date 
   - Merchant name
   - Itemized list with quantities and prices
   - Order summary (subtotal, discount, delivery fee, total)

@@ -57,7 +57,9 @@ class TelegramAuthResponse(BaseModel):
 class AdminLoginRequest(BaseModel):
     email: str = Field(..., min_length=3, max_length=254)
     password: str = Field(..., min_length=1)
-    role: str = Field("merchant", pattern=r"^(merchant|super_admin)$")
+    # Optional — when omitted the backend auto-detects the role from the
+    # credentials. Kept for backwards compatibility with older clients.
+    role: str | None = Field(None, pattern=r"^(merchant|super_admin)$")
 
 
 class AdminUser(BaseModel):

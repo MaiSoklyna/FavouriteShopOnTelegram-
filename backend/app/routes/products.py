@@ -110,6 +110,15 @@ async def list_products(
             for p in products:
                 p["images"] = img_map.get(p["id"], [])
 
+            # Variant presence — lets listing cards send the shopper to the
+            # detail page to pick size/color instead of quick-adding blindly.
+            variant_rows = await (
+                db.from_("product_variants").in_("product_id", product_ids).select("product_id")
+            )
+            with_variants = {v["product_id"] for v in variant_rows}
+            for p in products:
+                p["has_variants"] = p["id"] in with_variants
+
     return products
 
 

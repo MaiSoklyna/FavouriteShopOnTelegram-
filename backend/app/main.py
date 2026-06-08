@@ -30,6 +30,7 @@ from app.routes import (
     products,
     promos,
     reviews,
+    sellers,
     support,
     telegram_webhook,
     users,
@@ -107,6 +108,9 @@ app.include_router(promos.router, prefix="/api")
 
 # Reviews
 app.include_router(reviews.router, prefix="/api")
+
+# Seller onboarding applications (mini-app submit + super-admin approval)
+app.include_router(sellers.router, prefix="/api")
 
 # Support tickets
 app.include_router(support.router, prefix="/api")

@@ -177,12 +177,42 @@ async def _upsert_telegram_user(telegram_id: int, name: str, username: Optional[
 @router.post("/admin-login", response_model=AdminLoginResponse)
 @limiter.limit("5/minute")
 async def admin_login(request: Request, body: AdminLoginRequest):
-    """Authenticate admin via email/password."""
+    """Authenticate admin via email/password.
+
+    Role is detected automatically from the credentials — the login form no
+    longer asks the user to choose Merchant / Super Admin. The explicit
+    ``role`` field is still honoured if an older client sends it.
+    """
 
     async with SupabaseClient.service_role() as db:
         if body.role == "super_admin":
             return await _login_super_admin(db, body)
+        if body.role == "merchant":
+            return await _login_merchant_admin(db, body)
+        return await _login_auto(db, body)
+
+
+async def _login_auto(db, body: AdminLoginRequest) -> AdminLoginResponse:
+    """Detect the admin's role by matching credentials against both tables.
+
+    A super-admin account takes precedence if the same email/password somehow
+    exists in both tables.
+    """
+    email = body.email.strip()
+
+    sa = await db.from_("super_admins").eq("email", email).select_one(
+        "id,full_name,email,password_hash,is_active"
+    )
+    if sa and sa.get("is_active") and verify_password(body.password, sa["password_hash"]):
+        return await _login_super_admin(db, body)
+
+    ma = await db.from_("merchant_admins").eq("email", email).select_one(
+        "id,merchant_id,full_name,email,password_hash,role,is_active"
+    )
+    if ma and ma.get("is_active") and verify_password(body.password, ma["password_hash"]):
         return await _login_merchant_admin(db, body)
+
+    raise AuthenticationError("Invalid credentials")
 
 
 async def _login_super_admin(db, body: AdminLoginRequest) -> AdminLoginResponse:

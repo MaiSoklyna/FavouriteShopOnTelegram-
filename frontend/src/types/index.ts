@@ -76,6 +76,7 @@ export interface Product {
   created_at?: string;
   images?: ProductImage[];
   variants?: VariantGroup[];
+  has_variants?: boolean;
 }
 
 export interface ProductImage {
@@ -274,6 +275,34 @@ export interface Notification {
   is_read?: boolean;
   sent_at?: string;
   user_name?: string;
+}
+
+// ── Seller applications ────────────────────────────────────────
+
+export type SellerApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
+
+export interface SellerApplication {
+  id: number;
+  seller_type: "individual" | "company";
+  full_name: string;
+  email: string;
+  phone?: string | null;
+  gender?: string | null;
+  date_of_birth?: string | null;
+  company_name?: string | null;
+  store_name: string;
+  store_description?: string | null;
+  logo_url?: string | null;
+  province?: string | null;
+  district?: string | null;
+  commune?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  status: SellerApplicationStatus;
+  review_note?: string | null;
+  merchant_id?: number | null;
+  created_at?: string;
+  reviewed_at?: string | null;
 }
 
 // ── Loyalty ────────────────────────────────────────────────────

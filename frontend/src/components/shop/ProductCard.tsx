@@ -22,7 +22,13 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
 
   async function handleAdd(e: React.MouseEvent) {
     e.stopPropagation();
-    if (!onAddToCart || outOfStock) return;
+    if (outOfStock) return;
+    // Products with size/color must be configured on the detail page first.
+    if (product.has_variants) {
+      router.push(`/shop/product/${product.id}`);
+      return;
+    }
+    if (!onAddToCart) return;
     setAdding(true);
     try {
       await onAddToCart(product.id);
@@ -170,7 +176,7 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
                 transition: "background 0.2s",
               }}
             >
-              {added ? "Added" : "Add"}
+              {added ? "Added" : product.has_variants ? "Select" : "Add"}
             </button>
           )}
         </div>

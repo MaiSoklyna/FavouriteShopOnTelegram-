@@ -25,7 +25,7 @@ function BottomNav() {
   const router = useRouter();
   const { count } = useCart();
 
-  const hideOn = ["/shop/checkout", "/shop/product/", "/shop/order/"];
+  const hideOn = ["/shop/checkout", "/shop/product/", "/shop/order/", "/shop/sell"];
   if (hideOn.some((p) => pathname.startsWith(p))) return null;
 
   const isActive = (href: string) => {

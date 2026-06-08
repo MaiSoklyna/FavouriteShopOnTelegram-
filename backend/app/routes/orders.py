@@ -205,6 +205,7 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
             )
             await send_order_placed_to_customer(
                 db_user.get("telegram_id") or user.telegram_id,
+                user_id=db_user.get("id"),
                 order_id=order_id,
                 order_code=order_code,
                 merchant_name=merchant_name,

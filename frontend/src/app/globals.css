@@ -52,9 +52,10 @@
   --shadow-xl: 0 20px 40px rgba(8, 29, 60, 0.12);
 
   /* ── Shop miniapp ── */
-  --shop-primary: #103562;
-  --shop-primary-dark: #081D3C;
-  --shop-primary-tint: rgba(16, 53, 98, 0.08);
+  /* Brand gold (matches dark mode + Byme24 logo) — no blue accents in light mode */
+  --shop-primary: #71541A;
+  --shop-primary-dark: #5A4315;
+  --shop-primary-tint: rgba(113, 84, 26, 0.10);
   --shop-accent: #71541A;
   --shop-accent-light: #D6BA80;
   --shop-black: #081D3C;

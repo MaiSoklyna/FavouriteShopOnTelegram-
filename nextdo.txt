@@ -1,0 +1,35 @@
+# 1. Stage everything, then drop the files that shouldn't ship
+  git add -A
+  git reset -- DOCUMENT_REWRITE.md "Ecommerce Telegram Bot (2) (1).docx" RECEIPT_SENDER_IMPLEMENTATION.md frontend/cartegorypage.css "frontend/cssForm 
+  figma.css" frontend/homepage.css frontend/registerformcss.css
+
+  # 2. Check what's staged (should be only code + migration 010)
+  git status
+
+  # 3. Commit
+  git commit -m "Seller onboarding + variant cart guard + order/theme fixes" -m "- Seller registration mini-app form + super-admin approval (provisions
+  merchant + login)
+  - Logo upload during registration
+  - Require size/color selection before add-to-cart on listing cards
+  - Fix View Order blank screen (web_app SSO button + auth-aware order page)
+  - Gold light-mode shop theme (no blue)
+  - Role-based bot menu + auto-detect admin login"
+
+  # 4. Push
+  git push origin main
+
+  Before you push, double-check step 2 — the staged list should be exactly these:
+
+  - backend/: app/main.py, app/models/auth.py, app/models/seller.py, app/routes/auth.py, app/routes/orders.py, app/routes/products.py,
+  app/routes/sellers.py, bot/handlers/start.py, bot/notifications.py
+  - frontend/: (admin)/layout.tsx, (admin)/seller-applications/, (auth)/login/page.tsx, globals.css, shop/order/[id]/page.tsx, shop/profile/page.tsx,
+  shop/sell/, components/shop/ProductCard.tsx, providers/AuthProvider.tsx, types/index.ts
+  - supabase/migrations/010_seller_applications.sql
+
+  If you see any of the scratch CSS / .docx / DOCUMENT_REWRITE.md still staged, re-run the git reset -- line.
+
+  Two reminders after pushing:
+  1. Migration 010 is already applied to Supabase ✅ — no DB step needed.
+  2. On Railway, make sure WEB_APP_URL is your real https:// domain, or the bot's "View Order" / "Open Shop" buttons won't render.
+
+✻ Baked for 46s

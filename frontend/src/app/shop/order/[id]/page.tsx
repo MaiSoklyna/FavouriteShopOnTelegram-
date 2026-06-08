@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
+import { useAuth } from "@/providers/AuthProvider";
+import { LoginGate } from "@/components/shop/LoginGate";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { Order } from "@/types";
 
@@ -23,9 +25,14 @@ function OrderDetailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const placed = searchParams.get("placed") === "true";
+  // Wait for auth to resolve before fetching. The bot's "View Order" deep link
+  // opens this page with a fresh ?auth= token that AuthProvider consumes on
+  // mount, so fetching too early would 401 and show a blank screen.
+  const { user, loading: authLoading } = useAuth();
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [showSuccess, setShowSuccess] = useState(placed);
   const [showItems, setShowItems] = useState(false);
@@ -35,12 +42,17 @@ function OrderDetailContent() {
   const [submittingReview, setSubmittingReview] = useState(false);
 
   const fetchOrder = useCallback(async () => {
-    try { setOrder(await api.get<Order>(`/orders/${id}`)); }
-    catch { router.back(); }
+    try { setOrder(await api.get<Order>(`/orders/${id}`)); setNotFound(false); }
+    catch { setNotFound(true); }
     finally { setLoading(false); }
-  }, [id, router]);
+  }, [id]);
 
-  useEffect(() => { fetchOrder(); }, [fetchOrder]);
+  // Only fetch once auth has resolved and we have a session.
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) { setLoading(false); return; }
+    fetchOrder();
+  }, [authLoading, user, fetchOrder]);
   useAutoRefresh(fetchOrder, { interval: 10000 });
 
   useEffect(() => { if (showSuccess) { const t = setTimeout(() => setShowSuccess(false), 4000); return () => clearTimeout(t); } }, [showSuccess]);
@@ -75,7 +87,17 @@ function OrderDetailContent() {
     finally { setSubmittingReview(false); }
   }
 
-  if (loading) return (
+  // Not logged in (e.g. opened in a plain browser without a token) — show the
+  // Telegram login prompt rather than a blank screen.
+  if (!authLoading && !user) {
+    return (
+      <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
+        <LoginGate><div /></LoginGate>
+      </div>
+    );
+  }
+
+  if (authLoading || loading) return (
     <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
       <div style={{
         height: 56, display: "flex", alignItems: "center", gap: 12,
@@ -98,7 +120,37 @@ function OrderDetailContent() {
     </div>
   );
 
-  if (!order) return null;
+  // Couldn't load the order (bad id, not yours, network) — explain instead of
+  // silently bouncing to a blank page.
+  if (notFound || !order) return (
+    <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
+      <div style={{
+        height: 56, display: "flex", alignItems: "center", gap: 12,
+        background: "var(--shop-surface, #FFFFFF)", borderBottom: "1px solid var(--shop-divider, #ECEEF3)",
+        padding: "0 16px",
+      }}>
+        <BackButton />
+        <span style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)" }}>Order Details</span>
+      </div>
+      <div style={{ textAlign: "center", padding: "80px 24px" }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>📦</div>
+        <p style={{ fontSize: 15, fontWeight: 600, color: "var(--shop-black, #0B0B0F)", marginBottom: 6 }}>
+          Order not found
+        </p>
+        <p style={{ fontSize: 13, color: "var(--shop-muted, #8A8F9C)", marginBottom: 20 }}>
+          We couldn&apos;t load this order. It may have been removed, or you may need to reopen it from Telegram.
+        </p>
+        <button onClick={() => router.push("/shop/orders")}
+          style={{
+            padding: "12px 24px", borderRadius: "var(--shop-r-input, 12px)",
+            border: "none", background: "var(--shop-primary, #1E6BFF)",
+            color: "#FFFFFF", fontWeight: 600, fontSize: 14, cursor: "pointer",
+          }}>
+          View My Orders
+        </button>
+      </div>
+    </div>
+  );
 
   const stepIdx = TIMELINE.findIndex(s => s.key === order.status);
   const isCancelled = order.status === "cancelled";

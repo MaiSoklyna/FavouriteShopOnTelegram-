@@ -27,6 +27,7 @@ def _is_https(url: str) -> bool:
 
 
 def _build_menu_keyboard(miniapp_url: str) -> InlineKeyboardMarkup:
+    """Simple shopping menu for normal customers."""
     rows = []
     if _is_https(miniapp_url):
         rows.append([InlineKeyboardButton("Open Shop", web_app=WebAppInfo(url=miniapp_url))])
@@ -39,6 +40,38 @@ def _build_menu_keyboard(miniapp_url: str) -> InlineKeyboardMarkup:
         InlineKeyboardButton("Support", callback_data="support"),
     ])
     return InlineKeyboardMarkup(rows)
+
+
+# Admin (shop owner) control sections — (button label, dashboard path).
+_ADMIN_SECTIONS = [
+    ("Manage Products", "products"),
+    ("View Orders", "orders"),
+    ("Analytics / Reports", "analytics"),
+    ("Shop Settings", "settings"),
+]
+
+
+def _build_admin_keyboard(miniapp_url: str, dashboard_base: str, admin_token: str) -> InlineKeyboardMarkup:
+    """Control menu for shop owners / admins.
+
+    Dashboard sections open as URL buttons carrying a one-tap SSO token
+    (``?auth=`` is consumed by the dashboard AuthProvider on load).
+    """
+    rows = []
+    if _is_https(miniapp_url):
+        rows.append([InlineKeyboardButton("Open Shop", web_app=WebAppInfo(url=miniapp_url))])
+    for label, path in _ADMIN_SECTIONS:
+        rows.append([InlineKeyboardButton(label, url=f"{dashboard_base}/{path}?auth={admin_token}")])
+    return InlineKeyboardMarkup(rows)
+
+
+def _admin_token_for(sa: dict | None, ma: dict | None) -> str | None:
+    """Mint an admin SSO token, preferring the shop-owner (merchant) role."""
+    if ma:
+        return _make_admin_token(ma["id"], Role.MERCHANT_ADMIN, ma["email"], ma.get("merchant_id"))
+    if sa:
+        return _make_admin_token(sa["id"], Role.SUPER_ADMIN, sa["email"])
+    return None
 
 
 async def _upsert_user(telegram_id: int, username: str, first_name: str, last_name: str):
@@ -201,9 +234,25 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg, parse_mode="HTML")
         return
 
-    # Regular /start — show menu
+    # Regular /start — role-aware menu (admins get a control menu, users a shop menu)
     token = _make_user_token(db_user["id"], telegram_id)
     miniapp_url = f"{settings.web_app_base}/shop?auth={token}"
+
+    sa, ma = await _get_admin_accounts(telegram_id)
+    admin_token = _admin_token_for(sa, ma)
+
+    if admin_token:
+        admin_name = (ma or sa).get("full_name") or first_name or "admin"
+        text = f"Welcome back, <b>{admin_name}</b>! Manage your shop below."
+        if not _is_https(miniapp_url):
+            text += f'\n\n<a href="{miniapp_url}">Open Shop</a>'
+        await update.message.reply_text(
+            text, parse_mode="HTML",
+            reply_markup=_build_admin_keyboard(miniapp_url, settings.web_app_base, admin_token),
+            disable_web_page_preview=True,
+        )
+        return
+
     text = f"{'Welcome to <b>Favourite of Shop</b>' if is_new else 'Welcome back'}, {first_name or 'friend'}!"
     if _is_https(miniapp_url):
         text += "\n\nTap <b>Open Shop</b> to start!"
@@ -212,6 +261,75 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         text, parse_mode="HTML",
+        reply_markup=_build_menu_keyboard(miniapp_url),
+        disable_web_page_preview=True,
+    )
+
+
+# ── /help command ───────────────────────────────────────────────
+
+
+_USER_HELP = (
+    "🛍 <b>Byme24 — Help</b>\n"
+    "Here's everything you can do:\n\n"
+    "🏬 <b>Open Shop</b> — browse products & checkout in the mini app\n"
+    "📦 /orders — track your orders\n"
+    "🛒 /cart — view items in your cart\n"
+    "👤 /profile — your account & saved addresses\n"
+    "💬 /support — chat with our team for help\n"
+    "🔁 /start — back to the main menu\n"
+    "ℹ️ /help — show this message\n\n"
+    "💡 <b>Want to sell?</b> Open the shop, go to <b>Profile → Become a Seller</b> "
+    "and set up your store in a few easy steps."
+)
+
+_ADMIN_HELP = (
+    "🛠 <b>Byme24 — Shop Owner Help</b>\n"
+    "Manage your shop right from Telegram:\n\n"
+    "📦 <b>Manage Products</b> — add, edit & restock items\n"
+    "🧾 <b>View Orders</b> — see and fulfil customer orders\n"
+    "📊 <b>Analytics / Reports</b> — sales & performance\n"
+    "⚙️ <b>Shop Settings</b> — store info, logo & payment\n"
+    "🏬 <b>Open Shop</b> — preview your store as a customer\n\n"
+    "<b>Quick commands</b>\n"
+    "🔁 /start — open your control menu\n"
+    "📦 /orders · 🛒 /cart · 👤 /profile · 💬 /support\n"
+    "ℹ️ /help — show this message\n\n"
+    "💡 Tap a button below to jump straight to the dashboard."
+)
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Role-aware /help — admins get shop-management guidance, users get shopping help."""
+    tg_user = update.effective_user
+    telegram_id = tg_user.id
+
+    try:
+        sa, ma = await _get_admin_accounts(telegram_id)
+    except Exception as e:
+        logger.warning("help_command admin lookup failed: %s", e)
+        sa = ma = None
+    admin_token = _admin_token_for(sa, ma)
+
+    # Build a mini-app URL so the help keyboard's "Open Shop" works.
+    miniapp_url = f"{settings.web_app_base}/shop"
+    try:
+        db_user = await sb_get_one("users", f"select=id&telegram_id=eq.{telegram_id}")
+        if db_user:
+            miniapp_url = f"{settings.web_app_base}/shop?auth={_make_user_token(db_user['id'], telegram_id)}"
+    except Exception:
+        pass
+
+    if admin_token:
+        await update.message.reply_text(
+            _ADMIN_HELP, parse_mode="HTML",
+            reply_markup=_build_admin_keyboard(miniapp_url, settings.web_app_base, admin_token),
+            disable_web_page_preview=True,
+        )
+        return
+
+    await update.message.reply_text(
+        _USER_HELP, parse_mode="HTML",
         reply_markup=_build_menu_keyboard(miniapp_url),
         disable_web_page_preview=True,
     )
@@ -259,7 +377,7 @@ async def dash_role_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show main menu with refreshed token."""
+    """Show main menu with refreshed token — role-aware (admin vs user)."""
     query = update.callback_query
     await query.answer()
 
@@ -270,6 +388,20 @@ async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"{base}/shop?auth={_make_user_token(db_user['id'], tg_user.id)}"
         if db_user else f"{base}/shop"
     )
+
+    sa, ma = await _get_admin_accounts(tg_user.id)
+    admin_token = _admin_token_for(sa, ma)
+
+    if admin_token:
+        text = f"Hey {tg_user.first_name}! Manage your shop below."
+        if not _is_https(miniapp_url):
+            text += f'\n\n<a href="{miniapp_url}">Open Shop</a>'
+        await query.edit_message_text(
+            text, parse_mode="HTML",
+            reply_markup=_build_admin_keyboard(miniapp_url, base, admin_token),
+            disable_web_page_preview=True,
+        )
+        return
 
     text = f"Hey {tg_user.first_name}! What would you like to do?"
     if not _is_https(miniapp_url):
