@@ -11,6 +11,7 @@ import {
   HiOutlineBell, HiOutlineGift, HiOutlineOfficeBuilding,
   HiOutlineLogout, HiOutlineMenu, HiOutlineX,
   HiOutlinePhotograph, HiOutlineChatAlt2, HiOutlineUserAdd,
+  HiOutlineCash, HiOutlineCurrencyDollar,
 } from "react-icons/hi";
 
 const MENU = [
@@ -21,6 +22,8 @@ const MENU = [
   { href: "/banners", label: "Banners", icon: HiOutlinePhotograph, superOnly: true },
   { href: "/promotions", label: "Promotions", icon: HiOutlineGift },
   { href: "/analytics", label: "Analytics", icon: HiOutlineChartBar },
+  { href: "/earnings", label: "Earnings", icon: HiOutlineCurrencyDollar, merchantOnly: true },
+  { href: "/settlements", label: "Settlements", icon: HiOutlineCash, superOnly: true },
   { href: "/reviews", label: "Reviews", icon: HiOutlineChatAlt2 },
   { href: "/support", label: "Support", icon: HiOutlineTicket },
   { href: "/loyalty", label: "Loyalty", icon: HiOutlineStar },
@@ -53,7 +56,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   const adminUser = user as AdminUser;
-  const visibleMenu = MENU.filter((m) => !("superOnly" in m && m.superOnly) || isSuperAdmin);
+  const visibleMenu = MENU.filter((m) =>
+    "superOnly" in m && m.superOnly ? isSuperAdmin
+      : "merchantOnly" in m && m.merchantOnly ? !isSuperAdmin
+      : true,
+  );
 
   function handleLogout() {
     logout();

@@ -23,7 +23,11 @@ export default function CheckoutPage() {
   const [orderError, setOrderError] = useState("");
   const [khqrData, setKhqrData] = useState<any>(null);
   const [khqrTimer, setKhqrTimer] = useState(900);
-  const [orderId, setOrderId] = useState<number | null>(null);
+  const [qrOrderIds, setQrOrderIds] = useState<number[]>([]);
+  const [qrIndex, setQrIndex] = useState(0);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrError, setQrError] = useState("");
+  const orderId = qrOrderIds[qrIndex] ?? null;
 
   useEffect(() => {
     if (user && "first_name" in user) {
@@ -38,6 +42,46 @@ export default function CheckoutPage() {
       return () => clearInterval(id);
     }
   }, [step, khqrTimer]);
+
+  // Poll PayWay status (via backend) while the QR is on screen
+  useEffect(() => {
+    if (step !== 4 || !orderId || !khqrData) return;
+    let stopped = false;
+    const id = setInterval(async () => {
+      try {
+        const res = await api.get<{ data: { payment_status: string } }>(`/payments/payway/orders/${orderId}/status`);
+        if (!stopped && res.data?.payment_status === "paid") {
+          stopped = true;
+          clearInterval(id);
+          handlePaid();
+        }
+      } catch { /* keep polling */ }
+    }, 4000);
+    return () => { stopped = true; clearInterval(id); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, orderId, khqrData]);
+
+  async function loadQr(oid: number) {
+    setQrLoading(true); setQrError(""); setKhqrData(null);
+    try {
+      const qr = await api.post<{ data: any }>(`/payments/payway/orders/${oid}/qr`);
+      if (qr.data?.payment_status === "paid") { handlePaid(); return; }
+      setKhqrData(qr.data);
+      setKhqrTimer(qr.data?.expires_in || 900);
+    } catch (err: any) {
+      setQrError(err.detail || err.message || "Failed to generate QR");
+    } finally { setQrLoading(false); }
+  }
+
+  function handlePaid() {
+    const next = qrIndex + 1;
+    if (next < qrOrderIds.length) {
+      setQrIndex(next);
+      loadQr(qrOrderIds[next]);
+    } else {
+      router.replace(`/shop/order/${qrOrderIds[0]}?placed=true`);
+    }
+  }
 
   const formatTimer = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
@@ -84,26 +128,17 @@ export default function CheckoutPage() {
       const oid = results[0]?.data?.order_id;
 
       if (payment === "khqr" && oid) {
-        setOrderId(oid);
-        try {
-          const qr = await api.get<{ data: any }>(`/orders/${oid}/khqr`);
-          setKhqrData(qr.data);
-          setKhqrTimer(qr.data?.expires_in || 900);
-        } catch { setOrderError("Failed to generate QR"); }
+        // One QR per shop order, paid one after another
+        const ids = results.map(r => r?.data?.order_id).filter(Boolean) as number[];
+        setQrOrderIds(ids);
+        setQrIndex(0);
         setStep(4);
+        loadQr(ids[0]);
       } else {
         router.replace(oid ? `/shop/order/${oid}?placed=true` : "/shop/orders");
       }
     } catch (err: any) { setOrderError(err.detail || err.message || "Order failed"); }
     finally { setPlacing(false); }
-  }
-
-  async function handleConfirmPayment() {
-    if (!orderId) return;
-    try {
-      await api.post(`/orders/${orderId}/confirm-payment`);
-      router.replace(`/shop/order/${orderId}?placed=true`);
-    } catch { alert("Payment confirmation failed. Contact support if you already paid."); }
   }
 
   if (!user || (items.length === 0 && step < 4)) {
@@ -223,7 +258,7 @@ export default function CheckoutPage() {
             }}>Payment Method</h2>
             {[
               { key: "cod", label: "Cash on Delivery", desc: "Pay when you receive", icon: "💵" },
-              { key: "khqr", label: "KHQR Payment", desc: "ABA, ACLEDA, Wing, Pi Pay", icon: "📱" },
+              { key: "khqr", label: "ABA KHQR", desc: "Scan with ABA Mobile or any KHQR banking app", icon: "📱" },
             ].map(m => {
               const selected = payment === m.key;
               return (
@@ -338,49 +373,78 @@ export default function CheckoutPage() {
             <h2 style={{
               fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)", marginBottom: 8,
             }}>Complete Payment</h2>
-            <p style={{ fontSize: 13, color: "var(--shop-muted, #8A8F9C)", marginBottom: 24 }}>
-              Scan QR with any KHQR app
+            <p style={{ fontSize: 13, color: "var(--shop-muted, #8A8F9C)", marginBottom: qrOrderIds.length > 1 ? 8 : 24 }}>
+              Scan with ABA Mobile or any KHQR banking app
             </p>
+            {qrOrderIds.length > 1 && (
+              <p style={{ fontSize: 13, fontWeight: 600, color: "var(--shop-primary, #1E6BFF)", marginBottom: 24 }}>
+                Order {qrIndex + 1} of {qrOrderIds.length}
+                {khqrData?.order_code ? ` · ${khqrData.order_code}` : ""}
+              </p>
+            )}
 
-            {khqrData ? (
+            {qrLoading ? (
+              <div style={{ padding: 40, color: "var(--shop-muted, #8A8F9C)", fontSize: 14 }}>Generating QR…</div>
+            ) : khqrData ? (
               <>
                 <div style={{
                   background: "var(--shop-surface, #FFFFFF)",
                   borderRadius: "var(--shop-r-card, 16px)", padding: 24, marginBottom: 16,
                   boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
                 }}>
-                  {khqrData.qr_code && (
-                    <img src={khqrData.qr_code} alt="KHQR"
-                      style={{ width: 220, height: 220, margin: "0 auto 16px", borderRadius: 12, display: "block" }} />
+                  {khqrData.qr_image && (
+                    <img src={khqrData.qr_image} alt="ABA KHQR"
+                      style={{
+                        width: 240, maxWidth: "100%", margin: "0 auto 16px", borderRadius: 12, display: "block",
+                        opacity: khqrTimer > 0 ? 1 : 0.25,
+                      }} />
                   )}
                   <p style={{ fontSize: 28, fontWeight: 700, color: "var(--shop-primary, #1E6BFF)" }}>
-                    ${khqrData.amount?.toFixed(2)}
+                    ${khqrData.amount}
                   </p>
-                  <p style={{ fontSize: 13, color: "#E65100", fontWeight: 600, marginTop: 8 }}>
-                    Expires in {formatTimer(khqrTimer)}
-                  </p>
+                  {khqrTimer > 0 ? (
+                    <>
+                      <p style={{ fontSize: 13, color: "#E65100", fontWeight: 600, marginTop: 8 }}>
+                        Expires in {formatTimer(khqrTimer)}
+                      </p>
+                      <p style={{ fontSize: 12, color: "var(--shop-muted, #8A8F9C)", marginTop: 8 }}>
+                        Waiting for payment… this page updates automatically.
+                      </p>
+                    </>
+                  ) : (
+                    <p style={{ fontSize: 13, color: "#C62828", fontWeight: 600, marginTop: 8 }}>
+                      QR expired
+                    </p>
+                  )}
                 </div>
-                {khqrData.deeplink && (
+                {khqrTimer > 0 && khqrData.deeplink && (
                   <a href={khqrData.deeplink} style={{
                     display: "block", width: "100%", padding: 14,
                     background: "var(--shop-primary, #1E6BFF)", color: "#FFFFFF",
                     borderRadius: "var(--shop-r-input, 12px)", fontWeight: 600,
                     textAlign: "center", textDecoration: "none", marginBottom: 10, fontSize: 14,
                   }}>
-                    Open in Bakong App
+                    Pay with ABA Mobile
                   </a>
                 )}
-                <button onClick={handleConfirmPayment} style={{ ...btnPrimary, marginBottom: 10, marginTop: 0 }}>
-                  I&apos;ve Paid
-                </button>
+                {khqrTimer <= 0 && orderId && (
+                  <button onClick={() => loadQr(orderId)} style={{ ...btnPrimary, marginBottom: 10, marginTop: 0 }}>
+                    Generate new QR
+                  </button>
+                )}
                 <button onClick={() => router.push("/shop/orders")} style={{ ...btnSecondary, width: "100%", marginTop: 0 }}>
                   Pay Later
                 </button>
               </>
             ) : (
               <div style={{ padding: 40 }}>
-                <p style={{ color: "#C62828" }}>Failed to generate QR code</p>
-                <button onClick={() => router.push("/shop/orders")} style={{ ...btnPrimary, marginTop: 16 }}>
+                <p style={{ color: "#C62828" }}>{qrError || "Failed to generate QR code"}</p>
+                {orderId && (
+                  <button onClick={() => loadQr(orderId)} style={{ ...btnPrimary, marginTop: 16 }}>
+                    Try again
+                  </button>
+                )}
+                <button onClick={() => router.push("/shop/orders")} style={{ ...btnSecondary, width: "100%", marginTop: 10 }}>
                   Go to Orders
                 </button>
               </div>

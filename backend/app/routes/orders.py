@@ -22,6 +22,7 @@ from app.core.dependencies import require_any_admin, require_role
 from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
+from app.services import settlement
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -319,19 +320,12 @@ async def cancel_order(order_id: int, user: TokenClaims = require_role(Role.USER
                     restored = (opt.get("stock_adjust") or 0) + item["quantity"]
                     await db.from_("product_variant_options").eq("id", opt_id).update({"stock_adjust": restored})
 
+        await settlement.on_order_status_changed(
+            db, order_id, "cancelled", actor_type="user", actor_id=str(db_user["id"]),
+            reason="Cancelled by customer",
+        )
         await db.from_("orders").eq("id", order_id).update({"status": "cancelled"})
     return {"success": True, "message": "Order cancelled"}
-
-
-@router.post("/{order_id}/confirm-payment")
-async def confirm_payment(order_id: int, user: TokenClaims = require_role(Role.USER)):
-    """Confirm payment for an order (user self-service)."""
-    async with SupabaseClient.service_role() as db:
-        await db.from_("orders").eq("id", order_id).update({
-            "status": "confirmed",
-            "payment_status": "paid",
-        })
-    return {"success": True, "message": "Payment confirmed"}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -398,44 +392,19 @@ async def update_order_status(
         if body.get("payment_status"):
             update_data["payment_status"] = body["payment_status"]
 
+        actor = {"actor_type": str(user.role), "actor_id": user.sub}
+        # Reverse first: it refuses if the earning sits in an open payout,
+        # and that must stop the cancellation too.
+        if new_status == "cancelled":
+            await settlement.on_order_status_changed(
+                db, order_id, new_status, reason=body.get("admin_note"), **actor,
+            )
+
         await db.from_("orders").eq("id", order_id).update(update_data)
+
+        if new_status == "delivered":
+            await settlement.on_order_status_changed(db, order_id, new_status, **actor)
     return {"success": True}
-
-
-# ═══════════════════════════════════════════════════════════════
-#  KHQR PAYMENT
-# ═══════════════════════════════════════════════════════════════
-
-
-@router.get("/{order_id}/khqr")
-async def generate_khqr(order_id: int, user: TokenClaims = require_role(Role.USER)):
-    """Generate KHQR payment QR code for an order."""
-    async with SupabaseClient.service_role() as db:
-        order = await db.from_("orders").eq("id", order_id).select_one(
-            "id,order_code,total,merchant_id"
-        )
-        if not order:
-            raise NotFoundError("Order", order_id)
-
-    # Generate QR code
-    qr_code = None
-    deeplink = None
-    try:
-        from app.utils.khqr import generate_khqr as gen_khqr, generate_payment_deeplink
-        qr_code = await gen_khqr(order["merchant_id"], order["total"])
-        deeplink = await generate_payment_deeplink(order["merchant_id"], order["total"])
-    except Exception:
-        logger.debug("KHQR generation unavailable")
-
-    return {
-        "data": {
-            "qr_code": qr_code,
-            "amount": order["total"],
-            "order_code": order["order_code"],
-            "expires_in": 900,
-            "deeplink": deeplink,
-        }
-    }
 
 
 # ═══════════════════════════════════════════════════════════════

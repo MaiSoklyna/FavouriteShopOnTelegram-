@@ -27,10 +27,12 @@ from app.routes import (
     merchants,
     notifications,
     orders,
+    payments,
     products,
     promos,
     reviews,
     sellers,
+    settlements,
     support,
     telegram_webhook,
     users,
@@ -102,6 +104,12 @@ app.include_router(cart.router, prefix="/api")
 
 # Orders (user placement + admin management)
 app.include_router(orders.router, prefix="/api")
+
+# ABA PayWay QR payments
+app.include_router(payments.router, prefix="/api")
+
+# Merchant settlement (earnings, payouts, payout accounts)
+app.include_router(settlements.router, prefix="/api")
 
 # Promos
 app.include_router(promos.router, prefix="/api")
