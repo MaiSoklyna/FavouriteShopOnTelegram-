@@ -106,7 +106,11 @@ async def create_qr(request: Request, order_id: int, user: TokenClaims = require
             )
         except payway.PayWayError as exc:
             logger.warning("PayWay QR failed for order %s: %s (code=%s)", order_id, exc, exc.code)
-            raise BadRequestError("Could not create the payment QR. Please try again.")
+            # The PayWay status code is not sensitive and makes support
+            # possible without server logs (1 = wrong hash, 6 = domain not whitelisted).
+            raise BadRequestError(
+                f"Could not create the payment QR. Please try again. (PayWay code {exc.code or 'n/a'})"
+            )
 
         # Record the tran_id before handing out the QR so the
         # callback and status poll can find it.

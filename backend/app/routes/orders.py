@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import random
 from datetime import datetime, timezone
+from decimal import ROUND_HALF_UP, Decimal
 
 from fastapi import APIRouter
 
@@ -51,42 +52,20 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
         db_user = await _get_db_user(db, user)
         user_id = db_user["id"]
 
-        # ── Get cart ────────────────────────────────────────────
-        cart = await (
-            db.from_("cart")
-            .eq("user_id", user_id)
-            .eq("merchant_id", merchant_id)
-            .select_one("id")
-        )
-        if not cart:
+        # ── Price the cart (same computation as /orders/quote) ──
+        promo_code = (request_body.get("promo_code") or "").strip() or None
+        priced = await _price_cart(db, user_id, merchant_id, promo_code)
+        if priced is None:
             raise BadRequestError("Cart is empty")
+        if promo_code and not priced["promo"]:
+            # The customer was shown a discount; never silently charge more.
+            raise BadRequestError(priced["promo_error"] or "Promo code is no longer valid")
 
-        items = await db.from_("cart_items").eq("cart_id", cart["id"]).select()
-        if not items:
-            raise BadRequestError("Cart is empty")
-
-        # ── Calculate subtotal ──────────────────────────────────
-        subtotal = sum(
-            round(item.get("unit_price", 0) * item.get("quantity", 0), 2)
-            for item in items
-        )
-
-        # ── Delivery fee ────────────────────────────────────────
-        delivery_fee = 0.0 if subtotal >= FREE_DELIVERY_THRESHOLD else 5.0
-
-        # ── Promo discount ──────────────────────────────────────
-        discount = 0.0
-        promo_code = request_body.get("promo_code")
-        promo = None
-        if promo_code:
-            promo = await _validate_promo(db, promo_code, merchant_id, subtotal)
-            if promo:
-                if promo["type"] == "percent":
-                    discount = round(subtotal * float(promo["value"]) / 100, 2)
-                else:
-                    discount = min(float(promo["value"]), subtotal)
-
-        total = round(subtotal - discount + delivery_fee, 2)
+        cart, items, promo = priced["cart"], priced["items"], priced["promo"]
+        subtotal = float(priced["subtotal"])
+        discount = float(priced["discount"])
+        delivery_fee = float(priced["delivery_fee"])
+        total = float(priced["total"])
 
         # ── Generate order code ─────────────────────────────────
         now = datetime.now(timezone.utc)
@@ -126,7 +105,7 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
             order_data["customer_phone"] = db_user["phone"]
 
         if promo:
-            order_data["promo_code"] = promo.get("code")
+            order_data["promo_code_id"] = promo["id"]
 
         rows = await db.from_("orders").insert(order_data)
         order = rows[0]
@@ -169,10 +148,10 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
         # ── Record promo usage ──────────────────────────────────
         if promo:
             await db.from_("promo_usages").insert({
-                "promo_id": promo["id"],
+                "promo_code_id": promo["id"],
                 "user_id": user_id,
                 "order_id": order_id,
-                "discount_amount": discount,
+                "discount_applied": discount,
             })
             used_count = promo.get("used_count", 0) + 1
             await db.from_("promo_codes").eq("id", promo["id"]).update({"used_count": used_count})
@@ -249,6 +228,58 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
             "loyalty": loyalty_result,
         },
     }
+
+
+@router.post("/quote")
+async def quote_order(request_body: dict, user: TokenClaims = require_role(Role.USER)):
+    """Price the caller's cart exactly as placing the order would.
+
+    Body: {"promo_code"?: str}. Returns one quote per shop (each shop is a
+    separate order with its own delivery fee). A promo code belongs to one
+    shop and is applied to that shop's order only.
+    """
+    promo_code = (request_body.get("promo_code") or "").strip() or None
+    async with SupabaseClient.service_role() as db:
+        db_user = await _get_db_user(db, user)
+        carts = await db.from_("cart").eq("user_id", db_user["id"]).select("id,merchant_id")
+
+        quotes = []
+        promo_merchant_id = None
+        promo_error = None
+        for cart in carts:
+            if not cart.get("merchant_id"):
+                continue
+            priced = await _price_cart(db, db_user["id"], cart["merchant_id"], promo_code)
+            if priced is None:
+                continue
+            if priced["promo"]:
+                promo_merchant_id = cart["merchant_id"]
+            elif priced["promo_error"] and priced["promo_owned"]:
+                promo_error = priced["promo_error"]
+            quotes.append({
+                "merchant_id": cart["merchant_id"],
+                "subtotal": str(priced["subtotal"]),
+                "discount": str(priced["discount"]),
+                "delivery_fee": str(priced["delivery_fee"]),
+                "total": str(priced["total"]),
+                "promo_applied": bool(priced["promo"]),
+            })
+
+    if promo_code and promo_merchant_id is None and promo_error is None:
+        promo_error = "Promo code not valid for the shops in your cart"
+
+    grand = {k: str(sum((Decimal(q[k]) for q in quotes), Decimal("0.00")))
+             for k in ("subtotal", "discount", "delivery_fee", "total")}
+    return {"data": {
+        "orders": quotes,
+        "totals": grand,
+        "promo": {
+            "code": promo_code,
+            "applied": promo_merchant_id is not None,
+            "merchant_id": promo_merchant_id,
+            "error": promo_error,
+        } if promo_code else None,
+    }}
 
 
 @router.get("")
@@ -423,8 +454,60 @@ async def _get_db_user(db, user: TokenClaims) -> dict:
     raise NotFoundError("User")
 
 
-async def _validate_promo(db, code: str, merchant_id: int, subtotal: float) -> dict | None:
-    """Validate a promo code. Returns promo row or None."""
+async def _price_cart(db, user_id: int, merchant_id: int, promo_code: str | None) -> dict | None:
+    """Single source of truth for an order's price.
+
+    Used by both /orders/quote (what the customer sees) and place_order
+    (what is charged). Returns None when the cart for this shop is empty.
+    """
+    cart = await db.from_("cart").eq("user_id", user_id).eq("merchant_id", merchant_id).select_one("id")
+    if not cart:
+        return None
+    items = await db.from_("cart_items").eq("cart_id", cart["id"]).select()
+    if not items:
+        return None
+
+    subtotal = sum(
+        (_money(item.get("unit_price")) * int(item.get("quantity") or 0) for item in items),
+        Decimal("0.00"),
+    )
+    delivery_fee = Decimal("0.00") if subtotal >= Decimal(str(FREE_DELIVERY_THRESHOLD)) else Decimal("5.00")
+
+    promo, promo_error, promo_owned = None, None, False
+    discount = Decimal("0.00")
+    if promo_code:
+        promo, promo_error, promo_owned = await _validate_promo(db, promo_code, merchant_id, subtotal)
+        if promo:
+            value = _money(promo["value"])
+            if promo["type"] == "percent":
+                discount = (subtotal * value / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            else:
+                discount = value
+            discount = min(discount, subtotal)
+
+    return {
+        "cart": cart,
+        "items": items,
+        "subtotal": subtotal,
+        "discount": discount,
+        "delivery_fee": delivery_fee,
+        "total": subtotal - discount + delivery_fee,
+        "promo": promo,
+        "promo_error": promo_error,
+        "promo_owned": promo_owned,
+    }
+
+
+def _money(value) -> Decimal:
+    return Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+async def _validate_promo(db, code: str, merchant_id: int, subtotal: Decimal) -> tuple[dict | None, str | None, bool]:
+    """Validate a promo code for one shop.
+
+    Returns (promo, error, owned): `owned` is True when the code exists for
+    this shop, so its error message is the one to show the customer.
+    """
     promo = await (
         db.from_("promo_codes")
         .eq("merchant_id", merchant_id)
@@ -433,20 +516,17 @@ async def _validate_promo(db, code: str, merchant_id: int, subtotal: float) -> d
         .select_one()
     )
     if not promo:
-        return None
+        return None, None, False
 
-    # Check expiration
     if promo.get("expires_at"):
         exp = datetime.fromisoformat(promo["expires_at"].replace("Z", "+00:00"))
         if datetime.now(timezone.utc) > exp:
-            return None
+            return None, "Promo code has expired", True
 
-    # Check max uses
-    if promo.get("max_uses") and promo.get("used_count", 0) >= promo["max_uses"]:
-        return None
+    if promo.get("max_uses") and (promo.get("used_count") or 0) >= promo["max_uses"]:
+        return None, "Promo code usage limit reached", True
 
-    # Check minimum order
-    if promo.get("min_order") and subtotal < promo["min_order"]:
-        return None
+    if promo.get("min_order") and subtotal < _money(promo["min_order"]):
+        return None, f"Minimum order ${_money(promo['min_order'])} required for this code", True
 
-    return promo
+    return promo, None, True

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
+import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote } from "@/lib/quote";
 
 const PROVINCES = ["Phnom Penh", "Siem Reap", "Battambang", "Kampot", "Kampong Cham", "Other"];
 
@@ -28,6 +29,26 @@ export default function CheckoutPage() {
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState("");
   const orderId = qrOrderIds[qrIndex] ?? null;
+  const [quote, setQuote] = useState<CartQuote | null>(null);
+  const [quoteError, setQuoteError] = useState("");
+
+  // Backend price for the cart — identical to what placing the order charges
+  useEffect(() => {
+    if (!user || items.length === 0 || step >= 4) return;
+    const code = getSavedPromo();
+    fetchQuote(code)
+      .then((q) => {
+        setQuote(q);
+        setQuoteError(q.promo && !q.promo.applied ? (q.promo.error || "Promo code not valid") : "");
+        if (q.promo && !q.promo.applied) savePromo(null);
+      })
+      .catch(() => setQuoteError("Could not calculate the total. Please go back and try again."));
+  }, [user, items, step]);
+
+  function removePromo() {
+    savePromo(null);
+    fetchQuote(null).then(setQuote).catch(() => {});
+  }
 
   useEffect(() => {
     if (user && "first_name" in user) {
@@ -121,9 +142,12 @@ export default function CheckoutPage() {
             delivery_name: form.name,
             customer_note: form.note,
             payment_method: payment,
+            // A promo code belongs to one shop — send it only with that shop's order
+            promo_code: quote?.promo?.applied && quote.promo.merchant_id === Number(mid) ? quote.promo.code : undefined,
           })
         )
       );
+      savePromo(null);
       await fetchCart();
       const oid = results[0]?.data?.order_id;
 
@@ -164,8 +188,9 @@ export default function CheckoutPage() {
     );
   }
 
-  const deliveryFee = total > 50 ? 0 : 5;
-  const finalTotal = total + deliveryFee;
+  const qt = quote?.totals;
+  const deliveryFee = Number(qt?.delivery_fee ?? 0);
+  const discount = Number(qt?.discount ?? 0);
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
@@ -338,13 +363,30 @@ export default function CheckoutPage() {
             </Card>
 
             <Card>
-              <SummaryRow label="Subtotal" value={`$${total.toFixed(2)}`} />
-              <SummaryRow label="Delivery" value={deliveryFee === 0 ? "FREE" : `$${deliveryFee.toFixed(2)}`} green={deliveryFee === 0} />
+              <SummaryRow label="Subtotal" value={qt ? money(qt.subtotal) : `$${total.toFixed(2)}`} />
+              {discount > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 14, marginBottom: 8 }}>
+                  <span style={{ color: "var(--shop-muted, #8A8F9C)" }}>
+                    Discount ({quote?.promo?.code}){" "}
+                    <button onClick={removePromo} style={{ background: "none", border: "none", color: "#C62828", fontSize: 12, cursor: "pointer", padding: 0 }}>
+                      Remove
+                    </button>
+                  </span>
+                  <span style={{ fontWeight: 600, color: "#2E7D32" }}>-{money(discount)}</span>
+                </div>
+              )}
+              <SummaryRow label="Delivery" value={!qt ? "…" : deliveryFee === 0 ? "FREE" : money(deliveryFee)} green={!!qt && deliveryFee === 0} />
+              {(quote?.orders.length ?? 0) > 1 && (
+                <p style={{ fontSize: 11, color: "var(--shop-muted, #8A8F9C)", margin: "0 0 8px" }}>
+                  Items from {quote!.orders.length} shops — each shop is a separate order with its own delivery fee.
+                </p>
+              )}
+              {quoteError && <p style={{ fontSize: 12, color: "#C62828", margin: "0 0 8px" }}>{quoteError}</p>}
               <div style={{ height: 1, background: "var(--shop-divider, #ECEEF3)", margin: "10px 0" }} />
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontWeight: 700, fontSize: 16, color: "var(--shop-black, #0B0B0F)" }}>Total</span>
                 <span style={{ fontWeight: 700, fontSize: 20, color: "var(--shop-primary, #1E6BFF)" }}>
-                  ${finalTotal.toFixed(2)}
+                  {qt ? money(qt.total) : "…"}
                 </span>
               </div>
             </Card>
@@ -360,7 +402,7 @@ export default function CheckoutPage() {
 
             <div style={{ display: "flex", gap: 12 }}>
               <button onClick={() => setStep(2)} style={btnSecondary}>Back</button>
-              <button onClick={handlePlaceOrder} disabled={placing} style={{ ...btnPrimary, opacity: placing ? 0.6 : 1 }}>
+              <button onClick={handlePlaceOrder} disabled={placing || !quote} style={{ ...btnPrimary, opacity: placing || !quote ? 0.6 : 1 }}>
                 {placing ? "Placing..." : "Place Order"}
               </button>
             </div>

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
-import { api } from "@/lib/api";
+import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote } from "@/lib/quote";
 
 export default function CartPage() {
   const router = useRouter();
@@ -16,35 +16,67 @@ export default function CartPage() {
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoError, setPromoError] = useState("");
   const [promoSuccess, setPromoSuccess] = useState(false);
-  const [discount, setDiscount] = useState(0);
+  const [quote, setQuote] = useState<CartQuote | null>(null);
+
+  // Price from the backend — same computation as placing the order
+  const refreshQuote = useCallback(async (code: string | null) => {
+    try {
+      const q = await fetchQuote(code);
+      setQuote(q);
+      return q;
+    } catch {
+      setQuote(null);
+      return null;
+    }
+  }, []);
+
+  // Restore an applied code and re-price whenever the cart changes
+  useEffect(() => {
+    if (!user || items.length === 0) return;
+    const saved = getSavedPromo();
+    refreshQuote(saved).then((q) => {
+      if (saved && q?.promo?.applied) {
+        setPromoCode(saved);
+        setPromoSuccess(true);
+      } else if (saved) {
+        savePromo(null);
+        setPromoSuccess(false);
+        if (q?.promo?.error) setPromoError(q.promo.error);
+      }
+    });
+  }, [user, items, refreshQuote]);
 
   const handleApplyPromo = async () => {
-    if (!promoCode.trim()) return;
+    const code = promoCode.trim();
+    if (!code) return;
     setPromoLoading(true);
     setPromoError("");
-    const merchantIds = [...new Set(items.map((i: any) => i.merchant_id).filter(Boolean))];
-    if (!merchantIds.length) { setPromoError("Cannot validate promo"); setPromoLoading(false); return; }
-
-    for (const mid of merchantIds) {
-      const merchantTotal = items.filter((i: any) => i.merchant_id === mid).reduce((s, i) => s + (i.line_total || i.unit_price * i.quantity), 0);
-      try {
-        const res = await api.post<{ data: { discount_amount: number } }>("/promos/validate", { code: promoCode, merchant_id: mid, cart_total: merchantTotal });
-        setDiscount(res.data.discount_amount || 0);
-        setPromoSuccess(true);
-        setPromoLoading(false);
-        return;
-      } catch { /* try next merchant */ }
+    const q = await refreshQuote(code);
+    if (q?.promo?.applied) {
+      savePromo(code);
+      setPromoSuccess(true);
+    } else {
+      setPromoError(q?.promo?.error || "Invalid promo code");
+      await refreshQuote(null);
     }
-    setPromoError("Invalid promo code");
     setPromoLoading(false);
+  };
+
+  const clearPromo = () => {
+    savePromo(null);
+    setPromoSuccess(false);
+    setPromoCode("");
+    setPromoError("");
+    refreshQuote(null);
   };
 
   if (!user) return <LoginGate><div /></LoginGate>;
   if (loading) return <LoadingPage />;
   if (items.length === 0) return <EmptyPage onAction={() => router.push("/shop")} />;
 
-  const deliveryFee = total > 50 ? 0 : 5;
-  const finalTotal = total + deliveryFee - discount;
+  const t = quote?.totals;
+  const deliveryFee = Number(t?.delivery_fee ?? 0);
+  const discount = Number(t?.discount ?? 0);
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
@@ -183,7 +215,7 @@ export default function CartPage() {
                 outline: "none",
               }} />
             {promoSuccess ? (
-              <button onClick={() => { setPromoSuccess(false); setDiscount(0); setPromoCode(""); setPromoError(""); }}
+              <button onClick={clearPromo}
                 style={{
                   padding: "10px 18px",
                   borderRadius: "var(--shop-r-input, 12px)",
@@ -222,13 +254,13 @@ export default function CartPage() {
           borderRadius: "var(--shop-r-card, 16px)",
           boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
         }}>
-          <Row label="Subtotal" value={`$${total.toFixed(2)}`} />
-          <Row label="Shipping" value={deliveryFee === 0 ? "Free" : `$${deliveryFee.toFixed(2)}`} valueColor={deliveryFee === 0 ? "#16a34a" : undefined} />
-          {discount > 0 && <Row label="Discount" value={`-$${discount.toFixed(2)}`} valueColor="#16a34a" />}
+          <Row label="Subtotal" value={t ? money(t.subtotal) : `$${total.toFixed(2)}`} />
+          <Row label="Shipping" value={!t ? "…" : deliveryFee === 0 ? "Free" : money(deliveryFee)} valueColor={t && deliveryFee === 0 ? "#16a34a" : undefined} />
+          {discount > 0 && <Row label={`Discount (${quote?.promo?.code})`} value={`-${money(discount)}`} valueColor="#16a34a" />}
           <div style={{ height: 1, background: "var(--shop-divider, #ECEEF3)", margin: "12px 0" }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
             <span style={{ fontWeight: 700, fontSize: 15, color: "var(--shop-black, #0B0B0F)" }}>Total</span>
-            <span style={{ fontWeight: 700, fontSize: 17, color: "var(--shop-primary, #1E6BFF)" }}>${finalTotal.toFixed(2)}</span>
+            <span style={{ fontWeight: 700, fontSize: 17, color: "var(--shop-primary, #1E6BFF)" }}>{t ? money(t.total) : "…"}</span>
           </div>
         </div>
       </div>
@@ -249,7 +281,7 @@ export default function CartPage() {
           cursor: "pointer",
           boxShadow: "0 4px 16px rgba(30,107,255,0.3)",
         }}>
-          Checkout &middot; ${finalTotal.toFixed(2)}
+          Checkout{t ? <> &middot; {money(t.total)}</> : null}
         </button>
       </div>
     </div>
