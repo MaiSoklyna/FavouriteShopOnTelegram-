@@ -240,6 +240,8 @@ async def _settle(db, order: dict, tran_id: str, *, raise_errors: bool = False) 
             )
         elif order.get("status") == "cancelled":
             logger.error("Order %s was paid after cancellation — refund required", order["id"])
+        if order.get("status") != "cancelled":
+            await _notify_paid(db, order)
 
     # Record the merchant's earning. Idempotent, so it also repairs a
     # previous attempt that marked the order paid but failed here. A ledger
@@ -252,6 +254,57 @@ async def _settle(db, order: dict, tran_id: str, *, raise_errors: bool = False) 
     except Exception:
         logger.exception("Failed to record earning for paid order %s", order["id"])
     return "paid"
+
+
+async def _notify_paid(db, order: dict) -> None:
+    """Tell the customer and the shop that a QR order is paid. Best-effort.
+
+    Only called by the request that actually flipped payment_status to
+    paid, so each order is announced once.
+    """
+    try:
+        from bot.notifications import (
+            send_order_placed_to_merchant_group,
+            send_payment_received_to_customer,
+        )
+
+        merchant = await db.from_("merchants").eq("id", order["merchant_id"]).select_one(
+            "name,telegram_group_id"
+        ) or {}
+        customer = await db.from_("users").eq("id", order["user_id"]).select_one("id,telegram_id") or {}
+        full = await db.from_("orders").eq("id", order["id"]).select_one(
+            "delivery_address,customer_name,customer_phone,delivery_name,delivery_phone"
+        ) or {}
+        total = float(order["total"])
+
+        await send_payment_received_to_customer(
+            customer.get("telegram_id"),
+            user_id=customer.get("id"),
+            order_id=order["id"],
+            order_code=order["order_code"],
+            merchant_name=merchant.get("name") or "Shop",
+            total=total,
+            payment_method=order.get("payment_method") or "khqr",
+        )
+        if merchant.get("telegram_group_id"):
+            items = await db.from_("order_items").eq("order_id", order["id"]).select(
+                "product_name,quantity,unit_price,subtotal"
+            )
+            await send_order_placed_to_merchant_group(
+                merchant["telegram_group_id"],
+                order_id=order["id"],
+                order_code=order["order_code"],
+                merchant_name=merchant.get("name") or "Shop",
+                items=items,
+                total=total,
+                payment_method=order.get("payment_method") or "khqr",
+                delivery_address=full.get("delivery_address") or "",
+                customer_name=full.get("customer_name") or full.get("delivery_name"),
+                customer_phone=full.get("customer_phone") or full.get("delivery_phone"),
+                paid=True,
+            )
+    except Exception:
+        logger.exception("Paid-order notification failed for order %s (non-fatal)", order["id"])
 
 
 def _build_payout(order: dict, merchant: dict | None, commission_rate) -> tuple[list[dict] | None, str]:

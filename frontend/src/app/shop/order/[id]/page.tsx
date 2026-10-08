@@ -7,6 +7,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { Order } from "@/types";
+import { KhqrPayPanel } from "@/components/shop/KhqrPayPanel";
 
 const TIMELINE = [
   { key: "pending", label: "Ordered", msg: "Your order has been placed" },
@@ -186,6 +187,11 @@ function OrderDetailContent() {
               <p style={{ fontSize: 12, color: "#388E3C" }}>We&apos;ll notify you when confirmed</p>
             </div>
           </div>
+        )}
+
+        {/* Unpaid QR order: pay from here */}
+        {order.payment_method === "khqr" && order.payment_status !== "paid" && order.status === "pending" && (
+          <KhqrPayPanel orderId={order.id} total={Number(order.total)} onPaid={fetchOrder} />
         )}
 
         {/* Timeline */}

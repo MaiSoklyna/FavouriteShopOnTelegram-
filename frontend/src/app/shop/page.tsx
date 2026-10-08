@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isOutOfStock, OutOfStockOverlay } from "@/components/shop/OutOfStock";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
@@ -614,6 +615,7 @@ export default function ShopHomePage() {
                           </span>
                         </div>
                       )}
+                      {isOutOfStock(p) && <OutOfStockOverlay compact />}
                     </div>
                     <div style={{ padding: "8px 10px" }}>
                       {p.merchant_name && (
@@ -855,18 +857,7 @@ function ProductCard({ product }: { product: Product }) {
             </span>
           )}
         </div>
-        {product.stock === 0 && (
-          <div style={{
-            position: "absolute", inset: 0,
-            background: "rgba(8,29,60,0.6)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#fff", fontSize: 13, fontWeight: 600,
-            fontFamily: "'Kantumruy Pro', sans-serif",
-            backdropFilter: "blur(2px)",
-          }}>
-            Out of Stock
-          </div>
-        )}
+        {isOutOfStock(product) && <OutOfStockOverlay />}
       </div>
       <div style={{ padding: "8px 10px 12px" }}>
         {product.merchant_name && (

@@ -43,8 +43,39 @@ class PayWayError(Exception):
         super().__init__(message)
 
 
+def _clean(value: str) -> str:
+    """Strip spaces, line breaks and wrapping quotes pasted into env vars."""
+    return (value or "").strip().strip("'\"").strip()
+
+
+def _base_url() -> str:
+    """PAYWAY_BASE_URL tolerant of a missing scheme or trailing slash/path slip-ups.
+
+    "checkout-sandbox.payway.com.kh" → "https://checkout-sandbox.payway.com.kh"
+    """
+    url = _clean(settings.PAYWAY_BASE_URL).rstrip("/")
+    if url and "://" not in url:
+        url = "https://" + url
+    return url
+
+
+def _merchant_id() -> str:
+    return _clean(settings.PAYWAY_MERCHANT_ID)
+
+
+def _api_key() -> str:
+    return _clean(settings.PAYWAY_API_KEY)
+
+
+def _callback_url() -> str:
+    url = _clean(settings.PAYWAY_CALLBACK_URL)
+    if url and "://" not in url:
+        url = "https://" + url
+    return url
+
+
 def is_configured() -> bool:
-    return bool(settings.PAYWAY_MERCHANT_ID and settings.PAYWAY_API_KEY)
+    return bool(_merchant_id() and _api_key() and _base_url())
 
 
 def to_money(value: Any) -> Decimal:
@@ -62,7 +93,7 @@ def _b64_json(value: Any) -> str:
 
 def _sign(*parts: str) -> str:
     message = "".join(parts).encode("utf-8")
-    digest = hmac.new(settings.PAYWAY_API_KEY.encode("utf-8"), message, hashlib.sha512).digest()
+    digest = hmac.new(_api_key().encode("utf-8"), message, hashlib.sha512).digest()
     return base64.b64encode(digest).decode("ascii")
 
 
@@ -71,7 +102,7 @@ def _req_time() -> str:
 
 
 async def _post(path: str, body: dict) -> dict:
-    url = settings.PAYWAY_BASE_URL.rstrip("/") + path
+    url = _base_url() + path
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.post(url, json=body)
@@ -102,10 +133,10 @@ async def generate_qr(
     Returns PayWay's response: qrString, qrImage, abapay_deeplink, amount, currency.
     """
     req_time = _req_time()
-    merchant_id = settings.PAYWAY_MERCHANT_ID
+    merchant_id = _merchant_id()
     amount_str = f"{amount:.2f}" if currency == "USD" else f"{amount:.0f}"
     items_b64 = _b64_json(items) if items else ""
-    callback_b64 = _b64(settings.PAYWAY_CALLBACK_URL) if settings.PAYWAY_CALLBACK_URL else ""
+    callback_b64 = _b64(_callback_url()) if _callback_url() else ""
     payout_b64 = (
         _b64_json([{"account": p["account"], "amount": float(p["amount"])} for p in payout])
         if payout else ""
@@ -167,7 +198,7 @@ async def check_transaction(tran_id: str) -> dict:
     Only transactions created within the last 7 days can be checked.
     """
     req_time = _req_time()
-    merchant_id = settings.PAYWAY_MERCHANT_ID
+    merchant_id = _merchant_id()
     body = {
         "req_time": req_time,
         "merchant_id": merchant_id,

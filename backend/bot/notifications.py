@@ -34,6 +34,18 @@ def _format_items(items: Iterable[dict]) -> str:
     return "\n".join(lines) if lines else "  (no items)"
 
 
+_PAYMENT_LABELS = {"khqr": "ABA KHQR", "cod": "Cash on delivery"}
+
+
+def _payment_label(payment_method: str) -> str:
+    return _PAYMENT_LABELS.get(payment_method, payment_method.upper())
+
+
+def _awaiting_online_payment(payment_method: str, payment_status: str | None) -> bool:
+    """QR orders are not real orders until PayWay confirms the money."""
+    return payment_method == "khqr" and payment_status != "paid"
+
+
 async def send_order_placed_to_customer(
     telegram_id: int,
     *,
@@ -48,16 +60,21 @@ async def send_order_placed_to_customer(
     payment_method: str,
     delivery_address: str,
     user_id: int | None = None,
+    payment_status: str | None = None,
 ) -> bool:
     """DM the customer after their order is created.
 
+    For an unpaid QR order the message says it is awaiting payment; the
+    confirmation follows from send_payment_received_to_customer().
     Returns True if the message was sent, False otherwise. Never raises.
     """
     if not telegram_id:
         return False
 
+    awaiting = _awaiting_online_payment(payment_method, payment_status)
+    title = "⏳ Awaiting payment" if awaiting else "Order placed"
     text = (
-        f"<b>Order placed</b> — {order_code}\n"
+        f"<b>{title}</b> — {order_code}\n"
         f"<b>Shop:</b> {merchant_name}\n\n"
         f"<b>Items</b>\n{_format_items(items)}\n\n"
         f"Subtotal: ${subtotal:.2f}\n"
@@ -66,9 +83,70 @@ async def send_order_placed_to_customer(
         text += f"Discount: −${discount:.2f}\n"
     text += f"Delivery: {'FREE' if delivery_fee == 0 else f'${delivery_fee:.2f}'}\n"
     text += f"<b>Total: ${total:.2f}</b>\n\n"
-    text += f"Payment: {payment_method.upper()}\n"
-    text += f"Delivery to: {delivery_address}\n"
+    if awaiting:
+        text += f"Payment: {_payment_label(payment_method)} — <b>not paid yet</b>\n"
+        text += f"Delivery to: {delivery_address}\n\n"
+        text += "Your order goes to the shop once your payment is received. Open the order to pay.\n"
+    else:
+        text += f"Payment: {_payment_label(payment_method)}\n"
+        text += f"Delivery to: {delivery_address}\n"
 
+    keyboard = _order_keyboard(telegram_id, order_id, user_id, "Pay now" if awaiting else "View Order")
+
+    try:
+        async with Bot(token=settings.TELEGRAM_BOT_TOKEN) as bot:
+            await bot.send_message(
+                chat_id=telegram_id,
+                text=text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=keyboard,
+                disable_web_page_preview=True,
+            )
+        logger.info("Order DM sent to telegram_id=%s for order=%s", telegram_id, order_code)
+        return True
+    except Exception as e:
+        logger.warning("Order DM failed for telegram_id=%s order=%s: %s", telegram_id, order_code, e)
+        return False
+
+
+async def send_payment_received_to_customer(
+    telegram_id: int,
+    *,
+    order_id: int,
+    order_code: str,
+    merchant_name: str,
+    total: float,
+    payment_method: str,
+    user_id: int | None = None,
+) -> bool:
+    """DM the customer once PayWay confirms their payment. Never raises."""
+    if not telegram_id:
+        return False
+
+    text = (
+        f"<b>✅ Payment received</b> — {order_code}\n"
+        f"<b>Shop:</b> {merchant_name}\n\n"
+        f"Paid: <b>${total:.2f}</b> by {_payment_label(payment_method)}\n"
+        f"Your order is confirmed and has been sent to the shop."
+    )
+    keyboard = _order_keyboard(telegram_id, order_id, user_id, "View Order")
+    try:
+        async with Bot(token=settings.TELEGRAM_BOT_TOKEN) as bot:
+            await bot.send_message(
+                chat_id=telegram_id,
+                text=text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=keyboard,
+                disable_web_page_preview=True,
+            )
+        logger.info("Payment DM sent to telegram_id=%s for order=%s", telegram_id, order_code)
+        return True
+    except Exception as e:
+        logger.warning("Payment DM failed for telegram_id=%s order=%s: %s", telegram_id, order_code, e)
+        return False
+
+
+def _order_keyboard(telegram_id: int, order_id: int, user_id: int | None, order_label: str) -> InlineKeyboardMarkup:
     base = settings.web_app_base
 
     # Carry a one-tap SSO token so the Mini App opens already authenticated,
@@ -92,30 +170,14 @@ async def send_order_placed_to_customer(
     # Telegram only accepts Web App buttons over HTTPS; fall back to plain URL
     # buttons in local/dev (http) so the message still sends.
     if base.startswith("https://"):
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("View Order", web_app=WebAppInfo(url=order_url))],
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton(order_label, web_app=WebAppInfo(url=order_url))],
             [InlineKeyboardButton("Shop Again", web_app=WebAppInfo(url=shop_url))],
         ])
-    else:
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("View Order", url=order_url)],
-            [InlineKeyboardButton("Shop Again", url=shop_url)],
-        ])
-
-    try:
-        async with Bot(token=settings.TELEGRAM_BOT_TOKEN) as bot:
-            await bot.send_message(
-                chat_id=telegram_id,
-                text=text,
-                parse_mode=ParseMode.HTML,
-                reply_markup=keyboard,
-                disable_web_page_preview=True,
-            )
-        logger.info("Order DM sent to telegram_id=%s for order=%s", telegram_id, order_code)
-        return True
-    except Exception as e:
-        logger.warning("Order DM failed for telegram_id=%s order=%s: %s", telegram_id, order_code, e)
-        return False
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(order_label, url=order_url)],
+        [InlineKeyboardButton("Shop Again", url=shop_url)],
+    ])
 
 
 async def send_seller_application_update(
@@ -176,6 +238,7 @@ async def send_order_placed_to_merchant_group(
     delivery_address: str,
     customer_name: str | None,
     customer_phone: str | None,
+    paid: bool = False,
 ) -> bool:
     """Post a new-order summary to the merchant's configured Telegram group.
 
@@ -189,7 +252,7 @@ async def send_order_placed_to_merchant_group(
         f"<b>Shop:</b> {merchant_name}\n\n"
         f"<b>Items</b>\n{_format_items(items)}\n\n"
         f"<b>Total: ${total:.2f}</b>\n"
-        f"Payment: {payment_method.upper()}\n\n"
+        f"Payment: {_payment_label(payment_method)}{' — PAID ✅' if paid else ''}\n\n"
         f"<b>Deliver to</b>\n"
     )
     if customer_name:

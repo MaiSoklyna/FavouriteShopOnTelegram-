@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, Suspense } from "react";
+import { isOutOfStock, OutOfStockOverlay } from "@/components/shop/OutOfStock";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useCart } from "@/providers/CartProvider";
@@ -330,6 +331,7 @@ function MiniProductCard({ product, onClick, onAddToCart }: { product: Product; 
             </span>
           </div>
         )}
+        {isOutOfStock(product) && <OutOfStockOverlay />}
       </div>
       <div style={{ padding: "8px 10px 12px" }}>
         {product.merchant_name && (

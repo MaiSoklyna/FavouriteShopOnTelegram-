@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { isOutOfStock, OutOfStockOverlay } from "./OutOfStock";
 import { useRouter } from "next/navigation";
 import type { Product } from "@/types";
 
@@ -18,7 +19,7 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
     ? Math.round((1 - product.base_price / product.compare_price) * 100)
     : 0;
 
-  const outOfStock = product.stock === 0;
+  const outOfStock = isOutOfStock(product);
 
   async function handleAdd(e: React.MouseEvent) {
     e.stopPropagation();
@@ -91,16 +92,7 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
           </span>
         )}
 
-        {outOfStock && (
-          <div style={{
-            position: "absolute", inset: 0, background: "rgba(8,29,60,0.6)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#fff", fontSize: 13, fontWeight: 600,
-            fontFamily: "'Kantumruy Pro', sans-serif",
-          }}>
-            Out of Stock
-          </div>
-        )}
+        {outOfStock && <OutOfStockOverlay />}
       </div>
 
       {/* Body */}

@@ -5,3 +5,4 @@ export { CartItemCard } from "./CartItem";
 export { PriceSummary } from "./PriceSummary";
 export { OrderTimeline } from "./OrderTimeline";
 export { LoginGate, TelegramLoginPrompt } from "./LoginGate";
+export { isOutOfStock, OutOfStockOverlay } from "./OutOfStock";
