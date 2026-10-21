@@ -3,7 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
+import dynamic from "next/dynamic";
 import { HeroImagesEditor } from "@/components/admin/HeroImagesEditor";
+
+const MapPicker = dynamic(() => import("@/components/map/MapPicker"), { ssr: false });
 import type { Merchant } from "@/types";
 
 const EMPTY_FORM = {
@@ -24,6 +27,10 @@ const EMPTY_FORM = {
   telegram_id: "",
   is_featured: false,
   telegram_group_id: "",
+  address: "",
+  latitude: "",
+  longitude: "",
+  delivery_radius_km: "5",
 };
 
 type MerchantAdminRow = {
@@ -108,6 +115,10 @@ export default function MerchantsPage() {
       instagram: m.instagram || "",
       is_featured: !!m.is_featured,
       telegram_group_id: m.telegram_group_id != null ? String(m.telegram_group_id) : "",
+      address: m.address || "",
+      latitude: m.latitude != null ? String(m.latitude) : "",
+      longitude: m.longitude != null ? String(m.longitude) : "",
+      delivery_radius_km: m.delivery_radius_km != null ? String(m.delivery_radius_km) : "5",
     });
     setLogoFile(null);
     setLogoPreview("");
@@ -135,7 +146,7 @@ export default function MerchantsPage() {
     }
 
     // Build the merchant fields payload (used for both create and edit)
-    const merchantFields = ["name", "owner_name", "email", "phone", "tagline", "description", "icon_emoji", "accent_color", "plan", "fb_page", "instagram"] as const;
+    const merchantFields = ["name", "owner_name", "email", "phone", "tagline", "description", "icon_emoji", "accent_color", "plan", "fb_page", "instagram", "address"] as const;
     const merchantPayload: Record<string, unknown> = {};
     for (const k of merchantFields) {
       const v = (form as any)[k];
@@ -156,6 +167,25 @@ export default function MerchantsPage() {
       }
       merchantPayload.telegram_group_id = parsed;
     }
+
+    // Shop location — all or nothing, so delivery never prices off half a pin
+    const lat = form.latitude.trim() === "" ? null : Number(form.latitude);
+    const lng = form.longitude.trim() === "" ? null : Number(form.longitude);
+    const radius = Number(form.delivery_radius_km);
+    if ((lat === null) !== (lng === null)) { flash("Set both latitude and longitude, or neither", false); return; }
+    if (lat !== null && lng !== null) {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+        flash("Latitude/longitude out of range", false);
+        return;
+      }
+      merchantPayload.latitude = lat;
+      merchantPayload.longitude = lng;
+    }
+    if (!Number.isFinite(radius) || radius < 0 || radius > 10) {
+      flash("Delivery radius must be between 0 and 10 km", false);
+      return;
+    }
+    merchantPayload.delivery_radius_km = radius;
 
     if (isEditMode) {
       // ── EDIT path ──
@@ -621,6 +651,33 @@ export default function MerchantsPage() {
                 />
                 <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
                   Add @{process.env.NEXT_PUBLIC_BOT_USERNAME || "FavouriteOfShop_bot"} as an admin to your group, then forward any message from the group to @userinfobot to get the id (it starts with -100…). New orders will be posted there.
+                </p>
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <label style={lbl}>Shop location (for delivery &amp; nearby search)</label>
+                <input className="admin-input" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Street, district, city" style={{ marginBottom: 8 }} />
+                <MapPicker
+                  height={220}
+                  value={form.latitude && form.longitude ? { lat: Number(form.latitude), lng: Number(form.longitude) } : null}
+                  onChange={(p, addr) => setForm(f => ({ ...f, latitude: p.lat.toFixed(6), longitude: p.lng.toFixed(6), address: f.address || addr }))}
+                />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 8 }}>
+                  <div>
+                    <label style={lbl}>Latitude</label>
+                    <input className="admin-input" value={form.latitude} onChange={e => setForm({ ...form, latitude: e.target.value })} placeholder="11.5564" inputMode="decimal" />
+                  </div>
+                  <div>
+                    <label style={lbl}>Longitude</label>
+                    <input className="admin-input" value={form.longitude} onChange={e => setForm({ ...form, longitude: e.target.value })} placeholder="104.9282" inputMode="decimal" />
+                  </div>
+                  <div>
+                    <label style={lbl}>Delivery radius (km)</label>
+                    <input className="admin-input" value={form.delivery_radius_km} onChange={e => setForm({ ...form, delivery_radius_km: e.target.value })} inputMode="decimal" />
+                  </div>
+                </div>
+                <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                  Tap the map or drag the pin to set the shop. Delivery fee: 0–3 km $0.50 · 3–5 km $0.75 · 5–8 km $1.50 · 8–10 km $3.00. Max radius 10 km.
                 </p>
               </div>
             </div>

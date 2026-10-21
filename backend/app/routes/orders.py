@@ -14,6 +14,8 @@ from decimal import ROUND_HALF_UP, Decimal
 from fastapi import APIRouter
 
 from app.core.constants import (
+    DEFAULT_DELIVERY_FEE,
+    DEFAULT_DELIVERY_RADIUS_KM,
     FREE_DELIVERY_THRESHOLD,
     ORDER_PREFIX,
     ORDER_STATUS_TRANSITIONS,
@@ -24,6 +26,7 @@ from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.services import settlement
+from app.services.delivery import fee_for_distance, haversine_km, valid_point
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -54,7 +57,8 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
 
         # ── Price the cart (same computation as /orders/quote) ──
         promo_code = (request_body.get("promo_code") or "").strip() or None
-        priced = await _price_cart(db, user_id, merchant_id, promo_code)
+        delivery_type, dest = _parse_delivery(request_body)
+        priced = await _price_cart(db, user_id, merchant_id, promo_code, delivery_type, dest)
         if priced is None:
             raise BadRequestError("Cart is empty")
         if promo_code and not priced["promo"]:
@@ -87,6 +91,14 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
             "payment_status": "pending",
             "delivery_address": delivery_address,
         }
+        # Columns from migration 016 — only sent when used, so plain delivery orders
+        # keep working on a database that hasn't been migrated yet.
+        if delivery_type != "delivery":
+            order_data["delivery_type"] = delivery_type
+        if dest:
+            order_data["delivery_latitude"], order_data["delivery_longitude"] = dest
+        if priced["distance_km"] is not None:
+            order_data["distance_km"] = float(priced["distance_km"])
 
         # Optional fields — only include if present to avoid schema errors
         for field in ("delivery_province", "customer_note", "delivery_phone", "delivery_name"):
@@ -237,11 +249,14 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
 async def quote_order(request_body: dict, user: TokenClaims = require_role(Role.USER)):
     """Price the caller's cart exactly as placing the order would.
 
-    Body: {"promo_code"?: str}. Returns one quote per shop (each shop is a
+    Body: {"promo_code"?: str, "delivery_type"?: "delivery"|"pickup",
+    "lat"?: float, "lng"?: float} — lat/lng is the delivery pin; pickup is free,
+    delivery without a pin gets the default fee. Returns one quote per shop (each shop is a
     separate order with its own delivery fee). A promo code belongs to one
     shop and is applied to that shop's order only.
     """
     promo_code = (request_body.get("promo_code") or "").strip() or None
+    delivery_type, dest = _parse_delivery(request_body)
     async with SupabaseClient.service_role() as db:
         db_user = await _get_db_user(db, user)
         carts = await db.from_("cart").eq("user_id", db_user["id"]).select("id,merchant_id")
@@ -252,7 +267,7 @@ async def quote_order(request_body: dict, user: TokenClaims = require_role(Role.
         for cart in carts:
             if not cart.get("merchant_id"):
                 continue
-            priced = await _price_cart(db, db_user["id"], cart["merchant_id"], promo_code)
+            priced = await _price_cart(db, db_user["id"], cart["merchant_id"], promo_code, delivery_type, dest)
             if priced is None:
                 continue
             if priced["promo"]:
@@ -264,6 +279,7 @@ async def quote_order(request_body: dict, user: TokenClaims = require_role(Role.
                 "subtotal": str(priced["subtotal"]),
                 "discount": str(priced["discount"]),
                 "delivery_fee": str(priced["delivery_fee"]),
+                "distance_km": str(priced["distance_km"]) if priced["distance_km"] is not None else None,
                 "total": str(priced["total"]),
                 "promo_applied": bool(priced["promo"]),
             })
@@ -457,7 +473,11 @@ async def _get_db_user(db, user: TokenClaims) -> dict:
     raise NotFoundError("User")
 
 
-async def _price_cart(db, user_id: int, merchant_id: int, promo_code: str | None) -> dict | None:
+async def _price_cart(
+    db, user_id: int, merchant_id: int, promo_code: str | None,
+    delivery_type: str = "delivery",
+    dest: tuple[float, float] | None = None,
+) -> dict | None:
     """Single source of truth for an order's price.
 
     Used by both /orders/quote (what the customer sees) and place_order
@@ -474,7 +494,9 @@ async def _price_cart(db, user_id: int, merchant_id: int, promo_code: str | None
         (_money(item.get("unit_price")) * int(item.get("quantity") or 0) for item in items),
         Decimal("0.00"),
     )
-    delivery_fee = Decimal("0.00") if subtotal >= Decimal(str(FREE_DELIVERY_THRESHOLD)) else Decimal("5.00")
+    distance_km, delivery_fee = await _delivery_fee(db, merchant_id, delivery_type, dest)
+    if subtotal >= Decimal(str(FREE_DELIVERY_THRESHOLD)):
+        delivery_fee = Decimal("0.00")
 
     promo, promo_error, promo_owned = None, None, False
     discount = Decimal("0.00")
@@ -494,11 +516,47 @@ async def _price_cart(db, user_id: int, merchant_id: int, promo_code: str | None
         "subtotal": subtotal,
         "discount": discount,
         "delivery_fee": delivery_fee,
+        "distance_km": distance_km,
         "total": subtotal - discount + delivery_fee,
         "promo": promo,
         "promo_error": promo_error,
         "promo_owned": promo_owned,
     }
+
+
+def _parse_delivery(body: dict) -> tuple[str, tuple[float, float] | None]:
+    """(delivery_type, customer's map pin or None) from a request body."""
+    delivery_type = body.get("delivery_type") or "delivery"
+    if delivery_type not in ("delivery", "pickup"):
+        raise BadRequestError("delivery_type must be 'delivery' or 'pickup'")
+    if delivery_type == "pickup":
+        return delivery_type, None
+    lat, lng = body.get("lat", body.get("delivery_latitude")), body.get("lng", body.get("delivery_longitude"))
+    if lat is None or lng is None:
+        return delivery_type, None
+    if not valid_point(lat, lng):
+        raise BadRequestError("Invalid delivery location")
+    return delivery_type, (float(lat), float(lng))
+
+
+async def _delivery_fee(db, merchant_id: int, delivery_type: str, dest) -> tuple[Decimal | None, Decimal]:
+    """(distance_km, fee) for a shop → pin. Pickup is free; no pin or no shop location → default fee."""
+    if delivery_type == "pickup":
+        return None, Decimal("0.00")
+    default = Decimal(str(DEFAULT_DELIVERY_FEE)).quantize(Decimal("0.01"))
+    if not dest:
+        return None, default
+    shop = await db.from_("merchants").eq("id", merchant_id).select_one("latitude,longitude,delivery_radius_km")
+    if not shop or shop.get("latitude") is None or shop.get("longitude") is None:
+        return None, default
+    km = Decimal(str(haversine_km(shop["latitude"], shop["longitude"], *dest))).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    radius = float(shop.get("delivery_radius_km") or DEFAULT_DELIVERY_RADIUS_KM)
+    fee = fee_for_distance(float(km)) if float(km) <= radius else None
+    if fee is None:
+        raise BadRequestError("Delivery unavailable for this location")
+    return km, fee
 
 
 def _money(value) -> Decimal:

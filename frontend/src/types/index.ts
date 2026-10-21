@@ -45,6 +45,10 @@ export interface Merchant {
   logo_url?: string | null;
   is_featured?: boolean;
   telegram_group_id?: number | null;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  delivery_radius_km?: number | null;
   product_count?: number;
   order_count?: number;
   created_at?: string;

@@ -47,6 +47,17 @@ LOGIN_SESSION_PREFIX = "dash_"
 
 ORDER_PREFIX = "FS-"
 FREE_DELIVERY_THRESHOLD = 50.0   # USD — orders above this get free delivery
+DEFAULT_DELIVERY_FEE = 5.0       # USD — used when the shop or the customer has no map pin
+
+# Flat fee per distance band: (max straight-line km, fee USD). Past the last band: no delivery.
+DELIVERY_FEE_TIERS = (
+    (3.0, 0.50),
+    (5.0, 0.75),
+    (8.0, 1.50),
+    (10.0, 3.00),
+)
+MAX_DELIVERY_KM = DELIVERY_FEE_TIERS[-1][0]
+DEFAULT_DELIVERY_RADIUS_KM = 5.0   # used when a shop has no radius set
 
 
 class OrderStatus(StrEnum):

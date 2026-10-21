@@ -18,6 +18,7 @@ from app.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.rate_limit import limiter, rate_limit_handler
 from app.routes import (
+    addresses,
     ai,
     analytics,
     auth,
@@ -104,6 +105,7 @@ app.include_router(cart.router, prefix="/api")
 
 # Orders (user placement + admin management)
 app.include_router(orders.router, prefix="/api")
+app.include_router(addresses.router, prefix="/api")
 
 # ABA PayWay QR payments
 app.include_router(payments.router, prefix="/api")

@@ -5,6 +5,7 @@ import { isOutOfStock, OutOfStockOverlay } from "@/components/shop/OutOfStock";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import NearbyShops from "@/components/map/NearbyShops";
 import { useAuth } from "@/providers/AuthProvider";
 import type { Product, Category, CategoryBanner, Merchant, PromoCode, Notification } from "@/types";
 
@@ -660,6 +661,8 @@ export default function ShopHomePage() {
             </div>
           </section>
         )}
+
+        <NearbyShops />
 
         {/* ── Featured Shops ── */}
         {featuredShops.length > 0 && (

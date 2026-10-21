@@ -13,6 +13,7 @@ export interface ShopQuote {
   subtotal: string;
   discount: string;
   delivery_fee: string;
+  distance_km: string | null;
   total: string;
   promo_applied: boolean;
 }
@@ -23,8 +24,15 @@ export interface CartQuote {
   promo: { code: string; applied: boolean; merchant_id: number | null; error: string | null } | null;
 }
 
-export async function fetchQuote(promoCode?: string | null): Promise<CartQuote> {
-  const res = await api.post<{ data: CartQuote }>("/orders/quote", { promo_code: promoCode || undefined });
+export interface DeliveryChoice {
+  delivery_type: "delivery" | "pickup";
+  /** The map pin; without it delivery is priced at the default fee. */
+  lat?: number;
+  lng?: number;
+}
+
+export async function fetchQuote(promoCode?: string | null, delivery?: DeliveryChoice): Promise<CartQuote> {
+  const res = await api.post<{ data: CartQuote }>("/orders/quote", { promo_code: promoCode || undefined, ...delivery });
   return res.data;
 }
 

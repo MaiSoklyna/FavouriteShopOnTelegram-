@@ -25,6 +25,10 @@ class MerchantCreate(BaseModel):
     logo_url: str | None = Field(None, max_length=500)
     is_featured: bool = False
     telegram_group_id: int | None = None
+    address: str | None = Field(None, max_length=500)
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
+    delivery_radius_km: float | None = Field(None, ge=0, le=10)
 
 
 class MerchantUpdate(BaseModel):
@@ -45,6 +49,10 @@ class MerchantUpdate(BaseModel):
     logo_url: str | None = Field(None, max_length=500)
     is_featured: bool | None = None
     telegram_group_id: int | None = None
+    address: str | None = Field(None, max_length=500)
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
+    delivery_radius_km: float | None = Field(None, ge=0, le=10)
 
 
 class MerchantResponse(BaseModel):
@@ -66,6 +74,10 @@ class MerchantResponse(BaseModel):
     logo_url: str | None = None
     is_featured: bool = False
     telegram_group_id: int | None = None
+    address: str | None = Field(None, max_length=500)
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
+    delivery_radius_km: float | None = Field(None, ge=0, le=10)
     product_count: int = 0
     order_count: int = 0
     created_at: datetime | None = None

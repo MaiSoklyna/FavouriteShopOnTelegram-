@@ -1,11 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
-import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote } from "@/lib/quote";
+import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote, type DeliveryChoice } from "@/lib/quote";
+import { deleteAddress, listAddresses, saveAddress, type SavedAddress } from "@/lib/addresses";
+import type { LatLng } from "@/lib/mapbox";
+
+const MapPicker = dynamic(() => import("@/components/map/MapPicker"), {
+  ssr: false,
+  loading: () => <div style={{ height: 260, borderRadius: 12, background: "var(--shop-bg, #F7F8FB)" }} />,
+});
 
 const PROVINCES = ["Phnom Penh", "Siem Reap", "Battambang", "Kampot", "Kampong Cham", "Other"];
 
@@ -31,23 +39,56 @@ export default function CheckoutPage() {
   const orderId = qrOrderIds[qrIndex] ?? null;
   const [quote, setQuote] = useState<CartQuote | null>(null);
   const [quoteError, setQuoteError] = useState("");
+  const [deliveryType, setDeliveryType] = useState<"delivery" | "pickup">("delivery");
+  const [pin, setPin] = useState<LatLng | null>(null);
+  const [saved, setSaved] = useState<SavedAddress[]>([]);
+  const [saveThis, setSaveThis] = useState(false);
+  const [saveLabel, setSaveLabel] = useState("Home");
+
+  const choice: DeliveryChoice = deliveryType === "pickup"
+    ? { delivery_type: "pickup" }
+    : { delivery_type: "delivery", lat: pin?.lat, lng: pin?.lng };
 
   // Backend price for the cart — identical to what placing the order charges
   useEffect(() => {
     if (!user || items.length === 0 || step >= 4) return;
     const code = getSavedPromo();
-    fetchQuote(code)
+    fetchQuote(code, choice)
       .then((q) => {
         setQuote(q);
         setQuoteError(q.promo && !q.promo.applied ? (q.promo.error || "Promo code not valid") : "");
         if (q.promo && !q.promo.applied) savePromo(null);
       })
-      .catch(() => setQuoteError("Could not calculate the total. Please go back and try again."));
-  }, [user, items, step]);
+      .catch((err: any) => {
+        setQuote(null);
+        setQuoteError(err?.detail || "Could not calculate the total. Please go back and try again.");
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, items, step, deliveryType, pin?.lat, pin?.lng]);
+
+  useEffect(() => {
+    if (!user) return;
+    listAddresses().then((rows) => {
+      setSaved(rows);
+      const def = rows.find((a) => a.is_default);
+      if (def) pickSaved(def);
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  function pickSaved(a: SavedAddress) {
+    setPin({ lat: a.latitude, lng: a.longitude });
+    setForm((f) => ({ ...f, address: a.address }));
+    setSaveThis(false);
+  }
+
+  async function removeSaved(id: number) {
+    try { await deleteAddress(id); setSaved((rows) => rows.filter((a) => a.id !== id)); } catch { /* keep the chip */ }
+  }
 
   function removePromo() {
     savePromo(null);
-    fetchQuote(null).then(setQuote).catch(() => {});
+    fetchQuote(null, choice).then(setQuote).catch(() => {});
   }
 
   useEffect(() => {
@@ -110,7 +151,8 @@ export default function CheckoutPage() {
     const e: Record<string, string> = {};
     if (!form.name.trim()) e.name = "Name is required";
     if (!form.phone.trim() || form.phone.length < 9) e.phone = "Valid phone required (min 9 digits)";
-    if (!form.address.trim()) e.address = "Address is required";
+    if (deliveryType === "delivery" && !form.address.trim()) e.address = "Address is required";
+    if (deliveryType === "delivery" && !quote && quoteError) e.address = quoteError;
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -136,7 +178,10 @@ export default function CheckoutPage() {
         merchantIds.map(mid =>
           api.post<{ data: { order_id: number } }>("/orders", {
             merchant_id: Number(mid),
-            delivery_address: form.address,
+            delivery_type: deliveryType,
+            delivery_address: deliveryType === "pickup" ? "Pickup at shop" : form.address,
+            lat: deliveryType === "delivery" ? pin?.lat : undefined,
+            lng: deliveryType === "delivery" ? pin?.lng : undefined,
             delivery_province: form.province,
             delivery_phone: "+855" + form.phone,
             delivery_name: form.name,
@@ -150,6 +195,12 @@ export default function CheckoutPage() {
       savePromo(null);
       await fetchCart();
       const oid = results[0]?.data?.order_id;
+
+      if (saveThis && deliveryType === "delivery" && pin && form.address.trim()) {
+        // Best-effort: a failed save must not hide the placed order
+        saveAddress({ label: saveLabel.trim() || "Home", address: form.address, latitude: pin.lat, longitude: pin.lng, is_default: saved.length === 0 })
+          .catch(() => {});
+      }
 
       if (payment === "khqr" && oid) {
         // One QR per shop order, paid one after another
@@ -244,7 +295,18 @@ export default function CheckoutPage() {
           <div>
             <h2 style={{
               fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)", marginBottom: 20,
-            }}>Delivery Address</h2>
+            }}>{deliveryType === "pickup" ? "Your Details" : "Delivery Address"}</h2>
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              {([["delivery", "🛵 Delivery"], ["pickup", "🏪 Pickup"]] as const).map(([key, label]) => (
+                <button key={key} onClick={() => setDeliveryType(key)} style={{
+                  flex: 1, padding: 12, borderRadius: "var(--shop-r-input, 12px)", cursor: "pointer",
+                  fontWeight: 600, fontSize: 14,
+                  border: deliveryType === key ? "2px solid var(--shop-primary, #1E6BFF)" : "1.5px solid var(--shop-divider, #ECEEF3)",
+                  background: deliveryType === key ? "var(--shop-primary-tint, #E8F0FF)" : "var(--shop-surface, #FFFFFF)",
+                  color: deliveryType === key ? "var(--shop-primary, #1E6BFF)" : "var(--shop-text, #4A4E5A)",
+                }}>{label}</button>
+              ))}
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <Field label="Full Name *" value={form.name} onChange={v => setForm({ ...form, name: v })} error={errors.name} />
               <div>
@@ -261,14 +323,52 @@ export default function CheckoutPage() {
                 </div>
                 {errors.phone && <p style={{ color: "#C62828", fontSize: 12, marginTop: 6 }}>{errors.phone}</p>}
               </div>
-              <div>
-                <label style={labelStyle}>Province</label>
-                <select value={form.province} onChange={e => setForm({ ...form, province: e.target.value })} style={inputStyle}>
-                  <option value="">Select province</option>
-                  {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <Field label="Full Address *" value={form.address} onChange={v => setForm({ ...form, address: v })} error={errors.address} multiline />
+              {deliveryType === "delivery" && (
+                <>
+                  {saved.length > 0 && (
+                    <div>
+                      <label style={labelStyle}>Saved addresses</label>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {saved.map(a => {
+                          const on = pin?.lat === a.latitude && pin?.lng === a.longitude;
+                          return (
+                            <span key={a.id} style={{
+                              display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 999, fontSize: 13, fontWeight: 600,
+                              border: on ? "2px solid var(--shop-primary, #1E6BFF)" : "1.5px solid var(--shop-divider, #ECEEF3)",
+                              background: on ? "var(--shop-primary-tint, #E8F0FF)" : "var(--shop-surface, #FFFFFF)",
+                            }}>
+                              <button onClick={() => pickSaved(a)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 600, fontSize: 13, color: "var(--shop-black, #0B0B0F)" }}>
+                                {a.is_default ? "★ " : ""}{a.label}
+                              </button>
+                              <button onClick={() => removeSaved(a.id)} aria-label={`Delete ${a.label}`} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--shop-muted, #8A8F9C)" }}>×</button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <label style={labelStyle}>Drop a pin on the map</label>
+                    <MapPicker value={pin} onChange={(p, addr) => { setPin(p); if (addr) setForm(f => ({ ...f, address: addr })); setSaveThis(false); }} />
+                    {quote && pin && (
+                      <p style={{ fontSize: 13, color: "#2E7D32", fontWeight: 600, margin: "8px 0 0" }}>
+                        Delivery fee: {Number(quote.totals.delivery_fee) === 0 ? "FREE" : money(quote.totals.delivery_fee)}
+                        {quote.orders.length === 1 && quote.orders[0].distance_km ? ` · ${quote.orders[0].distance_km} km` : ""}
+                      </p>
+                    )}
+                    {!quote && quoteError && pin && <p style={{ fontSize: 13, color: "#C62828", fontWeight: 600, margin: "8px 0 0" }}>{quoteError}</p>}
+                  </div>
+                  <Field label="Full Address *" value={form.address} onChange={v => setForm({ ...form, address: v })} error={errors.address} multiline />
+                  {pin && (
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--shop-text, #4A4E5A)" }}>
+                      <input type="checkbox" checked={saveThis} onChange={e => setSaveThis(e.target.checked)} />
+                      Save this address as
+                      <input value={saveLabel} onChange={e => setSaveLabel(e.target.value)} maxLength={40}
+                        style={{ ...inputStyle, width: 110, padding: "6px 10px" }} />
+                    </label>
+                  )}
+                </>
+              )}
               <Field label="Note (optional)" value={form.note} onChange={v => setForm({ ...form, note: v })} multiline />
             </div>
             <button onClick={() => validateStep1() && setStep(2)} style={btnPrimary}>Continue</button>
@@ -359,7 +459,9 @@ export default function CheckoutPage() {
               <p style={{ fontSize: 14, fontWeight: 500, color: "var(--shop-black, #0B0B0F)" }}>
                 {form.name} | +855{form.phone}
               </p>
-              <p style={{ fontSize: 13, color: "var(--shop-muted, #8A8F9C)", marginTop: 4 }}>{form.address}</p>
+              <p style={{ fontSize: 13, color: "var(--shop-muted, #8A8F9C)", marginTop: 4 }}>
+                {deliveryType === "pickup" ? "Pickup at the shop — no delivery fee" : form.address}
+              </p>
             </Card>
 
             <Card>
@@ -375,7 +477,7 @@ export default function CheckoutPage() {
                   <span style={{ fontWeight: 600, color: "#2E7D32" }}>-{money(discount)}</span>
                 </div>
               )}
-              <SummaryRow label="Delivery" value={!qt ? "…" : deliveryFee === 0 ? "FREE" : money(deliveryFee)} green={!!qt && deliveryFee === 0} />
+              <SummaryRow label={deliveryType === "pickup" ? "Pickup" : "Delivery"} value={!qt ? "…" : deliveryFee === 0 ? "FREE" : money(deliveryFee)} green={!!qt && deliveryFee === 0} />
               {(quote?.orders.length ?? 0) > 1 && (
                 <p style={{ fontSize: 11, color: "var(--shop-muted, #8A8F9C)", margin: "0 0 8px" }}>
                   Items from {quote!.orders.length} shops — each shop is a separate order with its own delivery fee.

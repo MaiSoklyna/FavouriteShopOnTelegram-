@@ -11,12 +11,13 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, UploadFile
 
-from app.core.constants import Role
+from app.core.constants import DEFAULT_DELIVERY_RADIUS_KM, Role
 from app.core.dependencies import get_optional_user, require_any_admin, require_role
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError, RateLimitError
 from app.core.security import TokenClaims
 from app.db.client import StorageClient, SupabaseClient
 from app.models.merchant import MerchantCreate, MerchantUpdate
+from app.services.delivery import fee_for_distance, haversine_km, valid_point
 
 router = APIRouter(prefix="/merchants", tags=["Merchants"])
 
@@ -63,6 +64,38 @@ async def list_merchants(
     return merchants
 
 
+@router.get("/nearby")
+async def nearby_merchants(lat: float, lng: float, limit: int = 20):
+    """Active shops that have a map location, nearest first.
+
+    Each row carries the straight-line `distance_km`, whether the shop
+    delivers that far (`can_deliver`) and the `delivery_fee` for that distance.
+    """
+    if not valid_point(lat, lng):
+        raise BadRequestError("Invalid location")
+    async with SupabaseClient.service_role() as db:
+        rows = await db.from_("merchants").eq("status", "active").select(
+            "id,name,slug,tagline,icon_emoji,accent_color,logo_url,is_featured,"
+            "address,latitude,longitude,delivery_radius_km"
+        )
+
+    shops = []
+    for m in rows:
+        if m.get("latitude") is None or m.get("longitude") is None:
+            continue
+        km = round(haversine_km(lat, lng, m["latitude"], m["longitude"]), 2)
+        radius = float(m.get("delivery_radius_km") or DEFAULT_DELIVERY_RADIUS_KM)
+        fee = fee_for_distance(km) if km <= radius else None
+        shops.append({
+            **m,
+            "distance_km": km,
+            "can_deliver": fee is not None,
+            "delivery_fee": str(fee) if fee is not None else None,
+        })
+    shops.sort(key=lambda s: s["distance_km"])
+    return shops[: max(1, min(limit, 50))]
+
+
 @router.get("/{merchant_id}")
 async def get_merchant(merchant_id: int):
     """Get merchant details (public for active merchants)."""
@@ -86,6 +119,10 @@ async def create_merchant(body: MerchantCreate, user: TokenClaims = require_role
             raise ConflictError(f"Merchant slug '{body.slug}' already exists")
 
         data = body.model_dump()
+        # Location columns come from migration 016 — don't send them unless set
+        for k in ("address", "latitude", "longitude", "delivery_radius_km"):
+            if data.get(k) is None:
+                data.pop(k, None)
         data["status"] = "active"
         rows = await db.from_("merchants").insert(data)
     return rows[0] if rows else data
