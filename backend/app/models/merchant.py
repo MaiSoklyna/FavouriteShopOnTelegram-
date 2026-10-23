@@ -29,6 +29,10 @@ class MerchantCreate(BaseModel):
     latitude: float | None = Field(None, ge=-90, le=90)
     longitude: float | None = Field(None, ge=-180, le=180)
     delivery_radius_km: float | None = Field(None, ge=0, le=10)
+    opening_hours: dict[str, list[list[str]]] | None = None
+    delivery_base_fee: float | None = Field(None, ge=0, le=100)
+    delivery_per_km_fee: float | None = Field(None, ge=0, le=100)
+    min_order_amount: float | None = Field(None, ge=0, le=10000)
 
 
 class MerchantUpdate(BaseModel):
@@ -53,6 +57,10 @@ class MerchantUpdate(BaseModel):
     latitude: float | None = Field(None, ge=-90, le=90)
     longitude: float | None = Field(None, ge=-180, le=180)
     delivery_radius_km: float | None = Field(None, ge=0, le=10)
+    opening_hours: dict[str, list[list[str]]] | None = None
+    delivery_base_fee: float | None = Field(None, ge=0, le=100)
+    delivery_per_km_fee: float | None = Field(None, ge=0, le=100)
+    min_order_amount: float | None = Field(None, ge=0, le=10000)
 
 
 class MerchantResponse(BaseModel):
@@ -78,6 +86,10 @@ class MerchantResponse(BaseModel):
     latitude: float | None = Field(None, ge=-90, le=90)
     longitude: float | None = Field(None, ge=-180, le=180)
     delivery_radius_km: float | None = Field(None, ge=0, le=10)
+    opening_hours: dict[str, list[list[str]]] | None = None
+    delivery_base_fee: float | None = Field(None, ge=0, le=100)
+    delivery_per_km_fee: float | None = Field(None, ge=0, le=100)
+    min_order_amount: float | None = Field(None, ge=0, le=10000)
     product_count: int = 0
     order_count: int = 0
     created_at: datetime | None = None

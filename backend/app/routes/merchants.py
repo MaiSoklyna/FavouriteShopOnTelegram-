@@ -6,20 +6,33 @@ Admin: CRUD operations (super_admin for all, merchant_admin for own).
 
 from __future__ import annotations
 
+import math
 import time
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, UploadFile
 
-from app.core.constants import DEFAULT_DELIVERY_RADIUS_KM, Role
+from app.core.constants import Role
 from app.core.dependencies import get_optional_user, require_any_admin, require_role
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError, RateLimitError
 from app.core.security import TokenClaims
 from app.db.client import StorageClient, SupabaseClient
 from app.models.merchant import MerchantCreate, MerchantUpdate
-from app.services.delivery import fee_for_distance, haversine_km, valid_point
+from app.services.delivery import SHOP_TZ, is_open, quote_delivery, valid_point
 
 router = APIRouter(prefix="/merchants", tags=["Merchants"])
+
+# Per-shop delivery settings (migration 017); null means "use the platform default"
+DELIVERY_SETTING_FIELDS = ("opening_hours", "delivery_base_fee", "delivery_per_km_fee", "min_order_amount")
+
+# Fields the public "nearby" list may expose — merchants rows also hold owner contact details
+NEARBY_PUBLIC_FIELDS = (
+    "id", "name", "slug", "tagline", "icon_emoji", "accent_color", "logo_url",
+    "is_featured", "address", "latitude", "longitude", "delivery_radius_km",
+    "min_order_amount", "rating",
+)
+# ~1° of latitude in km; used to turn the search radius into a bounding box
+KM_PER_DEGREE = 111.0
 
 # Logo update policy for merchant_admin role: max N updates per rolling window
 LOGO_UPDATE_MAX_PER_WINDOW = 2
@@ -65,35 +78,59 @@ async def list_merchants(
 
 
 @router.get("/nearby")
-async def nearby_merchants(lat: float, lng: float, limit: int = 20):
-    """Active shops that have a map location, nearest first.
+async def nearby_merchants(
+    lat: float,
+    lng: float,
+    radius_km: float = 10,
+    limit: int = 20,
+    offset: int = 0,
+):
+    """Active shops with a map location near (lat, lng), best first.
 
-    Each row carries the straight-line `distance_km`, whether the shop
-    delivers that far (`can_deliver`) and the `delivery_fee` for that distance.
+    Everything the card shows is computed here — never by the client:
+    `distance_m`/`distance_km`, `delivery_fee`, `eta_minutes`..`eta_max_minutes`,
+    `is_open` and `can_deliver`. Order: open shops nearest-first, then closed
+    shops (also nearest-first). A shop past its own delivery radius is still
+    listed (`can_deliver: false`) so the customer can pick up instead.
     """
     if not valid_point(lat, lng):
         raise BadRequestError("Invalid location")
+    radius_km = max(0.5, min(radius_km, 25))
+    limit, offset = max(1, min(limit, 50)), max(0, offset)
+
+    # Cheap bounding-box prefilter in the database (uses idx_merchants_location),
+    # then exact great-circle distances on the few rows that remain.
+    dlat = radius_km / KM_PER_DEGREE
+    dlng = radius_km / (KM_PER_DEGREE * max(math.cos(math.radians(lat)), 0.01))
     async with SupabaseClient.service_role() as db:
-        rows = await db.from_("merchants").eq("status", "active").select(
-            "id,name,slug,tagline,icon_emoji,accent_color,logo_url,is_featured,"
-            "address,latitude,longitude,delivery_radius_km"
+        rows = await (
+            db.from_("merchants").eq("status", "active")
+            .gte("latitude", lat - dlat).lte("latitude", lat + dlat)
+            .gte("longitude", lng - dlng).lte("longitude", lng + dlng)
+            .select()
         )
 
+    now = datetime.now(SHOP_TZ)
     shops = []
     for m in rows:
-        if m.get("latitude") is None or m.get("longitude") is None:
+        q = quote_delivery(m, (lat, lng))
+        if q is None or float(q.distance_km) > radius_km:
             continue
-        km = round(haversine_km(lat, lng, m["latitude"], m["longitude"]), 2)
-        radius = float(m.get("delivery_radius_km") or DEFAULT_DELIVERY_RADIUS_KM)
-        fee = fee_for_distance(km) if km <= radius else None
-        shops.append({
-            **m,
-            "distance_km": km,
-            "can_deliver": fee is not None,
-            "delivery_fee": str(fee) if fee is not None else None,
+        shop = {k: m.get(k) for k in NEARBY_PUBLIC_FIELDS if k in m}
+        shop.update({
+            "distance_km": float(q.distance_km),
+            "distance_m": q.distance_m,
+            "can_deliver": q.can_deliver,
+            "delivery_fee": str(q.fee) if q.fee is not None else None,
+            "delivery_unavailable_reason": q.reason,
+            "eta_minutes": q.eta_minutes,
+            "eta_max_minutes": q.eta_max_minutes,
+            "is_open": is_open(m.get("opening_hours"), now),
         })
-    shops.sort(key=lambda s: s["distance_km"])
-    return shops[: max(1, min(limit, 50))]
+        shops.append(shop)
+
+    shops.sort(key=lambda s: (not s["is_open"], s["distance_m"]))
+    return shops[offset: offset + limit]
 
 
 @router.get("/{merchant_id}")
@@ -119,8 +156,8 @@ async def create_merchant(body: MerchantCreate, user: TokenClaims = require_role
             raise ConflictError(f"Merchant slug '{body.slug}' already exists")
 
         data = body.model_dump()
-        # Location columns come from migration 016 — don't send them unless set
-        for k in ("address", "latitude", "longitude", "delivery_radius_km"):
+        # Columns from migrations 016/017 — don't send them unless set
+        for k in ("address", "latitude", "longitude", "delivery_radius_km", *DELIVERY_SETTING_FIELDS):
             if data.get(k) is None:
                 data.pop(k, None)
         data["status"] = "active"
@@ -144,6 +181,10 @@ async def update_merchant(
             raise ForbiddenError("You can only update your own merchant")
 
         data = body.model_dump(exclude_none=True)
+        # Delivery settings can be cleared back to "platform default" by sending null
+        for k in DELIVERY_SETTING_FIELDS:
+            if k in body.model_fields_set:
+                data[k] = getattr(body, k)
         # Merchant admins must use the rate-limited logo upload endpoint
         if user.role == Role.MERCHANT_ADMIN:
             data.pop("logo_url", None)

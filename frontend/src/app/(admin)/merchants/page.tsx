@@ -9,6 +9,8 @@ import { HeroImagesEditor } from "@/components/admin/HeroImagesEditor";
 const MapPicker = dynamic(() => import("@/components/map/MapPicker"), { ssr: false });
 import type { Merchant } from "@/types";
 
+const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+
 const EMPTY_FORM = {
   name: "",
   slug: "",
@@ -31,7 +33,28 @@ const EMPTY_FORM = {
   latitude: "",
   longitude: "",
   delivery_radius_km: "5",
+  delivery_base_fee: "",
+  delivery_per_km_fee: "",
+  min_order_amount: "",
+  hours_custom: false,
+  hours_open: "08:00",
+  hours_close: "20:00",
+  hours_days: [...DAYS] as string[],
 };
+
+/** Stored weekly hours -> the simple form (one window applied to the chosen days). */
+function hoursToForm(h: Merchant["opening_hours"]) {
+  const days = h ? DAYS.filter(d => h[d]?.length) : [];
+  if (!h || !days.length) return { hours_custom: false, hours_open: "08:00", hours_close: "20:00", hours_days: [...DAYS] as string[] };
+  const [open, close] = h[days[0]][0];
+  return { hours_custom: true, hours_open: open, hours_close: close, hours_days: days as string[] };
+}
+
+/** The form -> stored hours; null = always open. */
+function formToHours(f: { hours_custom: boolean; hours_open: string; hours_close: string; hours_days: string[] }) {
+  if (!f.hours_custom) return null;
+  return Object.fromEntries(DAYS.map(d => [d, f.hours_days.includes(d) ? [[f.hours_open, f.hours_close]] : []]));
+}
 
 type MerchantAdminRow = {
   id: number;
@@ -53,6 +76,7 @@ function slugify(name: string): string {
 export default function MerchantsPage() {
   const { isSuperAdmin } = useAuth();
   const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const autoAddress = useRef("");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState<Merchant | null>(null);
@@ -119,6 +143,10 @@ export default function MerchantsPage() {
       latitude: m.latitude != null ? String(m.latitude) : "",
       longitude: m.longitude != null ? String(m.longitude) : "",
       delivery_radius_km: m.delivery_radius_km != null ? String(m.delivery_radius_km) : "5",
+      delivery_base_fee: m.delivery_base_fee != null ? String(m.delivery_base_fee) : "",
+      delivery_per_km_fee: m.delivery_per_km_fee != null ? String(m.delivery_per_km_fee) : "",
+      min_order_amount: m.min_order_amount != null ? String(m.min_order_amount) : "",
+      ...hoursToForm(m.opening_hours),
     });
     setLogoFile(null);
     setLogoPreview("");
@@ -186,6 +214,27 @@ export default function MerchantsPage() {
       return;
     }
     merchantPayload.delivery_radius_km = radius;
+
+    // Delivery settings (migration 017): only sent when changed, so shops that never
+    // touch them keep working on a database that has not been migrated yet.
+    const original = merchants.find(x => x.id === editId);
+    const num = (v: string) => (v.trim() === "" ? null : Number(v));
+    const desired: Record<string, unknown> = {
+      delivery_base_fee: num(form.delivery_base_fee),
+      delivery_per_km_fee: num(form.delivery_per_km_fee),
+      min_order_amount: num(form.min_order_amount),
+      opening_hours: formToHours(form),
+    };
+    for (const [k, v] of Object.entries(desired)) {
+      if (typeof v === "number" && (!Number.isFinite(v) || v < 0)) { flash("Fees and minimum order must be 0 or more", false); return; }
+      const before = (original as any)?.[k] ?? null;
+      const same = k === "opening_hours" ? JSON.stringify(before) === JSON.stringify(v) : (before === null ? null : Number(before)) === v;
+      if (!same) merchantPayload[k] = v;
+    }
+    if (form.hours_custom && (!form.hours_days.length || form.hours_open === form.hours_close)) {
+      flash("Pick at least one open day and different open/close times", false);
+      return;
+    }
 
     if (isEditMode) {
       // ── EDIT path ──
@@ -660,7 +709,12 @@ export default function MerchantsPage() {
                 <MapPicker
                   height={220}
                   value={form.latitude && form.longitude ? { lat: Number(form.latitude), lng: Number(form.longitude) } : null}
-                  onChange={(p, addr) => setForm(f => ({ ...f, latitude: p.lat.toFixed(6), longitude: p.lng.toFixed(6), address: f.address || addr }))}
+                  onChange={(p, addr) => setForm(f => {
+                    // Keep an address the admin typed, but follow the pin while the text is blank or was auto-filled
+                    const follow = !f.address || f.address === autoAddress.current;
+                    if (addr) autoAddress.current = addr;
+                    return { ...f, latitude: p.lat.toFixed(6), longitude: p.lng.toFixed(6), address: follow && addr ? addr : f.address };
+                  })}
                 />
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 8 }}>
                   <div>
@@ -676,7 +730,53 @@ export default function MerchantsPage() {
                     <input className="admin-input" value={form.delivery_radius_km} onChange={e => setForm({ ...form, delivery_radius_km: e.target.value })} inputMode="decimal" />
                   </div>
                 </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 8 }}>
+                  <div>
+                    <label style={lbl}>Base fee ($)</label>
+                    <input className="admin-input" value={form.delivery_base_fee} onChange={e => setForm({ ...form, delivery_base_fee: e.target.value })} inputMode="decimal" placeholder="auto" />
+                  </div>
+                  <div>
+                    <label style={lbl}>Per km ($)</label>
+                    <input className="admin-input" value={form.delivery_per_km_fee} onChange={e => setForm({ ...form, delivery_per_km_fee: e.target.value })} inputMode="decimal" placeholder="auto" />
+                  </div>
+                  <div>
+                    <label style={lbl}>Min order ($)</label>
+                    <input className="admin-input" value={form.min_order_amount} onChange={e => setForm({ ...form, min_order_amount: e.target.value })} inputMode="decimal" placeholder="none" />
+                  </div>
+                </div>
                 <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                  Leave the fees empty to use the standard bands. With a base fee: fee = base + per km × distance.
+                </p>
+
+                <label style={{ ...lbl, marginTop: 12 }}>Opening hours (Cambodia time)</label>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, marginBottom: 8 }}>
+                  <input type="checkbox" checked={form.hours_custom} onChange={e => setForm({ ...form, hours_custom: e.target.checked })} />
+                  Set opening hours (otherwise the shop is always open)
+                </label>
+                {form.hours_custom && (
+                  <div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                      <input type="time" className="admin-input" style={{ maxWidth: 130 }} value={form.hours_open} onChange={e => setForm({ ...form, hours_open: e.target.value })} />
+                      <span style={{ color: "var(--text-muted)" }}>to</span>
+                      <input type="time" className="admin-input" style={{ maxWidth: 130 }} value={form.hours_close} onChange={e => setForm({ ...form, hours_close: e.target.value })} />
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {DAYS.map(d => {
+                        const on = form.hours_days.includes(d);
+                        return (
+                          <button key={d} type="button" onClick={() => setForm({ ...form, hours_days: on ? form.hours_days.filter(x => x !== d) : [...form.hours_days, d] })}
+                            style={{ padding: "6px 10px", borderRadius: 14, fontSize: 12, fontWeight: 600, cursor: "pointer", textTransform: "capitalize",
+                              border: on ? "1.5px solid var(--primary, #2563eb)" : "1.5px solid var(--border)", background: on ? "var(--bg-secondary)" : "transparent", color: "var(--text)" }}>
+                            {d}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>A close time earlier than the open time runs past midnight.</p>
+                  </div>
+                )}
+
+                <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
                   Tap the map or drag the pin to set the shop. Delivery fee: 0–3 km $0.50 · 3–5 km $0.75 · 5–8 km $1.50 · 8–10 km $3.00. Max radius 10 km.
                 </p>
               </div>

@@ -91,15 +91,29 @@ async def list_products(
             "is_featured,is_active,primary_image,created_at"
         )
 
-        # Enrich with merchant names and images
+        # Enrich with shop (owner) and category names
         if products:
-            # Merchant names
             merchant_ids = list({p["merchant_id"] for p in products if p.get("merchant_id")})
+            m_map: dict[int, dict] = {}
             if merchant_ids:
-                merchants = await db.from_("merchants").in_("id", merchant_ids).select("id,name")
-                m_map = {m["id"]: m["name"] for m in merchants}
-                for p in products:
-                    p["merchant_name"] = m_map.get(p.get("merchant_id"))
+                merchants = await db.from_("merchants").in_("id", merchant_ids).select(
+                    "id,name,icon_emoji,logo_url,status"
+                )
+                m_map = {m["id"]: m for m in merchants}
+            for p in products:
+                m = m_map.get(p.get("merchant_id")) or {}
+                p["merchant_name"] = m.get("name")
+                p["merchant_icon"] = m.get("icon_emoji")
+                p["merchant_logo_url"] = m.get("logo_url")
+                p["merchant_status"] = m.get("status")
+
+            category_ids = list({p["category_id"] for p in products if p.get("category_id")})
+            c_map: dict[int, str] = {}
+            if category_ids:
+                cats = await db.from_("categories").in_("id", category_ids).select("id,name")
+                c_map = {c["id"]: c["name"] for c in cats}
+            for p in products:
+                p["category_name"] = c_map.get(p.get("category_id"))
 
             # Images
             product_ids = [p["id"] for p in products]
@@ -129,6 +143,13 @@ async def get_product(product_id: int):
         product = await db.from_("products").eq("id", product_id).select_one()
         if not product:
             raise NotFoundError("Product", product_id)
+
+        if product.get("merchant_id"):
+            m = await db.from_("merchants").eq("id", product["merchant_id"]).select_one("name")
+            product["merchant_name"] = m["name"] if m else None
+        if product.get("category_id"):
+            c = await db.from_("categories").eq("id", product["category_id"]).select_one("name")
+            product["category_name"] = c["name"] if c else None
 
         images = await (
             db.from_("product_images")
@@ -167,9 +188,20 @@ async def create_product(
     body: ProductCreate,
     user: TokenClaims = require_any_admin(),
 ):
-    """Create a new product (admin only)."""
+    """Create a new product (admin only).
+
+    merchant_admin: always created under their own shop (body.merchant_id is
+    ignored). super_admin: must say which shop owns the product.
+    """
     async with SupabaseClient.service_role() as db:
-        merchant_id = _resolve_merchant_id(user)
+        if user.is_super_admin:
+            merchant_id = body.merchant_id
+            if not merchant_id:
+                raise BadRequestError("Choose the shop this product belongs to")
+            await _require_merchant(db, merchant_id)
+        else:
+            merchant_id = _own_merchant_id(user)
+        await _check_category(db, body.category_id, merchant_id)
 
         data = body.model_dump(exclude={"variants", "slug"})
         data["merchant_id"] = merchant_id
@@ -203,14 +235,38 @@ async def update_product(
     body: ProductUpdate,
     user: TokenClaims = require_any_admin(),
 ):
-    """Update a product (admin only)."""
+    """Update a product (admin only). Only super_admin can move it to another shop."""
     async with SupabaseClient.service_role() as db:
-        existing = await db.from_("products").eq("id", product_id).select_one("id,merchant_id")
+        existing = await db.from_("products").eq("id", product_id).select_one(
+            "id,merchant_id,category_id"
+        )
         if not existing:
             raise NotFoundError("Product", product_id)
         _check_merchant_ownership(user, existing["merchant_id"])
 
         data = body.model_dump(exclude_none=True)
+        # Explicit category_id (including 0/null from the form) clears the category
+        if "category_id" in body.model_fields_set:
+            data["category_id"] = body.category_id
+
+        new_merchant = data.get("merchant_id")
+        if new_merchant is not None and new_merchant != existing["merchant_id"]:
+            if not user.is_super_admin:
+                raise ForbiddenError("Only a super admin can move a product to another shop")
+            await _require_merchant(db, new_merchant)
+        else:
+            data.pop("merchant_id", None)
+        owner = data.get("merchant_id", existing["merchant_id"])
+
+        # Category must be global or belong to the (possibly new) owning shop
+        if "category_id" in data:
+            await _check_category(db, data["category_id"], owner)
+        elif owner != existing["merchant_id"]:
+            await _check_category(
+                db, existing.get("category_id"), owner,
+                hint="Pick a category that belongs to the new shop",
+            )
+
         if data:
             await db.from_("products").eq("id", product_id).update(data)
 
@@ -499,14 +555,41 @@ def _resolve_merchant_id(user: TokenClaims) -> int | None:
     return user.merchant_id
 
 
+def _own_merchant_id(user: TokenClaims) -> int:
+    """The shop a merchant_admin acts for; refuse tokens that carry none."""
+    if not user.merchant_id:
+        raise ForbiddenError("Your account is not linked to a shop")
+    return user.merchant_id
+
+
 def _check_merchant_ownership(user: TokenClaims, resource_merchant_id: int | None) -> None:
     """Ensure merchant admin can only modify their own merchant's resources."""
-    from app.core.exceptions import ForbiddenError
-
     if user.is_super_admin:
         return
-    if user.merchant_id != resource_merchant_id:
+    # A token without a merchant must never match an unowned row (None == None)
+    if _own_merchant_id(user) != resource_merchant_id:
         raise ForbiddenError("You can only modify your own merchant's resources")
+
+
+async def _require_merchant(db: SupabaseClient, merchant_id: int) -> None:
+    if not await db.from_("merchants").eq("id", merchant_id).select_one("id"):
+        raise BadRequestError("That shop does not exist")
+
+
+async def _check_category(
+    db: SupabaseClient,
+    category_id: int | None,
+    merchant_id: int | None,
+    hint: str = "That category belongs to a different shop",
+) -> None:
+    """A product's category must be global (no merchant) or owned by the same shop."""
+    if not category_id:
+        return
+    cat = await db.from_("categories").eq("id", category_id).select_one("id,merchant_id")
+    if not cat:
+        raise BadRequestError("That category does not exist")
+    if cat.get("merchant_id") not in (None, merchant_id):
+        raise BadRequestError(hint)
 
 
 def _slugify(name: str) -> str:

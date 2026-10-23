@@ -49,6 +49,11 @@ export interface Merchant {
   latitude?: number | null;
   longitude?: number | null;
   delivery_radius_km?: number | null;
+  /** Migration 017. Null/absent = platform defaults (always open, standard fee bands, no minimum). */
+  opening_hours?: Record<string, [string, string][]> | null;
+  delivery_base_fee?: number | string | null;
+  delivery_per_km_fee?: number | string | null;
+  min_order_amount?: number | string | null;
   product_count?: number;
   order_count?: number;
   created_at?: string;
@@ -63,6 +68,9 @@ export interface Product {
   description?: string;
   merchant_id: number;
   merchant_name?: string;
+  merchant_icon?: string | null;
+  merchant_logo_url?: string | null;
+  merchant_status?: string | null;
   category_id?: number | null;
   category_name?: string;
   base_price: number;

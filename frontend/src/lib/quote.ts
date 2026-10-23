@@ -16,6 +16,11 @@ export interface ShopQuote {
   distance_km: string | null;
   total: string;
   promo_applied: boolean;
+  /** Null for pickup or when no pin was sent. */
+  eta_minutes: number | null;
+  eta_max_minutes: number | null;
+  is_open: boolean;
+  min_order_amount: string | null;
 }
 
 export interface CartQuote {

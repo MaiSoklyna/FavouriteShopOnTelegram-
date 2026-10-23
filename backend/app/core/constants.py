@@ -59,6 +59,11 @@ DELIVERY_FEE_TIERS = (
 MAX_DELIVERY_KM = DELIVERY_FEE_TIERS[-1][0]
 DEFAULT_DELIVERY_RADIUS_KM = 5.0   # used when a shop has no radius set
 
+# Delivery time estimate: preparation + travel, shown as a window
+ETA_PREP_MINUTES = 10
+ETA_MINUTES_PER_KM = 3
+ETA_WINDOW_MINUTES = 10
+
 
 class OrderStatus(StrEnum):
     PENDING = "pending"
