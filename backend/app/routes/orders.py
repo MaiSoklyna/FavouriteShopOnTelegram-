@@ -15,18 +15,17 @@ from fastapi import APIRouter
 
 from app.core.constants import (
     DEFAULT_DELIVERY_FEE,
-    DEFAULT_DELIVERY_RADIUS_KM,
     FREE_DELIVERY_THRESHOLD,
     ORDER_PREFIX,
     ORDER_STATUS_TRANSITIONS,
     Role,
 )
 from app.core.dependencies import require_any_admin, require_role
-from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
+from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.services import settlement
-from app.services.delivery import fee_for_distance, haversine_km, valid_point
+from app.services.delivery import is_open, quote_delivery, valid_point
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -64,6 +63,17 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
         if promo_code and not priced["promo"]:
             # The customer was shown a discount; never silently charge more.
             raise BadRequestError(priced["promo_error"] or "Promo code is no longer valid")
+
+        _enforce_shop_rules(priced)
+        expected = request_body.get("expected_total")
+        if expected is not None:
+            try:
+                changed = _money(expected) != priced["total"]
+            except Exception:
+                raise BadRequestError("Invalid expected_total")
+            if changed:
+                # Fee, promo or stock price moved since the customer last saw the total
+                raise ConflictError(f"The price changed to ${priced['total']}. Please review your order.")
 
         cart, items, promo = priced["cart"], priced["items"], priced["promo"]
         subtotal = float(priced["subtotal"])
@@ -282,6 +292,10 @@ async def quote_order(request_body: dict, user: TokenClaims = require_role(Role.
                 "distance_km": str(priced["distance_km"]) if priced["distance_km"] is not None else None,
                 "total": str(priced["total"]),
                 "promo_applied": bool(priced["promo"]),
+                "eta_minutes": priced["eta"][0] if priced["eta"] else None,
+                "eta_max_minutes": priced["eta"][1] if priced["eta"] else None,
+                "is_open": priced["shop_open"],
+                "min_order_amount": str(priced["min_order"]) if priced["min_order"] is not None else None,
             })
 
     if promo_code and promo_merchant_id is None and promo_error is None:
@@ -494,7 +508,8 @@ async def _price_cart(
         (_money(item.get("unit_price")) * int(item.get("quantity") or 0) for item in items),
         Decimal("0.00"),
     )
-    distance_km, delivery_fee = await _delivery_fee(db, merchant_id, delivery_type, dest)
+    shop = await db.from_("merchants").eq("id", merchant_id).select_one() or {}
+    distance_km, delivery_fee, eta = _delivery_for(shop, delivery_type, dest)
     if subtotal >= Decimal(str(FREE_DELIVERY_THRESHOLD)):
         delivery_fee = Decimal("0.00")
 
@@ -517,6 +532,9 @@ async def _price_cart(
         "discount": discount,
         "delivery_fee": delivery_fee,
         "distance_km": distance_km,
+        "eta": eta,
+        "shop_open": is_open(shop.get("opening_hours")),
+        "min_order": _money(shop["min_order_amount"]) if shop.get("min_order_amount") else None,
         "total": subtotal - discount + delivery_fee,
         "promo": promo,
         "promo_error": promo_error,
@@ -539,24 +557,32 @@ def _parse_delivery(body: dict) -> tuple[str, tuple[float, float] | None]:
     return delivery_type, (float(lat), float(lng))
 
 
-async def _delivery_fee(db, merchant_id: int, delivery_type: str, dest) -> tuple[Decimal | None, Decimal]:
-    """(distance_km, fee) for a shop → pin. Pickup is free; no pin or no shop location → default fee."""
+def _delivery_for(shop: dict, delivery_type: str, dest) -> tuple[Decimal | None, Decimal, tuple[int, int] | None]:
+    """(distance_km, fee, (eta_min, eta_max)) for a shop → pin.
+
+    Pickup is free. No pin, or a shop without a map location, gets the default
+    fee (so a failed map never blocks checkout). A pin the shop can't reach is
+    rejected here — the same rule the nearby list shows as "can_deliver: false".
+    """
     if delivery_type == "pickup":
-        return None, Decimal("0.00")
+        return None, Decimal("0.00"), None
     default = Decimal(str(DEFAULT_DELIVERY_FEE)).quantize(Decimal("0.01"))
     if not dest:
-        return None, default
-    shop = await db.from_("merchants").eq("id", merchant_id).select_one("latitude,longitude,delivery_radius_km")
-    if not shop or shop.get("latitude") is None or shop.get("longitude") is None:
-        return None, default
-    km = Decimal(str(haversine_km(shop["latitude"], shop["longitude"], *dest))).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
-    )
-    radius = float(shop.get("delivery_radius_km") or DEFAULT_DELIVERY_RADIUS_KM)
-    fee = fee_for_distance(float(km)) if float(km) <= radius else None
-    if fee is None:
-        raise BadRequestError("Delivery unavailable for this location")
-    return km, fee
+        return None, default, None
+    q = quote_delivery(shop, dest)
+    if q is None:
+        return None, default, None
+    if not q.can_deliver:
+        raise BadRequestError(f"Delivery unavailable for this location. {q.reason or ''}".strip())
+    return q.distance_km, q.fee, (q.eta_minutes, q.eta_max_minutes)
+
+
+def _enforce_shop_rules(priced: dict) -> None:
+    """Refuse orders the shop can't take right now: closed, or below its minimum."""
+    if not priced["shop_open"]:
+        raise BadRequestError("This shop is closed right now")
+    if priced["min_order"] is not None and priced["subtotal"] < priced["min_order"]:
+        raise BadRequestError(f"This shop's minimum order is ${priced['min_order']}")
 
 
 def _money(value) -> Decimal:

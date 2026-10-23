@@ -121,3 +121,30 @@ The spec's statuses are `pending, accepted, preparing, ready_for_pickup, deliver
 - **Live tracking:** `delivery_locations` (delivery_id, lat, lng, at) + Supabase realtime; the customer map reuses `MapPicker`'s marker code.
 - **Road distance / ETA:** swap `haversine_km` in `services/delivery.py` for the Mapbox Directions Matrix API; nothing else changes.
 - **Per-shop pricing:** move `DELIVERY_FEE_TIERS` to a `delivery_tiers` table keyed by merchant.
+
+## 11. Delivery settings, ETA and shop rules (migration 017)
+
+`services/delivery.py` is the only place that decides distance, fee, ETA and availability. The
+nearby list, `POST /orders/quote` and `POST /orders` all call it, and the client never computes
+any of those numbers.
+
+| Setting (`merchants`) | Effect | Default when empty |
+|---|---|---|
+| `opening_hours` JSON `{"mon":[["08:00","20:00"]],…}` (Cambodia time, end < start = past midnight) | `is_open`; closed shops are listed last and refuse orders | always open |
+| `delivery_base_fee` + `delivery_per_km_fee` | fee = base + per_km × km | platform bands (0–3 km $0.50 … 8–10 km $3.00) |
+| `min_order_amount` | order refused below it | none |
+| `delivery_radius_km` (016) | beyond it → `can_deliver:false` ("Pickup only") | 5 km |
+
+ETA = 10 min preparation + 3 min/km, rounded to 5, shown as a 10-minute window.
+
+`GET /merchants/nearby?lat&lng&radius_km=10&limit=20&offset=0` — bounding-box prefilter in the DB
+(`idx_merchants_location`), exact great-circle distance on the remainder, open shops first then
+nearest. Returns `distance_m`, `distance_km`, `delivery_fee`, `eta_minutes`, `eta_max_minutes`,
+`is_open`, `can_deliver`, `delivery_unavailable_reason` (+ `rating` if the merchant row has one).
+Only whitelisted fields are exposed.
+
+`POST /orders` re-prices everything and refuses: closed shop, pin outside the radius, below the
+minimum order, and a changed price (`expected_total` mismatch → 409). A delivery order with no
+pin, or from a shop with no location, uses the default fee so a failed map never blocks checkout.
+
+Tests: `cd backend && pip install -r requirements-dev.txt && pytest tests`.
