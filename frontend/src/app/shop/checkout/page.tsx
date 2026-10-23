@@ -8,12 +8,33 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
 import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote, type DeliveryChoice } from "@/lib/quote";
 import { deleteAddress, listAddresses, saveAddress, type SavedAddress } from "@/lib/addresses";
-import type { LatLng } from "@/lib/mapbox";
+import { distanceKm, formatEta, formatKm, getCurrentPosition, reverseGeocode, type LatLng } from "@/lib/mapbox";
+import { haptic, useMainButton } from "@/lib/telegram";
 
+// Same look as the map's own loading state, so there is no flash of an empty box
 const MapPicker = dynamic(() => import("@/components/map/MapPicker"), {
   ssr: false,
-  loading: () => <div style={{ height: 260, borderRadius: 12, background: "var(--shop-bg, #F7F8FB)" }} />,
+  loading: () => (
+    <div className="shop-skeleton" style={{
+      height: 240, borderRadius: "var(--shop-r-input)", display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center", gap: 6,
+    }}>
+      <span className="map-pin-bounce" style={{ fontSize: 32 }}>📍</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--shop-muted)" }}>Loading map…</span>
+    </div>
+  ),
 });
+
+interface ShopInfo {
+  id: number;
+  name: string;
+  logo_url?: string | null;
+  icon_emoji?: string | null;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  delivery_radius_km?: number | null;
+}
 
 const PROVINCES = ["Phnom Penh", "Siem Reap", "Battambang", "Kampot", "Kampong Cham", "Other"];
 
@@ -44,6 +65,18 @@ export default function CheckoutPage() {
   const [saved, setSaved] = useState<SavedAddress[]>([]);
   const [saveThis, setSaveThis] = useState(false);
   const [saveLabel, setSaveLabel] = useState("Home");
+  const [mapOpen, setMapOpen] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [locError, setLocError] = useState(false);
+  const [shop, setShop] = useState<ShopInfo | null>(null);
+
+  // A single-shop cart can show that shop on the map; with several shops there is no one place to draw
+  const merchantKey = Array.from(new Set(items.map((i: any) => i.merchant_id).filter(Boolean))).join(",");
+  useEffect(() => {
+    if (!merchantKey || merchantKey.includes(",")) { setShop(null); return; }
+    api.get<ShopInfo>(`/merchants/${merchantKey}`).then(setShop).catch(() => setShop(null));
+  }, [merchantKey]);
+  const shopPoint: LatLng | null = shop?.latitude != null && shop?.longitude != null ? { lat: shop.latitude, lng: shop.longitude } : null;
 
   const choice: DeliveryChoice = deliveryType === "pickup"
     ? { delivery_type: "pickup" }
@@ -75,6 +108,17 @@ export default function CheckoutPage() {
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  async function useMyLocation() {
+    setLocating(true); setLocError(false);
+    const p = await getCurrentPosition();
+    if (!p) { setLocating(false); setLocError(true); haptic("error"); return; }
+    haptic("success");
+    setPin(p); setSaveThis(false);
+    const addr = await reverseGeocode(p);
+    if (addr) setForm((f) => ({ ...f, address: addr }));
+    setLocating(false);
+  }
 
   function pickSaved(a: SavedAddress) {
     setPin({ lat: a.latitude, lng: a.longitude });
@@ -147,14 +191,28 @@ export default function CheckoutPage() {
 
   const formatTimer = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
+  /** Reasons the server would refuse this cart — shown up front so checkout is blocked, not surprised. */
+  const blockers: string[] = (quote?.orders ?? []).flatMap((o) => {
+    const who = (quote!.orders.length > 1 ? `Shop #${o.merchant_id}` : shop?.name) || "This shop";
+    const out: string[] = [];
+    if (!o.is_open) out.push(`${who} is closed right now.`);
+    if (o.min_order_amount && Number(o.subtotal) < Number(o.min_order_amount)) {
+      out.push(`${who} has a ${money(o.min_order_amount)} minimum order — add ${money(Number(o.min_order_amount) - Number(o.subtotal))} more.`);
+    }
+    return out;
+  });
+
   function validateStep1() {
     const e: Record<string, string> = {};
     if (!form.name.trim()) e.name = "Name is required";
     if (!form.phone.trim() || form.phone.length < 9) e.phone = "Valid phone required (min 9 digits)";
     if (deliveryType === "delivery" && !form.address.trim()) e.address = "Address is required";
     if (deliveryType === "delivery" && !quote && quoteError) e.address = quoteError;
+    if (blockers.length) e.blocked = blockers[0];
     setErrors(e);
-    return Object.keys(e).length === 0;
+    const ok = Object.keys(e).length === 0;
+    if (!ok) haptic("error");
+    return ok;
   }
 
   async function handlePlaceOrder() {
@@ -187,6 +245,8 @@ export default function CheckoutPage() {
             delivery_name: form.name,
             customer_note: form.note,
             payment_method: payment,
+            // The total the customer was shown; the server refuses if it has moved since
+            expected_total: quote?.orders.find((o) => o.merchant_id === Number(mid))?.total,
             // A promo code belongs to one shop — send it only with that shop's order
             promo_code: quote?.promo?.applied && quote.promo.merchant_id === Number(mid) ? quote.promo.code : undefined,
           })
@@ -202,6 +262,7 @@ export default function CheckoutPage() {
           .catch(() => {});
       }
 
+      haptic("success");
       if (payment === "khqr" && oid) {
         // One QR per shop order, paid one after another
         const ids = results.map(r => r?.data?.order_id).filter(Boolean) as number[];
@@ -212,9 +273,26 @@ export default function CheckoutPage() {
       } else {
         router.replace(oid ? `/shop/order/${oid}?placed=true` : "/shop/orders");
       }
-    } catch (err: any) { setOrderError(err.detail || err.message || "Order failed"); }
+    } catch (err: any) {
+      haptic("error");
+      setOrderError(err.detail || err.message || "Order failed");
+      // A moved price (409) or a closed shop: refresh what the customer sees
+      fetchQuote(getSavedPromo(), choice).then(setQuote).catch(() => {});
+    }
     finally { setPlacing(false); }
   }
+
+  const totalLabel = quote ? money(quote.totals.total) : `$${total.toFixed(2)}`;
+  const action = step === 1 ? { label: "Continue", run: () => validateStep1() && setStep(2), disabled: false }
+    : step === 2 ? { label: "Continue", run: () => setStep(3), disabled: false }
+    : { label: placing ? "Placing…" : "Place order", run: handlePlaceOrder, disabled: placing || !quote || blockers.length > 0 };
+  const inTelegram = useMainButton({
+    text: `${action.label} · ${totalLabel}`,
+    onClick: action.run,
+    disabled: action.disabled,
+    loading: placing,
+    visible: step < 4 && !!user && items.length > 0,
+  });
 
   if (!user || (items.length === 0 && step < 4)) {
     return (
@@ -290,88 +368,164 @@ export default function CheckoutPage() {
           })}
         </div>
 
-        {/* Step 1: Address */}
+        {/* Step 1: Delivery */}
         {step === 1 && (
           <div>
-            <h2 style={{
-              fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)", marginBottom: 20,
-            }}>{deliveryType === "pickup" ? "Your Details" : "Delivery Address"}</h2>
-            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-              {([["delivery", "🛵 Delivery"], ["pickup", "🏪 Pickup"]] as const).map(([key, label]) => (
-                <button key={key} onClick={() => setDeliveryType(key)} style={{
-                  flex: 1, padding: 12, borderRadius: "var(--shop-r-input, 12px)", cursor: "pointer",
-                  fontWeight: 600, fontSize: 14,
-                  border: deliveryType === key ? "2px solid var(--shop-primary, #1E6BFF)" : "1.5px solid var(--shop-divider, #ECEEF3)",
-                  background: deliveryType === key ? "var(--shop-primary-tint, #E8F0FF)" : "var(--shop-surface, #FFFFFF)",
-                  color: deliveryType === key ? "var(--shop-primary, #1E6BFF)" : "var(--shop-text, #4A4E5A)",
-                }}>{label}</button>
-              ))}
+            <SectionTitle>Delivery method</SectionTitle>
+            <div role="radiogroup" aria-label="Delivery method" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+              {([
+                ["delivery", "🛵", "Delivery", "To your door"],
+                ["pickup", "🏪", "Pickup", "Collect at the shop · Free"],
+              ] as const).map(([key, icon, title, sub]) => {
+                const on = deliveryType === key;
+                return (
+                  <button key={key} role="radio" aria-checked={on} onClick={() => { haptic("select"); setDeliveryType(key); }} className="shop-press" style={{
+                    position: "relative", textAlign: "left", minHeight: 84, padding: 14, cursor: "pointer",
+                    borderRadius: "var(--shop-r-card)",
+                    border: on ? "2px solid var(--shop-primary)" : "1.5px solid var(--shop-divider)",
+                    background: on ? "var(--shop-primary-tint)" : "var(--shop-surface)",
+                    boxShadow: on ? "none" : "var(--shop-shadow)",
+                  }}>
+                    <span style={{
+                      position: "absolute", top: 12, right: 12, width: 18, height: 18, borderRadius: "50%",
+                      border: on ? "5px solid var(--shop-primary)" : "2px solid var(--shop-divider)", background: "var(--shop-surface)",
+                    }} />
+                    <div style={{ fontSize: 22 }}>{icon}</div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "var(--shop-black)", marginTop: 4 }}>{title}</div>
+                    <div style={{ fontSize: 11, color: "var(--shop-muted)", marginTop: 1 }}>{sub}</div>
+                  </button>
+                );
+              })}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <Field label="Full Name *" value={form.name} onChange={v => setForm({ ...form, name: v })} error={errors.name} />
-              <div>
-                <label style={labelStyle}>Phone *</label>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <div style={{
-                    padding: "12px 14px", background: "var(--shop-bg, #F7F8FB)",
-                    borderRadius: "var(--shop-r-input, 12px)", fontSize: 14,
-                    color: "var(--shop-muted, #8A8F9C)", fontWeight: 600,
-                    border: "1.5px solid var(--shop-divider, #ECEEF3)",
-                  }}>+855</div>
-                  <input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value.replace(/\D/g, "") })}
-                    style={{ ...inputStyle, flex: 1, borderColor: errors.phone ? "#C62828" : "var(--shop-divider, #ECEEF3)" }} placeholder="12 345 6789" />
-                </div>
-                {errors.phone && <p style={{ color: "#C62828", fontSize: 12, marginTop: 6 }}>{errors.phone}</p>}
-              </div>
-              {deliveryType === "delivery" && (
-                <>
-                  {saved.length > 0 && (
-                    <div>
-                      <label style={labelStyle}>Saved addresses</label>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {saved.map(a => {
-                          const on = pin?.lat === a.latitude && pin?.lng === a.longitude;
-                          return (
-                            <span key={a.id} style={{
-                              display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 999, fontSize: 13, fontWeight: 600,
-                              border: on ? "2px solid var(--shop-primary, #1E6BFF)" : "1.5px solid var(--shop-divider, #ECEEF3)",
-                              background: on ? "var(--shop-primary-tint, #E8F0FF)" : "var(--shop-surface, #FFFFFF)",
-                            }}>
-                              <button onClick={() => pickSaved(a)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontWeight: 600, fontSize: 13, color: "var(--shop-black, #0B0B0F)" }}>
-                                {a.is_default ? "★ " : ""}{a.label}
-                              </button>
-                              <button onClick={() => removeSaved(a.id)} aria-label={`Delete ${a.label}`} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--shop-muted, #8A8F9C)" }}>×</button>
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  <div>
-                    <label style={labelStyle}>Drop a pin on the map</label>
-                    <MapPicker value={pin} onChange={(p, addr) => { setPin(p); if (addr) setForm(f => ({ ...f, address: addr })); setSaveThis(false); }} />
-                    {quote && pin && (
-                      <p style={{ fontSize: 13, color: "#2E7D32", fontWeight: 600, margin: "8px 0 0" }}>
-                        Delivery fee: {Number(quote.totals.delivery_fee) === 0 ? "FREE" : money(quote.totals.delivery_fee)}
-                        {quote.orders.length === 1 && quote.orders[0].distance_km ? ` · ${quote.orders[0].distance_km} km` : ""}
-                      </p>
-                    )}
-                    {!quote && quoteError && pin && <p style={{ fontSize: 13, color: "#C62828", fontWeight: 600, margin: "8px 0 0" }}>{quoteError}</p>}
+
+            <Card>
+              <SectionTitle small>Contact</SectionTitle>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                <Field label="Full Name *" value={form.name} onChange={v => setForm({ ...form, name: v })} error={errors.name} />
+                <div>
+                  <label style={labelStyle}>Phone *</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <div style={{
+                      padding: "12px 14px", background: "var(--shop-bg, #F7F8FB)",
+                      borderRadius: "var(--shop-r-input, 12px)", fontSize: 14,
+                      color: "var(--shop-muted, #8A8F9C)", fontWeight: 600,
+                      border: "1.5px solid var(--shop-divider, #ECEEF3)",
+                    }}>+855</div>
+                    <input type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value.replace(/\D/g, "") })}
+                      style={{ ...inputStyle, flex: 1, borderColor: errors.phone ? "var(--shop-danger)" : "var(--shop-divider, #ECEEF3)" }} placeholder="12 345 6789" />
                   </div>
-                  <Field label="Full Address *" value={form.address} onChange={v => setForm({ ...form, address: v })} error={errors.address} multiline />
-                  {pin && (
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--shop-text, #4A4E5A)" }}>
-                      <input type="checkbox" checked={saveThis} onChange={e => setSaveThis(e.target.checked)} />
-                      Save this address as
-                      <input value={saveLabel} onChange={e => setSaveLabel(e.target.value)} maxLength={40}
-                        style={{ ...inputStyle, width: 110, padding: "6px 10px" }} />
-                    </label>
-                  )}
-                </>
-              )}
+                  {errors.phone && <p style={{ color: "var(--shop-danger)", fontSize: 12, marginTop: 6 }}>{errors.phone}</p>}
+                </div>
+              </div>
+            </Card>
+
+            {deliveryType === "pickup" && (
+              <Card>
+                <SectionTitle small>Pickup location</SectionTitle>
+                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                  <ShopBadge shop={shop} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "var(--shop-black)" }}>{shop?.name || "The shop"}</div>
+                    <div style={{ fontSize: 12, color: "var(--shop-muted)", marginTop: 2 }}>{shop?.address || "The shop will confirm the pickup address."}</div>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {deliveryType === "delivery" && (
+              <Card>
+                <SectionTitle small>📍 Delivery address</SectionTitle>
+
+                {saved.length > 0 && (
+                  <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, marginBottom: 12 }} className="shop-h-scroll">
+                    {saved.map(a => {
+                      const on = pin?.lat === a.latitude && pin?.lng === a.longitude;
+                      return (
+                        <span key={a.id} style={{
+                          display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0, borderRadius: 999, fontSize: 13, fontWeight: 600,
+                          border: on ? "2px solid var(--shop-primary)" : "1.5px solid var(--shop-divider)",
+                          background: on ? "var(--shop-primary-tint)" : "var(--shop-surface)",
+                        }}>
+                          <button onClick={() => pickSaved(a)} style={{ background: "none", border: "none", minHeight: 40, padding: "0 6px 0 14px", cursor: "pointer", fontWeight: 600, fontSize: 13, color: "var(--shop-black)" }}>
+                            {a.is_default ? "★ " : "🏠 "}{a.label}
+                          </button>
+                          <button onClick={() => removeSaved(a.id)} aria-label={`Delete ${a.label}`} style={{ background: "none", border: "none", minHeight: 40, minWidth: 32, padding: "0 10px 0 0", cursor: "pointer", color: "var(--shop-muted)" }}>×</button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <button onClick={useMyLocation} disabled={locating} style={actionBtn}>
+                    {locating ? "Locating…" : "🎯 Use my location"}
+                  </button>
+                  <button onClick={() => setMapOpen(o => !o)} aria-expanded={mapOpen} style={{ ...actionBtn, ...(mapOpen ? actionBtnOn : {}) }}>
+                    🗺️ {mapOpen ? "Hide map" : "Choose on map"}
+                  </button>
+                </div>
+                {locError && <p style={{ fontSize: 12, color: "var(--shop-danger)", margin: "8px 0 0" }}>Couldn&apos;t get your location — allow access, or choose on the map.</p>}
+
+                {mapOpen && (
+                  <div style={{ marginTop: 12 }}>
+                    <MapPicker
+                      value={pin}
+                      onChange={(p, addr) => { setPin(p); if (addr) setForm(f => ({ ...f, address: addr })); setSaveThis(false); }}
+                      shop={shopPoint}
+                      shopInfo={shop}
+                      radiusKm={shop?.delivery_radius_km ?? null}
+                      showLocate={false}
+                      height={260}
+                    />
+                  </div>
+                )}
+
+                <div style={{ marginTop: 14 }}>
+                  <Field label="Address *" value={form.address} onChange={v => setForm({ ...form, address: v })} error={errors.address} multiline />
+                </div>
+
+                <DeliveryInfo
+                  pin={pin}
+                  quote={quote}
+                  quoteError={quoteError}
+                  distance={(() => {
+                    const q = quote?.orders.length === 1 ? Number(quote.orders[0].distance_km) : NaN;
+                    if (!Number.isNaN(q) && q > 0) return q;
+                    return pin && shopPoint ? distanceKm(pin, shopPoint) : null;
+                  })()}
+                  multiShop={(quote?.orders.length ?? 0) > 1}
+                />
+
+                {pin && (
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--shop-text)", marginTop: 14, flexWrap: "wrap" }}>
+                    <input type="checkbox" checked={saveThis} onChange={e => setSaveThis(e.target.checked)} style={{ width: 18, height: 18 }} />
+                    Save this address as
+                    <input value={saveLabel} onChange={e => setSaveLabel(e.target.value)} maxLength={40}
+                      style={{ ...inputStyle, width: 110, padding: "6px 10px" }} />
+                  </label>
+                )}
+              </Card>
+            )}
+
+            <Card>
               <Field label="Note (optional)" value={form.note} onChange={v => setForm({ ...form, note: v })} multiline />
-            </div>
-            <button onClick={() => validateStep1() && setStep(2)} style={btnPrimary}>Continue</button>
+            </Card>
+
+            <Card>
+              <SectionTitle small>Order summary</SectionTitle>
+              <SummaryRow label="Products" value={qt ? money(qt.subtotal) : `$${total.toFixed(2)}`} />
+              {discount > 0 && <SummaryRow label="Discount" value={`-${money(discount)}`} green />}
+              <SummaryRow label={deliveryType === "pickup" ? "Pickup" : "Delivery"}
+                value={deliveryType === "delivery" && !pin ? "Pick a location" : !qt ? "…" : deliveryFee === 0 ? "FREE" : money(deliveryFee)}
+                green={!!qt && deliveryFee === 0} />
+              <div style={{ height: 1, background: "var(--shop-divider)", margin: "10px 0" }} />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontWeight: 700, fontSize: 15, color: "var(--shop-black)" }}>Total</span>
+                <span style={{ fontWeight: 700, fontSize: 18, color: "var(--shop-primary)" }}>{qt ? money(qt.total) : `$${total.toFixed(2)}`}</span>
+              </div>
+            </Card>
+
+            <Blockers items={blockers} />
           </div>
         )}
 
@@ -412,10 +566,7 @@ export default function CheckoutPage() {
                 </button>
               );
             })}
-            <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
-              <button onClick={() => setStep(1)} style={btnSecondary}>Back</button>
-              <button onClick={() => setStep(3)} style={btnPrimary}>Continue</button>
-            </div>
+
           </div>
         )}
 
@@ -502,13 +653,12 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            <div style={{ display: "flex", gap: 12 }}>
-              <button onClick={() => setStep(2)} style={btnSecondary}>Back</button>
-              <button onClick={handlePlaceOrder} disabled={placing || !quote} style={{ ...btnPrimary, opacity: placing || !quote ? 0.6 : 1 }}>
-                {placing ? "Placing..." : "Place Order"}
-              </button>
-            </div>
+            <Blockers items={blockers} />
           </div>
+        )}
+
+        {step < 4 && !inTelegram && (
+          <BottomBar total={totalLabel} label={action.label} onClick={action.run} disabled={action.disabled} />
         )}
 
         {/* Step 4: KHQR */}
@@ -633,6 +783,104 @@ function Field({ label, value, onChange, error, multiline }: { label: string; va
   );
 }
 
+function SectionTitle({ children, small }: { children: React.ReactNode; small?: boolean }) {
+  return (
+    <h2 style={{ fontSize: small ? 14 : 15, fontWeight: 700, color: "var(--shop-black)", margin: small ? "0 0 12px" : "0 0 10px" }}>{children}</h2>
+  );
+}
+
+function ShopBadge({ shop }: { shop: ShopInfo | null }) {
+  return (
+    <div style={{
+      width: 48, height: 48, borderRadius: 12, flexShrink: 0, overflow: "hidden", fontSize: 24,
+      background: "var(--shop-primary-tint)", display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      {shop?.logo_url ? <img src={shop.logo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (shop?.icon_emoji || "🏪")}
+    </div>
+  );
+}
+
+/** Distance, fee and time for the chosen pin — or why delivery isn't available. */
+function DeliveryInfo({ pin, quote, quoteError, distance, multiShop }: {
+  pin: LatLng | null; quote: CartQuote | null; quoteError: string; distance: number | null; multiShop: boolean;
+}) {
+  if (!pin) {
+    return (
+      <div style={{ marginTop: 12, padding: 12, borderRadius: "var(--shop-r-input)", background: "var(--shop-bg)", fontSize: 13, color: "var(--shop-muted)" }}>
+        Choose your location to see the distance and delivery fee.
+      </div>
+    );
+  }
+  if (!quote && quoteError) {
+    return (
+      <div role="alert" style={{ marginTop: 12, padding: 12, borderRadius: "var(--shop-r-input)", background: "var(--shop-danger-tint)", color: "var(--shop-danger)", fontSize: 13, fontWeight: 600 }}>
+        ⚠️ {quoteError}
+        <div style={{ fontWeight: 500, marginTop: 4 }}>Move the pin closer, or switch to Pickup.</div>
+      </div>
+    );
+  }
+  if (!quote) {
+    return <div className="shop-skeleton" style={{ marginTop: 12, height: 64, borderRadius: "var(--shop-r-input)" }} aria-busy="true" />;
+  }
+  const fee = Number(quote.totals.delivery_fee);
+  const first = quote.orders[0];
+  const eta = first?.eta_minutes != null && first?.eta_max_minutes != null ? [first.eta_minutes, first.eta_max_minutes] : null;
+  const tiles: [string, string][] = [
+    ["Distance", multiShop ? "Varies" : distance != null ? formatKm(distance) : "—"],
+    ["Delivery fee", multiShop ? money(fee) : fee === 0 ? "FREE" : money(fee)],
+    ["Est. time", !multiShop && eta ? formatEta(eta[0], eta[1]) : "—"],
+  ];
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 12 }}>
+        {tiles.map(([label, value]) => (
+          <div key={label} style={{ padding: "10px 6px", borderRadius: "var(--shop-r-input)", background: "var(--shop-success-tint)", textAlign: "center" }}>
+            <div style={{ fontSize: 11, color: "var(--shop-muted)" }}>{label}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--shop-success)", marginTop: 2 }}>{value}</div>
+          </div>
+        ))}
+      </div>
+      {multiShop && (
+        <p style={{ fontSize: 11, color: "var(--shop-muted)", margin: "8px 0 0" }}>
+          Items from {quote.orders.length} shops — each shop is a separate order with its own fee.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Blockers({ items }: { items: string[] }) {
+  if (!items.length) return null;
+  return (
+    <div role="alert" style={{ marginBottom: 12, padding: 14, borderRadius: "var(--shop-r-card)", background: "var(--shop-danger-tint)", color: "var(--shop-danger)", fontSize: 13, fontWeight: 600 }}>
+      {items.map((m) => <div key={m}>⚠️ {m}</div>)}
+    </div>
+  );
+}
+
+/** Sticky checkout bar: the running total stays visible next to the main action. */
+function BottomBar({ total, label, onClick, disabled }: { total: string; label: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <div style={{
+      position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 50,
+      display: "flex", alignItems: "center", gap: 14,
+      padding: "12px 16px calc(12px + var(--safe-bottom, 0px))",
+      background: "var(--shop-surface)", borderTop: "1px solid var(--shop-divider)",
+      boxShadow: "0 -6px 20px rgba(8, 29, 60, 0.08)",
+    }}>
+      <div style={{ minWidth: 76 }}>
+        <div style={{ fontSize: 11, color: "var(--shop-muted)" }}>Total</div>
+        <div style={{ fontSize: 19, fontWeight: 700, color: "var(--shop-black)" }}>{total}</div>
+      </div>
+      <button onClick={onClick} disabled={disabled} style={{
+        flex: 1, minHeight: 50, borderRadius: "var(--shop-r-input)", border: "none",
+        background: "var(--shop-primary)", color: "#fff", fontWeight: 700, fontSize: 15,
+        cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.55 : 1, transition: "opacity .2s",
+      }}>{label}</button>
+    </div>
+  );
+}
+
 function Card({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
@@ -664,6 +912,13 @@ const inputStyle: React.CSSProperties = {
   background: "var(--shop-bg, #F7F8FB)",
   color: "var(--shop-black, #0B0B0F)", fontSize: 14,
 };
+
+const actionBtn: React.CSSProperties = {
+  minHeight: 46, borderRadius: "var(--shop-r-input)", border: "1.5px solid var(--shop-primary)",
+  background: "var(--shop-surface)", color: "var(--shop-primary)", fontWeight: 700, fontSize: 13, cursor: "pointer",
+};
+
+const actionBtnOn: React.CSSProperties = { background: "var(--shop-primary-tint)" };
 
 const btnPrimary: React.CSSProperties = {
   flex: 1, width: "100%", padding: 14,

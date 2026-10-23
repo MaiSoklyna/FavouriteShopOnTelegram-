@@ -5,6 +5,8 @@
  * fallbacks when running outside Telegram (e.g. in a browser for testing).
  */
 
+import { useEffect, useRef, useState } from "react";
+
 interface TelegramUser {
   id: number;
   first_name: string;
@@ -95,4 +97,66 @@ export function initTelegram(): void {
   } catch {
     // Older Telegram clients may not support all methods — fail silent.
   }
+
+  // Follow Telegram's light/dark scheme, unless the customer picked a theme in the app
+  const applyScheme = () => {
+    try {
+      if (!localStorage.getItem("theme")) document.documentElement.setAttribute("data-theme", tg.colorScheme);
+    } catch { /* storage blocked — keep the default theme */ }
+  };
+  applyScheme();
+  try { tg.onEvent("themeChanged", applyScheme); } catch { /* older client */ }
+}
+
+type HapticKind = "light" | "medium" | "success" | "error" | "warning" | "select";
+
+/** Short vibration on key actions. A no-op outside Telegram or on clients without haptics. */
+export function haptic(kind: HapticKind = "light"): void {
+  try {
+    const h = getTelegram()?.HapticFeedback;
+    if (!h) return;
+    if (kind === "success" || kind === "error" || kind === "warning") h.notificationOccurred(kind);
+    else if (kind === "select") h.selectionChanged();
+    else h.impactOccurred(kind);
+  } catch { /* haptics are decoration — never break the action */ }
+}
+
+/**
+ * Drive Telegram's native MainButton (the big button at the bottom of the
+ * screen). Returns true when it is in use, so the page can hide its own
+ * fallback button; false in a normal browser.
+ */
+export function useMainButton(opts: {
+  text: string;
+  onClick: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  visible?: boolean;
+}): boolean {
+  const { text, onClick, disabled, loading, visible = true } = opts;
+  const onClickRef = useRef(onClick);
+  onClickRef.current = onClick;
+  const [active, setActive] = useState(false);
+
+  useEffect(() => {
+    const tg = getTelegram();
+    // initData is empty when the page is merely opened in a browser that has the SDK loaded
+    if (!tg?.MainButton || !tg.initData) { setActive(false); return; }
+    const handler = () => { haptic("light"); onClickRef.current(); };
+    tg.MainButton.onClick(handler);
+    setActive(true);
+    return () => { tg.MainButton.offClick(handler); tg.MainButton.hide(); };
+  }, []);
+
+  useEffect(() => {
+    const mb = getTelegram()?.MainButton;
+    if (!mb || !active) return;
+    if (!visible) { mb.hide(); return; }
+    mb.show();
+    mb.text = text;
+    if (disabled) mb.disable(); else mb.enable();
+    if (loading) mb.showProgress(false); else mb.hideProgress();
+  }, [active, visible, text, disabled, loading]);
+
+  return active;
 }

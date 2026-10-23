@@ -52,4 +52,52 @@ export function distanceKm(a: LatLng, b: LatLng): number {
   return 2 * 6371.0088 * Math.asin(Math.sqrt(h));
 }
 
-export const formatKm = (km: number) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`);
+/** "< 50 m", "300 m" under a kilometre, otherwise "3.2 km". */
+export const formatKm = (km: number) =>
+  km < 0.05 ? "< 50 m" : km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+
+/**
+ * Light, low-contrast basemap so pins, the radius and the route read first
+ * (the Grab / Foodpanda look). Swap for a custom Mapbox Studio style URL
+ * (`mapbox://styles/<user>/<id>`) to brand it further.
+ */
+export const MAP_STYLE = "mapbox://styles/mapbox/light-v11";
+
+/** "10–20 min" from the server's eta window. */
+export const formatEta = (min: number, max: number) => `${min}–${max} min`;
+
+export interface GeocodeHit {
+  label: string;
+  pos: LatLng;
+}
+
+/** Address search (Cambodia only) for customers who won't share their location. */
+export async function searchAddress(query: string): Promise<GeocodeHit[]> {
+  const q = query.trim();
+  if (!MAPBOX_TOKEN || q.length < 3) return [];
+  try {
+    const res = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?country=kh&limit=5&access_token=${MAPBOX_TOKEN}`,
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.features || []).map((f: { place_name: string; center: [number, number] }) => ({
+      label: f.place_name,
+      pos: { lat: f.center[1], lng: f.center[0] },
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** GeoJSON polygon approximating a circle of `radiusKm` around `center` (for the delivery radius). */
+export function circlePolygon(center: LatLng, radiusKm: number, steps = 72): GeoJSON.Feature<GeoJSON.Polygon> {
+  const coords: [number, number][] = [];
+  const dLat = radiusKm / 110.574;
+  const dLng = radiusKm / (111.32 * Math.cos((center.lat * Math.PI) / 180));
+  for (let i = 0; i <= steps; i++) {
+    const t = (i / steps) * 2 * Math.PI;
+    coords.push([center.lng + dLng * Math.cos(t), center.lat + dLat * Math.sin(t)]);
+  }
+  return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [coords] } };
+}

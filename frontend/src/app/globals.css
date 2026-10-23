@@ -70,6 +70,13 @@
   --shop-r-card: 8px;
   --shop-r-sheet: 20px;
   --shop-r-pill: 999px;
+  /* Status colours for delivery UI (badges, fee, availability) */
+  --shop-success: #1B7F46;
+  --shop-success-tint: rgba(27, 127, 70, 0.10);
+  --shop-warning: #B45309;
+  --shop-warning-tint: rgba(180, 83, 9, 0.10);
+  --shop-danger: #C62828;
+  --shop-danger-tint: rgba(198, 40, 40, 0.08);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
@@ -110,6 +117,12 @@
   --shop-surface: #132744;
   --shop-bg: #0A1628;
   --shop-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  --shop-success: #4ADE80;
+  --shop-success-tint: rgba(74, 222, 128, 0.12);
+  --shop-warning: #FBBF24;
+  --shop-warning-tint: rgba(251, 191, 36, 0.12);
+  --shop-danger: #F87171;
+  --shop-danger-tint: rgba(248, 113, 113, 0.12);
 }
 
 /* ═══════ BASE ═══════ */
@@ -318,7 +331,19 @@ input:focus, select:focus, textarea:focus {
 @keyframes pulseSuccess { 0%,100% { box-shadow: 0 0 0 0 rgba(16,53,98,.3); } 50% { box-shadow: 0 0 0 16px rgba(16,53,98,0); } }
 @keyframes shopFadeUp { from { opacity: 0; transform: translate3d(0, 8px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
 
+@keyframes mapPinDrop { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@keyframes mapPinShadow { 0%,100% { transform: scale(1); opacity: .25; } 50% { transform: scale(.6); opacity: .12; } }
+@keyframes mapPulse { 0% { transform: scale(.6); opacity: .55; } 100% { transform: scale(2.4); opacity: 0; } }
+
 .shop-fade-up { animation: shopFadeUp 0.4s ease-out both; }
+.shop-skeleton {
+  background: linear-gradient(90deg, var(--shop-divider) 25%, var(--shop-surface) 50%, var(--shop-divider) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+.map-pin-bounce { animation: mapPinDrop 1s ease-in-out infinite; }
+.map-pin-shadow { animation: mapPinShadow 1s ease-in-out infinite; }
+.map-pulse { animation: mapPulse 1.8s ease-out infinite; }
 .shop-press { transition: transform 0.18s ease, box-shadow 0.18s ease; }
 .shop-press:active { transform: scale(0.97); }
 @media (hover: hover) {
@@ -327,7 +352,7 @@ input:focus, select:focus, textarea:focus {
   .shop-icon-pop:hover { transform: scale(1.08); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .shop-fade-up, .shop-press, .shop-icon-pop { animation: none !important; transition: none !important; }
+  .shop-fade-up, .shop-press, .shop-icon-pop, .shop-skeleton, .map-pin-bounce, .map-pin-shadow, .map-pulse { animation: none !important; transition: none !important; }
 }
 
 /* ═══════ SHOP SCROLL UTILITY ═══════ */
