@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
-import type { Product, Category, AdminUser } from "@/types";
+import type { Product, Category, Merchant, AdminUser } from "@/types";
 import { VariantsEditor, type VariantGroup } from "@/components/admin/VariantsEditor";
 
 export default function ProductsPage() {
@@ -12,14 +12,16 @@ export default function ProductsPage() {
   const adminUser = user as AdminUser;
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [shops, setShops] = useState<Merchant[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState(0);
+  const [filterShop, setFilterShop] = useState(0);
   const [modal, setModal] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState({ show: false, msg: "", ok: true });
-  const [form, setForm] = useState({ name: "", description: "", base_price: 0, compare_price: 0, stock: 0, sku: "", icon_emoji: "", delivery_days: 3, category_id: 0, is_active: true, is_featured: false });
+  const [form, setForm] = useState({ ...EMPTY_FORM });
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [variants, setVariants] = useState<VariantGroup[]>([]);
@@ -32,23 +34,35 @@ export default function ProductsPage() {
       const params: Record<string, any> = { page_size: 50 };
       if (search) params.search = search;
       if (filterCat) params.category_id = filterCat;
-      const [p, c] = await Promise.all([api.get<Product[]>("/products", { params }), api.get<Category[]>("/categories")]);
-      setProducts(p); setCategories(c);
+      // The backend scopes merchants to their own shop; the shop filter is super-admin only
+      if (isSuperAdmin && filterShop) params.merchant_id = filterShop;
+      params.include_inactive = true;
+      const [p, c, m] = await Promise.all([
+        api.get<Product[]>("/products", { params }),
+        api.get<Category[]>("/categories"),
+        isSuperAdmin ? api.get<Merchant[]>("/merchants") : Promise.resolve<Merchant[]>([]),
+      ]);
+      setProducts(p); setCategories(c); if (isSuperAdmin) setShops(m);
     } catch { flash("Failed to load", false); }
     finally { setLoading(false); }
   }
 
   useEffect(() => { load(); }, []);
-  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [search, filterCat]);
+  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [search, filterCat, filterShop]);
   useAutoRefresh(load, { interval: 30000 });
 
+  // Category options: global ones plus those of the shop being edited / filtered
+  const catsFor = (shopId: number) => categories.filter(c => !c.merchant_id || !shopId || c.merchant_id === shopId);
+  const shopName = (id: number) => shops.find(s => s.id === id)?.name;
+  const ownShopName = products[0]?.merchant_name;
+
   function openCreate() {
-    setEditId(null); setForm({ name: "", description: "", base_price: 0, compare_price: 0, stock: 0, sku: "", icon_emoji: "", delivery_days: 3, category_id: 0, is_active: true, is_featured: false });
+    setEditId(null); setForm({ ...EMPTY_FORM, merchant_id: isSuperAdmin ? filterShop : 0 });
     setFiles([]); setPreviews([]); setVariants([]); setModal(true);
   }
 
   async function openEdit(p: Product) {
-    setEditId(p.id); setForm({ name: p.name, description: p.description || "", base_price: p.base_price, compare_price: p.compare_price || 0, stock: p.stock, sku: p.sku || "", icon_emoji: p.icon_emoji || "", delivery_days: p.delivery_days || 3, category_id: p.category_id || 0, is_active: p.is_active, is_featured: p.is_featured || false });
+    setEditId(p.id); setForm({ name: p.name, description: p.description || "", base_price: p.base_price, compare_price: p.compare_price || 0, stock: p.stock, sku: p.sku || "", icon_emoji: p.icon_emoji || "", delivery_days: p.delivery_days || 3, category_id: p.category_id || 0, merchant_id: p.merchant_id, is_active: p.is_active, is_featured: p.is_featured || false });
     setPreviews(p.primary_image ? [p.primary_image] : []); setFiles([]); setVariants([]); setModal(true);
 
     // Fetch full product with variants
@@ -80,6 +94,7 @@ export default function ProductsPage() {
 
   async function save() {
     if (!form.name.trim()) { flash("Name required", false); return; }
+    if (isSuperAdmin && !form.merchant_id) { flash("Choose the shop this product belongs to", false); return; }
     // Validate variants — every option needs a label
     for (const g of variants) {
       for (const o of g.options) {
@@ -90,7 +105,7 @@ export default function ProductsPage() {
     try {
       let productId = editId;
       if (editId) {
-        await api.patch(`/products/${editId}`, form);
+        await api.patch(`/products/${editId}`, isSuperAdmin ? form : { ...form, merchant_id: undefined });
         // Replace variants on edit
         await api.put(`/products/${editId}/variants`, { variants });
       } else {
@@ -123,7 +138,7 @@ export default function ProductsPage() {
       {toast.show && <div className={`toast ${toast.ok ? "toast-success" : "toast-error"}`}>{toast.msg}</div>}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <div><h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text)" }}>Products</h1><p style={{ fontSize: 13, color: "var(--text-muted)" }}>Manage your catalog</p></div>
+        <div><h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text)" }}>Products</h1><p style={{ fontSize: 13, color: "var(--text-muted)" }}>{isSuperAdmin ? "Every shop's products - each row shows its owner" : `Managing products for ${ownShopName || "your shop"}`}</p></div>
         <button className="btn-primary" onClick={openCreate}>+ Add Product</button>
       </div>
 
@@ -137,9 +152,15 @@ export default function ProductsPage() {
       {/* Filters */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <input className="admin-input" style={{ maxWidth: 260 }} placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} />
-        <select className="admin-input" style={{ maxWidth: 180 }} value={filterCat} onChange={e => setFilterCat(+e.target.value)}>
+        {isSuperAdmin && (
+          <select className="admin-input" style={{ maxWidth: 220 }} value={filterShop} onChange={e => { setFilterShop(+e.target.value); setFilterCat(0); }}>
+            <option value={0}>All Shops</option>
+            {shops.map(s => <option key={s.id} value={s.id}>{s.icon_emoji} {s.name} ({s.product_count ?? 0})</option>)}
+          </select>
+        )}
+        <select className="admin-input" style={{ maxWidth: 200 }} value={filterCat} onChange={e => setFilterCat(+e.target.value)}>
           <option value={0}>All Categories</option>
-          {categories.map(c => <option key={c.id} value={c.id}>{c.icon_emoji} {c.name}</option>)}
+          {catsFor(filterShop).map(c => <option key={c.id} value={c.id}>{c.icon_emoji} {c.name}</option>)}
         </select>
       </div>
 
@@ -147,13 +168,22 @@ export default function ProductsPage() {
       <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Loading...</div> : (
           <table className="admin-table">
-            <thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Active</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Image</th><th>Name</th>{isSuperAdmin && <th>Shop</th>}<th>Category</th><th>Price</th><th>Stock</th><th>Active</th><th>Actions</th></tr></thead>
             <tbody>
-              {products.length === 0 ? <tr><td colSpan={7} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>No products found</td></tr> :
+              {products.length === 0 ? <tr><td colSpan={isSuperAdmin ? 8 : 7} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>No products found</td></tr> :
               products.map(p => (
                 <tr key={p.id}>
                   <td>{p.primary_image ? <img src={p.primary_image} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }} /> : <div style={{ width: 44, height: 44, borderRadius: 8, background: "var(--bg-secondary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{p.icon_emoji || "📦"}</div>}</td>
                   <td><p style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</p>{p.sku && <p style={{ fontSize: 10, fontFamily: "monospace", color: "var(--text-muted)" }}>{p.sku}</p>}</td>
+                  {isSuperAdmin && (
+                    <td>
+                      <button onClick={() => { setFilterShop(p.merchant_id); setFilterCat(0); }} title="Show only this shop's products" style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 14, padding: "3px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--text)", display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
+                        {p.merchant_logo_url ? <img src={p.merchant_logo_url} alt="" style={{ width: 16, height: 16, borderRadius: "50%", objectFit: "cover" }} /> : <span>{p.merchant_icon || "🏪"}</span>}
+                        {p.merchant_name || `Shop #${p.merchant_id}`}
+                      </button>
+                      {p.merchant_status && p.merchant_status !== "active" && <p style={{ fontSize: 10, color: "var(--warning)", marginTop: 2 }}>shop {p.merchant_status}</p>}
+                    </td>
+                  )}
                   <td>{p.category_name || "—"}</td>
                   <td><span style={{ fontWeight: 600, fontFamily: "monospace" }}>${p.base_price}</span>{p.compare_price && p.compare_price > p.base_price && <span style={{ fontSize: 11, textDecoration: "line-through", color: "var(--text-muted)", marginLeft: 4 }}>${p.compare_price}</span>}</td>
                   <td style={{ color: p.stock === 0 ? "var(--danger)" : p.stock < 5 ? "var(--warning)" : "var(--text)", fontWeight: p.stock < 5 ? 600 : 400 }}>{p.stock}</td>
@@ -176,7 +206,26 @@ export default function ProductsPage() {
                 <div><label style={labelS}>Name *</label><input className="admin-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
                 <div><label style={labelS}>Icon</label><input className="admin-input" style={{ textAlign: "center", fontSize: 18 }} value={form.icon_emoji} onChange={e => setForm({ ...form, icon_emoji: e.target.value })} placeholder="📦" /></div>
               </div>
-              <div><label style={labelS}>Category</label><select className="admin-input" value={form.category_id} onChange={e => setForm({ ...form, category_id: +e.target.value })}><option value={0}>Select</option>{categories.map(c => <option key={c.id} value={c.id}>{c.icon_emoji} {c.name}</option>)}</select></div>
+              <div>
+                <label style={labelS}>Shop (owner) *</label>
+                {isSuperAdmin ? (
+                  <select className="admin-input" value={form.merchant_id} onChange={e => {
+                    const id = +e.target.value;
+                    // Drop a category that belongs to a different shop
+                    const cat = categories.find(c => c.id === form.category_id);
+                    setForm({ ...form, merchant_id: id, category_id: cat?.merchant_id && cat.merchant_id !== id ? 0 : form.category_id });
+                  }}>
+                    <option value={0}>Select a shop...</option>
+                    {shops.map(s => <option key={s.id} value={s.id}>{s.icon_emoji} {s.name}</option>)}
+                  </select>
+                ) : (
+                  <div className="admin-input" style={{ background: "var(--bg-secondary)", color: "var(--text-muted)" }}>🏪 {ownShopName || "Your shop"}</div>
+                )}
+                {isSuperAdmin && editId && form.merchant_id > 0 && form.merchant_id !== products.find(p => p.id === editId)?.merchant_id && (
+                  <p style={{ fontSize: 11, color: "var(--warning)", marginTop: 4 }}>Saving moves this product to {shopName(form.merchant_id)}.</p>
+                )}
+              </div>
+              <div><label style={labelS}>Category</label><select className="admin-input" value={form.category_id} onChange={e => setForm({ ...form, category_id: +e.target.value })}><option value={0}>None</option>{catsFor(isSuperAdmin ? form.merchant_id : 0).map(c => <option key={c.id} value={c.id}>{c.icon_emoji} {c.name}</option>)}</select></div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 <div><label style={labelS}>Price ($) *</label><input type="number" step="0.01" className="admin-input" value={form.base_price || ""} onChange={e => setForm({ ...form, base_price: +e.target.value })} /></div>
                 <div><label style={labelS}>Compare Price ($)</label><input type="number" step="0.01" className="admin-input" value={form.compare_price || ""} onChange={e => setForm({ ...form, compare_price: +e.target.value })} /></div>
@@ -218,5 +267,7 @@ export default function ProductsPage() {
     </div>
   );
 }
+
+const EMPTY_FORM = { name: "", description: "", base_price: 0, compare_price: 0, stock: 0, sku: "", icon_emoji: "", delivery_days: 3, category_id: 0, merchant_id: 0, is_active: true, is_featured: false };
 
 const labelS: React.CSSProperties = { display: "block", fontSize: 11, fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 };
