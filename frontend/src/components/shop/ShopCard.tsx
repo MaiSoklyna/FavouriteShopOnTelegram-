@@ -32,7 +32,8 @@ const initials = (name: string) =>
  * delivery fee always on the card. "rail" is the home-page size; "wide" fills the
  * nearby carousel and adds a Shop now button.
  */
-export function ShopCard({ shop, variant = "rail", selected = false }: { shop: ShopCardData; variant?: "rail" | "wide"; selected?: boolean }) {
+/** `located`: the customer has set a location, so a shop with no distance simply has no map pin yet. */
+export function ShopCard({ shop, variant = "rail", selected = false, located = false }: { shop: ShopCardData; variant?: "rail" | "wide"; selected?: boolean; located?: boolean }) {
   const theme = shop.theme ?? "general";
   const fee = shop.delivery_fee != null ? Number(shop.delivery_fee) : null;
   const known = shop.distance_km != null;
@@ -96,7 +97,7 @@ export function ShopCard({ shop, variant = "rail", selected = false }: { shop: S
           </div>
         ) : (
           <p className="mt-2.5 inline-flex items-center gap-1 text-[12px] font-bold text-navy-500">
-            <Icon name="pin" size={13} strokeWidth={2.2} />Set location for fee &amp; time
+            <Icon name={located ? "truck" : "pin"} size={13} strokeWidth={2.2} />{located ? "Delivery fee shown at checkout" : <>Set location for fee &amp; time</>}
           </p>
         )}
 

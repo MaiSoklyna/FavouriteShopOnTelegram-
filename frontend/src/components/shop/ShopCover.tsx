@@ -18,7 +18,7 @@ export function ShopCover({ url, theme, className = "" }: { url?: string | null;
   if (url) return <img src={url} alt="" loading="lazy" className={`h-full w-full object-cover ${className}`} />;
   const t = THEMES[theme];
   return (
-    <div className={`relative h-full w-full overflow-hidden ${className}`} style={{ background: t.bg, color: t.ink }} aria-hidden="true">
+    <div className={`fos-gen-cover relative h-full w-full overflow-hidden ${className}`} style={{ background: t.bg, color: t.ink }} aria-hidden="true">
       <span className="absolute -right-8 -top-10 h-40 w-40 rounded-full" style={{ background: "rgba(255,255,255,0.45)" }} />
       <span className="absolute -bottom-12 -left-6 h-32 w-32 rounded-full" style={{ background: "rgba(255,255,255,0.3)" }} />
       {t.icons.map((name, i) => {

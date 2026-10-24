@@ -10,8 +10,8 @@ const ICON = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLin
 const TABS = [
   { key: "home", label: "Home", href: "/shop", match: (p: string) => p === "/shop",
     icon: <><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></> },
-  { key: "shop", label: "Shop", href: "/shop/categories", match: (p: string) => /^\/shop\/(categor|search|merchant)/.test(p),
-    icon: <><path d="M3 9l1.5-5h15L21 9" /><path d="M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z" /><path d="M5 11v9h14v-9" /></> },
+  { key: "discover", label: "Discover", href: "/shop/discover", match: (p: string) => /^\/shop\/(discover|categor|search|merchant|collection|nearby)/.test(p),
+    icon: <><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5z" /></> },
   { key: "cart", label: "Cart", href: "/shop/cart", match: (p: string) => p.startsWith("/shop/cart"), icon: null },
   { key: "orders", label: "Orders", href: "/shop/orders", match: (p: string) => p.startsWith("/shop/orders") || p.startsWith("/shop/order"),
     icon: <><path d="M6 2h9l4 4v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" /><path d="M14 2v5h5M9 13h6M9 17h6" /></> },

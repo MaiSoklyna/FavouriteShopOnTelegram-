@@ -70,7 +70,7 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
               {s.image && <div className="absolute inset-0 bg-gradient-to-r from-navy-900/70 via-navy-900/25 to-transparent" />}
               <div className="relative flex h-full flex-col items-start justify-center gap-1 px-5 pb-5">
                 {s.label && <span className="text-[12px] font-bold text-gold-400">{s.label}</span>}
-                <p className="line-clamp-2 max-w-[78%] text-[30px] font-extrabold leading-[34px] tracking-[-0.03em] text-white">{s.title}</p>
+                <p className="line-clamp-2 max-w-[70%] text-[24px] font-extrabold leading-[28px] tracking-[-0.02em] text-white">{s.title}</p>
                 <div className="mt-2">
                   {s.href
                     ? <Link href={s.href} className="fos-press inline-block">{cta}</Link>
