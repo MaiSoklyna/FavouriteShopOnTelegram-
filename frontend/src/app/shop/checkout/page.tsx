@@ -111,6 +111,9 @@ export default function CheckoutPage() {
     // Only the latest request may update the page — an older one (e.g. priced
     // before the pin was set) can come back last on a slow connection.
     const req = ++quoteReq.current;
+    // Drop the old price at once: until the new quote lands the total shows "…" and Place order waits
+    setQuote(null);
+    setQuoteError("");
     fetchQuote(code, choice)
       .then((q) => {
         if (req !== quoteReq.current) return;
