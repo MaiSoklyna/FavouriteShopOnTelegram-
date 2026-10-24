@@ -63,6 +63,20 @@ export const formatKm = (km: number) =>
  */
 export const MAP_STYLE = "mapbox://styles/mapbox/light-v11";
 
+/**
+ * Static map image (no map library) with the customer pin in mango and an
+ * optional shop pin in navy. With both pins the view frames them; with one
+ * it centres on it at street zoom. Null when there is no Mapbox token.
+ */
+export function staticMapUrl(you: LatLng, shop?: LatLng | null, size = "686x300") {
+  if (!MAPBOX_TOKEN) return null;
+  const at = (p: LatLng) => `${p.lng.toFixed(5)},${p.lat.toFixed(5)}`;
+  const base = "https://api.mapbox.com/styles/v1/mapbox/light-v11/static";
+  const tail = `${size}@2x?attribution=false&logo=false&access_token=${MAPBOX_TOKEN}`;
+  if (!shop) return `${base}/${at(you)},15,0/${tail}`;
+  return `${base}/pin-l+ff7a1a(${at(you)}),pin-s-shop+103562(${at(shop)})/auto/${tail}&padding=56,64,48,64`;
+}
+
 /** "10–20 min" from the server's eta window. */
 export const formatEta = (min: number, max: number) => `${min}–${max} min`;
 

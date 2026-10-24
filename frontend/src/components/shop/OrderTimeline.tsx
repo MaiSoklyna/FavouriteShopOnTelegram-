@@ -1,58 +1,89 @@
 import { Icon } from "./Icon";
-const STEPS = [
-  { key: "pending", label: "Ordered", msg: "Your order has been placed" },
-  { key: "confirmed", label: "Confirmed", msg: "Merchant confirmed your order" },
-  { key: "processing", label: "Packaged", msg: "Order is being prepared" },
-  { key: "shipped", label: "Shipped", msg: "Order is on the way" },
-  { key: "delivered", label: "Delivered", msg: "Order delivered successfully" },
-];
+import { formatWhen, headline, progress, trackSteps, type TrackOrder } from "@/lib/orderStatus";
 
-interface OrderTimelineProps {
-  currentStatus: string;
+const TONE = {
+  navy: "bg-grad-hero",
+  mango: "bg-[linear-gradient(135deg,#B54708,#FF7A1A_60%,#FFB547)]",
+  jade: "bg-[linear-gradient(135deg,#05603A,#12B76A)]",
+  ruby: "bg-[linear-gradient(135deg,#912018,#E5484D)]",
+} as const;
+
+/** Big status card at the top of the order page: what's happening now + segmented progress. */
+export function OrderStatusHero({ order, eta }: { order: TrackOrder; eta?: string | null }) {
+  const h = headline(order);
+  const steps = trackSteps(order);
+  const cancelled = order.status === "cancelled";
+  return (
+    <section className={`relative overflow-hidden rounded-hero p-4 text-white shadow-fos-md ${TONE[h.tone]}`}>
+      <span className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/10" aria-hidden />
+      <div className="relative flex items-center gap-3">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-thumb bg-white/15">
+          <Icon name={h.icon} size={24} strokeWidth={2} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-title">{h.title}</h2>
+          <p className="truncate text-[13px] font-medium text-white/80">{h.sub}</p>
+        </div>
+        {eta && !cancelled && order.status !== "delivered" && (
+          <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[12px] font-extrabold text-ink-900">{eta}</span>
+        )}
+      </div>
+      {!cancelled && (
+        <div className="relative mt-4 flex gap-1.5" role="progressbar" aria-label="Order progress"
+          aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={steps.filter((s) => s.state === "done").length}>
+          {steps.map((s) => (
+            <span key={s.key} className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/25">
+              <i className={`block h-full rounded-full bg-white ${s.state === "done" ? "w-full" : s.state === "current" ? "w-1/2 animate-pulse motion-reduce:animate-none" : "w-0"}`} />
+            </span>
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }
 
-export function OrderTimeline({ currentStatus }: OrderTimelineProps) {
-  const stepIdx = STEPS.findIndex((s) => s.key === currentStatus);
-
+/** Vertical tracking timeline: done steps in jade with their time, the current one pulsing mango. */
+export function OrderTimeline({ order }: { order: TrackOrder }) {
+  const steps = trackSteps(order);
   return (
-    <div
-      style={{
-        background: "var(--shop-surface, #FFFFFF)",
-        borderRadius: "var(--shop-r-card, 16px)",
-        padding: 16,
-        boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-      }}
-    >
-      <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--shop-black, #0B0B0F)", marginBottom: 12, marginTop: 0 }}>Order Progress</h3>
-      {STEPS.map((step, i) => {
-        const done = i <= stepIdx;
-        const isCurrent = i === stepIdx;
-        return (
-          <div key={step.key} style={{ display: "flex", gap: 12 }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <div
-                style={{
-                  width: 28, height: 28, borderRadius: "50%",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 12, fontWeight: 700,
-                  background: done ? "var(--shop-primary, #1E6BFF)" : "var(--shop-divider, #ECEEF3)",
-                  color: done ? "#fff" : "var(--shop-muted, #8A8F9C)",
-                  border: isCurrent ? "2px solid var(--shop-primary-dark, #1751C4)" : "none",
-                }}
-              >
-                {done ? <Icon name="check" size={14} strokeWidth={3} /> : i + 1}
+    <section className="rounded-hero bg-white p-4 shadow-fos-sm">
+      <h3 className="mb-3 text-section text-ink-900">Tracking</h3>
+      <ol>
+        {steps.map((s, i) => {
+          const last = i === steps.length - 1;
+          return (
+            <li key={s.key} className="flex gap-3" aria-current={s.state === "current" ? "step" : undefined}>
+              <div className="flex w-8 flex-col items-center">
+                <span className={`relative grid h-8 w-8 shrink-0 place-items-center rounded-full ${
+                  s.state === "done" ? "bg-jade-500 text-white" : s.state === "current" ? "bg-mango-500 text-white" : "bg-surface text-ink-500"}`}>
+                  {s.state === "current" && <span className="absolute inset-0 animate-ping rounded-full bg-mango-500/40 motion-reduce:animate-none" aria-hidden />}
+                  <Icon name={s.state === "done" ? "check" : s.icon} size={16} strokeWidth={s.state === "done" ? 3 : 2} />
+                </span>
+                {!last && <span className={`my-1 w-0.5 flex-1 rounded-full ${s.state === "done" ? "bg-jade-500" : "bg-line"}`} />}
               </div>
-              {i < STEPS.length - 1 && (
-                <div style={{ width: 2, height: 32, background: done ? "var(--shop-primary, #1E6BFF)" : "var(--shop-divider, #ECEEF3)" }} />
-              )}
-            </div>
-            <div style={{ paddingBottom: 8 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: "var(--shop-black, #0B0B0F)", margin: 0 }}>{step.label}</p>
-              <p style={{ fontSize: 11, color: "var(--shop-muted, #8A8F9C)", margin: "2px 0 0" }}>{step.msg}</p>
-            </div>
-          </div>
-        );
-      })}
-    </div>
+              <div className={`min-w-0 flex-1 ${last ? "" : "pb-4"}`}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className={`text-[14px] font-extrabold ${s.state === "todo" ? "text-ink-500" : "text-ink-900"}`}>{s.label}</span>
+                  {s.at && s.state === "done" && <span className="shrink-0 text-[11px] font-semibold tabular-nums text-ink-500">{formatWhen(s.at)}</span>}
+                  {s.state === "current" && <span className="shrink-0 text-[11px] font-extrabold text-[#B54708]">Now</span>}
+                </div>
+                <p className="text-caption text-ink-500">{s.state === "current" && s.waiting ? s.waiting : s.detail}</p>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+/** Thin progress bar for order cards in the list. */
+export function OrderProgress({ order }: { order: TrackOrder }) {
+  const p = progress(order);
+  const done = order.status === "delivered";
+  return (
+    <span className="block h-1.5 overflow-hidden rounded-full bg-surface" aria-hidden>
+      <i className={`block h-full rounded-full transition-[width] duration-300 ${done ? "bg-jade-500" : "bg-mango-500"}`} style={{ width: `${p * 100}%` }} />
+    </span>
   );
 }

@@ -9,14 +9,23 @@ import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { Order } from "@/types";
 import { KhqrPayPanel } from "@/components/shop/KhqrPayPanel";
 import { Icon } from "@/components/shop/Icon";
+import { EmptyState, OrderStatusHero, OrderTimeline, Pill, Skeleton } from "@/components/shop";
+import { awaitingPayment, isPickup, statusLabel } from "@/lib/orderStatus";
+import { formatKm, staticMapUrl, type LatLng } from "@/lib/mapbox";
+import { formatKhr } from "@/lib/currency";
 
-const TIMELINE = [
-  { key: "pending", label: "Ordered", msg: "Your order has been placed" },
-  { key: "confirmed", label: "Confirmed", msg: "Merchant confirmed your order" },
-  { key: "processing", label: "Packaged", msg: "Order is being prepared" },
-  { key: "shipped", label: "Shipped", msg: "Order is on the way" },
-  { key: "delivered", label: "Delivered", msg: "Order delivered successfully" },
-];
+interface ShopInfo {
+  id: number;
+  name: string;
+  logo_url?: string | null;
+  icon_emoji?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+const money = (n: number | string | null | undefined) => `$${Number(n || 0).toFixed(2)}`;
 
 export default function OrderDetailPage() {
   return <Suspense><OrderDetailContent /></Suspense>;
@@ -33,11 +42,12 @@ function OrderDetailContent() {
   const { user, loading: authLoading } = useAuth();
 
   const [order, setOrder] = useState<Order | null>(null);
+  const [shop, setShop] = useState<ShopInfo | null>(null);
+  const [images, setImages] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [showSuccess, setShowSuccess] = useState(placed);
-  const [showItems, setShowItems] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   const [showReview, setShowReview] = useState(false);
@@ -56,6 +66,21 @@ function OrderDetailContent() {
     fetchOrder();
   }, [authLoading, user, fetchOrder]);
   useAutoRefresh(fetchOrder, { interval: 10000 });
+
+  // Shop (name, logo, location, phone) and item photos — once per order, not on every refresh
+  const merchantId = order?.merchant_id;
+  const productKey = (order?.items ?? []).map((i) => i.product_id).filter(Boolean).join(",");
+  useEffect(() => {
+    if (!merchantId) return;
+    api.get<ShopInfo>(`/merchants/${merchantId}`).then(setShop).catch(() => setShop(null));
+  }, [merchantId]);
+  useEffect(() => {
+    if (!productKey) return;
+    const ids = Array.from(new Set(productKey.split(",").map(Number))).slice(0, 8);
+    Promise.all(ids.map((pid) =>
+      api.get<{ primary_image?: string | null }>(`/products/${pid}`).then((p) => [pid, p.primary_image] as const).catch(() => [pid, null] as const),
+    )).then((rows) => setImages(Object.fromEntries(rows.filter(([, url]) => url)) as Record<number, string>));
+  }, [productKey]);
 
   useEffect(() => { if (showSuccess) { const t = setTimeout(() => setShowSuccess(false), 4000); return () => clearTimeout(t); } }, [showSuccess]);
 
@@ -92,373 +117,277 @@ function OrderDetailContent() {
   // Not logged in (e.g. opened in a plain browser without a token) — show the
   // Telegram login prompt rather than a blank screen.
   if (!authLoading && !user) {
-    return (
-      <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
-        <LoginGate><div /></LoginGate>
-      </div>
-    );
+    return <div className="min-h-screen bg-surface"><LoginGate><div /></LoginGate></div>;
   }
 
   if (authLoading || loading) return (
-    <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
-      <div style={{
-        height: 56, display: "flex", alignItems: "center", gap: 12,
-        background: "var(--shop-surface, #FFFFFF)", borderBottom: "1px solid var(--shop-divider, #ECEEF3)",
-        padding: "0 16px",
-      }}>
-        <BackButton />
-        <span style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)" }}>Order Details</span>
+    <div className="min-h-screen bg-surface">
+      <TopBar title="Order" />
+      <div className="flex flex-col gap-3 px-gutter pt-2">
+        <Skeleton className="h-[112px] rounded-hero" />
+        <Skeleton className="h-[200px] rounded-hero" />
+        <Skeleton className="h-[260px] rounded-hero" />
       </div>
-      <div style={{ padding: 16 }}>
-        {[1, 2, 3].map(i => (
-          <div key={i} style={{
-            height: 80, background: "var(--shop-divider, #ECEEF3)",
-            borderRadius: "var(--shop-r-card, 16px)", marginBottom: 12,
-            animation: "pulse 1.5s infinite",
-          }} />
-        ))}
-      </div>
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
     </div>
   );
 
   // Couldn't load the order (bad id, not yours, network) — explain instead of
   // silently bouncing to a blank page.
   if (notFound || !order) return (
-    <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
-      <div style={{
-        height: 56, display: "flex", alignItems: "center", gap: 12,
-        background: "var(--shop-surface, #FFFFFF)", borderBottom: "1px solid var(--shop-divider, #ECEEF3)",
-        padding: "0 16px",
-      }}>
-        <BackButton />
-        <span style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)" }}>Order Details</span>
-      </div>
-      <div style={{ textAlign: "center", padding: "80px 24px" }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12, color: "var(--shop-muted, #8A8F9C)" }}><Icon name="box" size={44} strokeWidth={1.5} /></div>
-        <p style={{ fontSize: 15, fontWeight: 600, color: "var(--shop-black, #0B0B0F)", marginBottom: 6 }}>
-          Order not found
-        </p>
-        <p style={{ fontSize: 13, color: "var(--shop-muted, #8A8F9C)", marginBottom: 20 }}>
-          We couldn&apos;t load this order. It may have been removed, or you may need to reopen it from Telegram.
-        </p>
-        <button onClick={() => router.push("/shop/orders")}
-          style={{
-            padding: "12px 24px", borderRadius: "var(--shop-r-input, 12px)",
-            border: "none", background: "var(--shop-primary, #1E6BFF)",
-            color: "#FFFFFF", fontWeight: 600, fontSize: 14, cursor: "pointer",
-          }}>
-          View My Orders
-        </button>
-      </div>
+    <div className="min-h-screen bg-surface">
+      <TopBar title="Order" />
+      <EmptyState className="mt-6 px-gutter" title="Order not found"
+        action={{ label: "View my orders", onClick: () => router.push("/shop/orders") }} />
+      <p className="-mt-2 px-8 text-center text-caption text-ink-500">
+        It may have been removed, or you may need to reopen it from Telegram.
+      </p>
     </div>
   );
 
-  const stepIdx = TIMELINE.findIndex(s => s.key === order.status);
-  const isCancelled = order.status === "cancelled";
+  const shopName = shop?.name || order.merchant_name || "Shop";
+  const track = { ...order, merchant_name: shopName };
+  const pickup = isPickup(order);
+  const cancelled = order.status === "cancelled";
+  const unpaid = awaitingPayment(order);
+  const you: LatLng | null = order.delivery_latitude != null && order.delivery_longitude != null
+    ? { lat: Number(order.delivery_latitude), lng: Number(order.delivery_longitude) } : null;
+  const shopPoint: LatLng | null = shop?.latitude != null && shop?.longitude != null ? { lat: shop.latitude, lng: shop.longitude } : null;
+  const deliveryFee = Number(order.delivery_fee || 0);
+  const discount = Number(order.discount_amount || 0);
+  const itemCount = (order.items ?? []).reduce((n, i) => n + i.quantity, 0);
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
-      {/* Top Bar */}
-      <div style={{
-        height: 56, display: "flex", alignItems: "center", gap: 12,
-        background: "var(--shop-surface, #FFFFFF)", borderBottom: "1px solid var(--shop-divider, #ECEEF3)",
-        padding: "0 16px", position: "sticky", top: 0, zIndex: 10,
-      }}>
-        <BackButton />
-        <span style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)" }}>
-          Order #{order.order_code}
-        </span>
-      </div>
+    <div className="min-h-screen bg-surface pb-10">
+      <TopBar title="Order" code={order.order_code} pill={
+        <Pill variant={cancelled ? "neutral" : order.status === "delivered" ? "jade" : "mango"} className={cancelled ? "!bg-[#FDECEC] !text-ruby-500" : ""}>
+          {statusLabel(order)}
+        </Pill>
+      } />
 
-      <div style={{ padding: "16px 16px 80px" }}>
-        {showSuccess && (
-          <div style={{
-            background: "#E8F5E9", border: "1px solid #A5D6A7",
-            borderRadius: "var(--shop-r-card, 16px)", padding: 16, marginBottom: 16,
-            display: "flex", alignItems: "center", gap: 12,
-          }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: "#C8E6C9", display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 18, flexShrink: 0,
-            }}>&#10003;</div>
-            <div>
-              <p style={{ fontWeight: 600, fontSize: 14, color: "#2E7D32" }}>Order placed!</p>
-              <p style={{ fontSize: 12, color: "#388E3C" }}>We&apos;ll notify you when confirmed</p>
+      <div className="flex flex-col gap-3 px-gutter pt-2">
+        {showSuccess && !unpaid && (
+          <div className="shop-fade-up flex items-center gap-3 rounded-card bg-[#E7F8EF] p-3.5" role="status">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-jade-500 text-white"><Icon name="check" size={20} strokeWidth={3} /></span>
+            <div className="min-w-0">
+              <div className="text-[14px] font-extrabold text-[#067647]">Order placed!</div>
+              <div className="text-caption text-ink-500">We&apos;ll message you in Telegram as it moves</div>
             </div>
           </div>
         )}
 
-        {/* Unpaid QR order: pay from here */}
-        {order.payment_method === "khqr" && order.payment_status !== "paid" && order.status === "pending" && (
-          <KhqrPayPanel orderId={order.id} total={Number(order.total)} onPaid={fetchOrder} />
-        )}
+        {unpaid && <KhqrPayPanel orderId={order.id} total={Number(order.total)} onPaid={fetchOrder} />}
 
-        {/* Timeline */}
-        {!isCancelled && (
-          <div style={{
-            background: "var(--shop-surface, #FFFFFF)",
-            borderRadius: "var(--shop-r-card, 16px)", padding: 20, marginBottom: 12,
-            boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-          }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--shop-black, #0B0B0F)", marginBottom: 16 }}>
-              Order Progress
-            </h3>
-            {TIMELINE.map((step, i) => {
-              const done = i <= stepIdx;
-              const isCurrent = i === stepIdx;
+        <OrderStatusHero order={track} />
+
+        {/* Where it's going (delivery) or where to collect it (pickup) */}
+        <PlaceCard pickup={pickup} you={you} shopPoint={shopPoint} shop={shop} shopName={shopName}
+          address={order.delivery_address} name={order.delivery_name || order.customer_name}
+          phone={order.delivery_phone || order.customer_phone} distanceKm={order.distance_km} />
+
+        {!cancelled && <OrderTimeline order={track} />}
+
+        {/* Shop + items */}
+        <section className="rounded-hero bg-white p-4 shadow-fos-sm">
+          <header className="mb-1 flex items-center gap-2.5">
+            <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[10px] bg-surface text-[15px]">
+              {shop?.logo_url
+                ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" />
+                : shop?.icon_emoji || <span className="text-[13px] font-extrabold text-navy-700">{shopName[0]?.toUpperCase()}</span>}
+            </span>
+            <button type="button" onClick={() => router.push(`/shop/merchant/${order.merchant_id}`)}
+              className="flex min-w-0 flex-1 items-center gap-1 text-left">
+              <span className="truncate text-[15px] font-extrabold text-ink-900">{shopName}</span>
+              <Icon name="chevron" size={16} className="shrink-0 text-ink-500" />
+            </button>
+            <span className="shrink-0 text-caption text-ink-500">{itemCount} {itemCount === 1 ? "item" : "items"}</span>
+          </header>
+          <ul>
+            {order.items?.map((item) => {
+              const img = item.product_id ? images[item.product_id] : undefined;
               return (
-                <div key={step.key} style={{ display: "flex", gap: 14 }}>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    <div style={{
-                      width: 30, height: 30, borderRadius: "50%",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 12, fontWeight: 700,
-                      background: done ? (isCurrent ? "var(--shop-primary, #1E6BFF)" : "#2E7D32") : "var(--shop-divider, #ECEEF3)",
-                      color: done ? "#FFFFFF" : "var(--shop-muted, #8A8F9C)",
-                      transition: "all 0.3s",
-                    }}>
-                      {done ? <Icon name="check" size={14} strokeWidth={3} /> : i + 1}
-                    </div>
-                    {i < TIMELINE.length - 1 && (
-                      <div style={{
-                        width: 2, height: 32,
-                        background: done ? (isCurrent ? "var(--shop-primary, #1E6BFF)" : "#2E7D32") : "var(--shop-divider, #ECEEF3)",
-                      }} />
-                    )}
+                <li key={item.id} className="flex items-center gap-3 border-t border-line py-2.5 first:border-t-0">
+                  <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-[14px] bg-surface text-ink-500">
+                    {img ? <img src={img} alt="" className="h-full w-full object-cover" /> : <Icon name="box" size={20} />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[14px] font-bold text-ink-900">{item.product_name}</div>
+                    <div className="text-caption tabular-nums text-ink-500">{item.quantity} × {money(item.unit_price)}</div>
                   </div>
-                  <div style={{ paddingBottom: 10 }}>
-                    <p style={{
-                      fontSize: 14, fontWeight: 600,
-                      color: done ? "var(--shop-black, #0B0B0F)" : "var(--shop-muted, #8A8F9C)",
-                    }}>{step.label}</p>
-                    <p style={{ fontSize: 12, color: "var(--shop-muted, #8A8F9C)" }}>{step.msg}</p>
-                  </div>
-                </div>
+                  <span className="shrink-0 text-[14px] font-extrabold tabular-nums text-ink-900">{money(item.subtotal)}</span>
+                </li>
               );
             })}
-          </div>
-        )}
+          </ul>
+        </section>
 
-        {isCancelled && (
-          <div style={{
-            background: "#FFEBEE", border: "1px solid #EF9A9A",
-            borderRadius: "var(--shop-r-card, 16px)", padding: 16, marginBottom: 12,
-            display: "flex", gap: 12, alignItems: "center",
-          }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: "#FFCDD2", display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 16, flexShrink: 0,
-            }}>&#10005;</div>
-            <p style={{ fontWeight: 600, color: "#C62828", fontSize: 14 }}>Order Cancelled</p>
-          </div>
-        )}
-
-        {/* Items */}
-        <div style={{
-          background: "var(--shop-surface, #FFFFFF)",
-          borderRadius: "var(--shop-r-card, 16px)", padding: 16, marginBottom: 12,
-          boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-        }}>
-          <button onClick={() => setShowItems(!showItems)} style={{
-            display: "flex", justifyContent: "space-between", alignItems: "center",
-            width: "100%", background: "none", border: "none", cursor: "pointer",
-          }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--shop-black, #0B0B0F)", margin: 0 }}>
-              Items ({order.items?.length || 0})
-            </h3>
-            <span style={{
-              fontSize: 12, color: "var(--shop-primary, #1E6BFF)", fontWeight: 600,
-            }}>{showItems ? "Hide" : "Show"}</span>
-          </button>
-          {(showItems || (order.items?.length || 0) <= 3) && order.items?.map((item, i) => (
-            <div key={i} style={{
-              display: "flex", justifyContent: "space-between", fontSize: 13,
-              padding: "10px 0",
-              borderTop: "1px solid var(--shop-divider, #ECEEF3)",
-              marginTop: i === 0 ? 10 : 0,
-            }}>
-              <span style={{ color: "var(--shop-text, #4A4E5A)" }}>{item.product_name} x{item.quantity}</span>
-              <span style={{ fontWeight: 600, color: "var(--shop-black, #0B0B0F)" }}>
-                ${Number(item.subtotal).toFixed(2)}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* Price */}
-        <div style={{
-          background: "var(--shop-surface, #FFFFFF)",
-          borderRadius: "var(--shop-r-card, 16px)", padding: 16, marginBottom: 12,
-          boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 10 }}>
-            <span style={{ color: "var(--shop-muted, #8A8F9C)" }}>Subtotal</span>
-            <span style={{ fontWeight: 600, color: "var(--shop-text, #4A4E5A)" }}>
-              ${Number(order.subtotal || order.total).toFixed(2)}
+        {/* Price + payment */}
+        <section className="rounded-hero bg-white p-4 text-[14px] shadow-fos-sm">
+          <Row label="Items" value={money(order.subtotal || order.total)} />
+          <Row label={pickup ? "Pickup" : `Delivery${order.distance_km != null ? ` · ${formatKm(Number(order.distance_km))}` : ""}`}
+            value={deliveryFee > 0 ? money(deliveryFee) : "Free"} tone={deliveryFee > 0 ? undefined : "jade"} />
+          {discount > 0 && <Row label="Discount" value={`−${money(discount)}`} tone="jade" />}
+          <div className="mt-2 flex items-end justify-between border-t border-line pt-3">
+            <span className="text-[15px] font-extrabold text-ink-900">Total</span>
+            <span className="text-right">
+              <span className="block text-[20px] font-extrabold tabular-nums text-ink-900">{money(order.total)}</span>
+              <span className="block text-caption tabular-nums text-ink-500">{formatKhr(Number(order.total))}</span>
             </span>
           </div>
-          {(order.discount_amount || 0) > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 10 }}>
-              <span style={{ color: "var(--shop-muted, #8A8F9C)" }}>Discount</span>
-              <span style={{ fontWeight: 600, color: "#2E7D32" }}>-${Number(order.discount_amount).toFixed(2)}</span>
-            </div>
+          <div className="mt-3 flex items-center gap-2.5 rounded-thumb bg-surface p-2.5">
+            {order.payment_method === "khqr"
+              ? <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-[#E1232E] text-[8px] font-black text-white">KHQR</span>
+              : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-jade-500 text-[14px] font-black text-white">$</span>}
+            <span className="min-w-0 flex-1 text-[13px] font-bold text-ink-900">
+              {order.payment_method === "khqr" ? "ABA KHQR" : pickup ? "Cash at the shop" : "Cash on delivery"}
+            </span>
+            {order.payment_method === "khqr" && (
+              order.payment_status === "paid" ? <Pill variant="jade">Paid</Pill> : !cancelled && <Pill variant="mango">Unpaid</Pill>
+            )}
+          </div>
+          {order.customer_note && (
+            <p className="mt-3 rounded-thumb bg-[#FBF4E4] p-2.5 text-[13px] text-ink-900">
+              <span className="font-bold">Note: </span>{order.customer_note}
+            </p>
           )}
-          <div style={{ height: 1, background: "var(--shop-divider, #ECEEF3)", margin: "10px 0" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontWeight: 700, fontSize: 15, color: "var(--shop-black, #0B0B0F)" }}>Total</span>
-            <span style={{ fontWeight: 700, fontSize: 20, color: "var(--shop-primary, #1E6BFF)" }}>
-              ${Number(order.total).toFixed(2)}
-            </span>
-          </div>
-        </div>
-
-        {/* Address */}
-        <div style={{
-          background: "var(--shop-surface, #FFFFFF)",
-          borderRadius: "var(--shop-r-card, 16px)", padding: 16, marginBottom: 20,
-          boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: "var(--shop-primary-tint, #E8F0FF)",
-              display: "flex", alignItems: "center", justifyContent: "center", color: "var(--shop-primary, #1E6BFF)",
-            }}><Icon name="pin" size={18} /></div>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--shop-black, #0B0B0F)", margin: 0 }}>Delivery</h3>
-          </div>
-          <p style={{ fontSize: 14, fontWeight: 500, color: "var(--shop-black, #0B0B0F)" }}>
-            {order.customer_name || "Customer"}
-          </p>
-          <p style={{ fontSize: 13, color: "var(--shop-muted, #8A8F9C)", marginTop: 4 }}>
-            {order.delivery_address}
-          </p>
-        </div>
+        </section>
 
         {/* Actions */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {order.status === "pending" && (
-            <button onClick={handleCancel} disabled={cancelling}
-              style={{
-                width: "100%", padding: 14,
-                borderRadius: "var(--shop-r-input, 12px)",
-                border: "2px solid #C62828", background: "transparent",
-                color: "#C62828", fontWeight: 600, fontSize: 14,
-                cursor: "pointer", opacity: cancelling ? 0.5 : 1,
-              }}>
-              {cancelling ? "Cancelling..." : "Cancel Order"}
-            </button>
-          )}
+        <div className="flex flex-col gap-2.5">
           {order.status === "delivered" && (
             (order.items?.length || 0) <= 1 ? (
-              <button onClick={() => openReview()}
-                style={{
-                  width: "100%", padding: 14,
-                  borderRadius: 8,
-                  border: "none",
-                  background: "var(--shop-primary)", color: "#FFFFFF",
-                  fontWeight: 500, fontSize: 14, cursor: "pointer",
-                  fontFamily: "'Kantumruy Pro', sans-serif",
-                }}>
-                Write Review
+              <button type="button" onClick={() => openReview()}
+                className="fos-press flex h-[52px] items-center justify-center gap-2 rounded-thumb bg-grad-cta text-[15px] font-extrabold text-white shadow-fos-cta">
+                <Icon name="star" size={18} filled />Rate your order
               </button>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: "var(--shop-text)", fontFamily: "'Kantumruy Pro', sans-serif" }}>
-                  Review your items:
-                </p>
-                {order.items?.map(item => (
-                  <button key={item.id} onClick={() => openReview(item.product_id)}
-                    style={{
-                      width: "100%", padding: "10px 14px",
-                      borderRadius: 8, border: "1px solid var(--shop-divider)",
-                      background: "var(--shop-surface)", color: "var(--shop-primary)",
-                      fontWeight: 500, fontSize: 13, cursor: "pointer",
-                      fontFamily: "'Kantumruy Pro', sans-serif",
-                      textAlign: "left",
-                    }}>
-                    Review: {item.product_name}
-                  </button>
-                ))}
-              </div>
+              <section className="rounded-hero bg-white p-4 shadow-fos-sm">
+                <h3 className="mb-2 text-[14px] font-extrabold text-ink-900">Rate your items</h3>
+                <div className="flex flex-col gap-2">
+                  {order.items?.map(item => (
+                    <button key={item.id} type="button" onClick={() => openReview(item.product_id)}
+                      className="fos-press flex h-11 items-center gap-2 rounded-thumb bg-surface px-3 text-left text-[13px] font-bold text-navy-700">
+                      <Icon name="star" size={16} className="text-gold-700" />
+                      <span className="truncate">{item.product_name}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
             )
           )}
-          <button onClick={() => router.push("/shop/support")}
-            style={{
-              width: "100%", padding: 14,
-              borderRadius: "var(--shop-r-input, 12px)",
-              border: "1.5px solid var(--shop-primary, #1E6BFF)",
-              background: "transparent", color: "var(--shop-primary, #1E6BFF)",
-              fontWeight: 600, fontSize: 14, cursor: "pointer",
-            }}>
-            Need Help?
-          </button>
-        </div>
-
-        {/* Review modal */}
-        {showReview && (
-          <div style={{
-            position: "fixed", inset: 0, zIndex: 50,
-            background: "rgba(11,11,15,0.4)", display: "flex", alignItems: "flex-end",
-          }}>
-            <div style={{
-              width: "100%", background: "var(--shop-surface, #FFFFFF)",
-              borderRadius: "24px 24px 0 0", padding: 24,
-              paddingBottom: "max(24px, env(safe-area-inset-bottom))",
-            }}>
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: "var(--shop-black, #0B0B0F)", marginBottom: 16 }}>
-                Write a Review
-              </h3>
-              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                {[1, 2, 3, 4, 5].map(s => (
-                  <button key={s} onClick={() => setReviewRating(s)} style={{
-                    fontSize: 28, background: "none", border: "none", cursor: "pointer",
-                    color: s <= reviewRating ? "#F59E0B" : "#D1D5DB",
-                  }}>&#9733;</button>
-                ))}
-              </div>
-              <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)} rows={4}
-                placeholder="Share your experience..."
-                style={{
-                  width: "100%", padding: "12px 14px",
-                  borderRadius: "var(--shop-r-input, 12px)",
-                  border: "1.5px solid var(--shop-divider, #ECEEF3)",
-                  background: "var(--shop-bg, #F7F8FB)", color: "var(--shop-black, #0B0B0F)",
-                  fontSize: 14, marginBottom: 16, resize: "vertical",
-                }} />
-              <button onClick={handleReview} disabled={submittingReview}
-                style={{
-                  width: "100%", padding: 14,
-                  borderRadius: "var(--shop-r-input, 12px)",
-                  border: "none", background: "var(--shop-primary, #1E6BFF)",
-                  color: "#FFFFFF", fontWeight: 600, fontSize: 14,
-                  cursor: "pointer", opacity: submittingReview ? 0.5 : 1, marginBottom: 8,
-                }}>
-                {submittingReview ? "Submitting..." : "Submit Review"}
+          <div className="flex gap-2.5">
+            <button type="button" onClick={() => router.push("/shop/support")}
+              className="fos-press flex h-12 flex-1 items-center justify-center gap-2 rounded-thumb bg-white text-[14px] font-extrabold text-navy-700 shadow-fos-sm">
+              <Icon name="chat" size={18} />Need help?
+            </button>
+            {order.status === "pending" && (
+              <button type="button" onClick={handleCancel} disabled={cancelling}
+                className="fos-press h-12 flex-1 rounded-thumb bg-white text-[14px] font-extrabold text-ruby-500 shadow-fos-sm disabled:opacity-50">
+                {cancelling ? "Cancelling…" : "Cancel order"}
               </button>
-              <button onClick={() => setShowReview(false)} style={{
-                width: "100%", padding: 10, background: "none", border: "none",
-                color: "var(--shop-muted, #8A8F9C)", cursor: "pointer", fontSize: 13,
-              }}>Cancel</button>
-            </div>
+            )}
           </div>
-        )}
+          <p className="text-center text-caption text-ink-500">Updates every few seconds · you&apos;ll also get Telegram messages</p>
+        </div>
       </div>
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
+
+      {/* Review sheet */}
+      {showReview && (
+        <div className="fixed inset-0 z-50 flex items-end bg-navy-900/40" onClick={() => setShowReview(false)}>
+          <div className="w-full rounded-t-sheet bg-white p-5 pb-[max(20px,env(safe-area-inset-bottom))]" onClick={(e) => e.stopPropagation()}>
+            <span className="mx-auto mb-4 block h-1 w-10 rounded-full bg-line" aria-hidden />
+            <h3 className="text-title text-ink-900">How was it?</h3>
+            <div className="my-4 flex justify-center gap-2" role="radiogroup" aria-label="Rating">
+              {[1, 2, 3, 4, 5].map(s => (
+                <button key={s} type="button" role="radio" aria-checked={s === reviewRating} aria-label={`${s} star${s > 1 ? "s" : ""}`}
+                  onClick={() => setReviewRating(s)}
+                  className={`fos-press grid h-12 w-12 place-items-center rounded-full ${s <= reviewRating ? "bg-[#FBF4E4] text-[#F59E0B]" : "bg-surface text-line"}`}>
+                  <Icon name="star" size={26} filled />
+                </button>
+              ))}
+            </div>
+            <textarea value={reviewComment} onChange={e => setReviewComment(e.target.value)} rows={4}
+              placeholder="Share your experience…"
+              className="w-full resize-none rounded-thumb border border-line bg-surface p-3 text-[14px] text-ink-900 outline-none focus:border-navy-500" />
+            <button type="button" onClick={handleReview} disabled={submittingReview}
+              className="fos-press mt-3 h-[52px] w-full rounded-thumb bg-grad-cta text-[15px] font-extrabold text-white shadow-fos-cta disabled:opacity-50">
+              {submittingReview ? "Submitting…" : "Submit review"}
+            </button>
+            <button type="button" onClick={() => setShowReview(false)} className="mt-1 h-11 w-full text-[13px] font-bold text-ink-500">Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function BackButton() {
+function TopBar({ title, code, pill }: { title: string; code?: string; pill?: React.ReactNode }) {
   const router = useRouter();
   return (
-    <button onClick={() => router.back()} style={{
-      width: 36, height: 36, borderRadius: "50%",
-      background: "var(--shop-bg, #F7F8FB)", border: "none",
-      cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: 16, color: "var(--shop-black, #0B0B0F)", flexShrink: 0,
-    }}>&#8592;</button>
+    <div className="sticky top-0 z-10 flex items-center gap-3 bg-surface/90 px-gutter pb-3 pt-5 backdrop-blur">
+      <button type="button" onClick={() => router.back()} aria-label="Back"
+        className="fos-press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-ink-900 shadow-fos-sm">
+        <Icon name="back" size={20} strokeWidth={2} />
+      </button>
+      <div className="min-w-0 flex-1">
+        <h1 className="truncate text-[20px] font-extrabold leading-6 text-ink-900">{title}</h1>
+        {code && <p className="truncate font-mono text-[12px] font-semibold text-ink-500">{code}</p>}
+      </div>
+      {pill}
+    </div>
+  );
+}
+
+function Row({ label, value, tone }: { label: string; value: string; tone?: "jade" }) {
+  return (
+    <div className="flex justify-between py-1">
+      <span className="text-ink-500">{label}</span>
+      <span className={`font-bold tabular-nums ${tone === "jade" ? "text-[#067647]" : "text-ink-900"}`}>{value}</span>
+    </div>
+  );
+}
+
+/** Map thumbnail + address: the drop-off pin (with the shop) for delivery, the shop for pickup. */
+function PlaceCard({ pickup, you, shopPoint, shop, shopName, address, name, phone, distanceKm }: {
+  pickup: boolean; you: LatLng | null; shopPoint: LatLng | null; shop: ShopInfo | null; shopName: string;
+  address?: string | null; name?: string | null; phone?: string | null; distanceKm?: number | null;
+}) {
+  const focus = pickup ? shopPoint : you;
+  const src = focus ? staticMapUrl(focus, pickup ? null : shopPoint, "686x260") : null;
+  return (
+    <section className="overflow-hidden rounded-hero bg-white shadow-fos-sm">
+      {focus && (
+        <div className="relative h-[130px] bg-[#E9EEF5]">
+          {src && <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+          {(pickup || !shopPoint) && (
+            <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full drop-shadow" width="34" height="34" viewBox="0 0 24 24" aria-hidden>
+              <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7z" fill={pickup ? "#103562" : "#FF7A1A"} /><circle cx="12" cy="9" r="2.6" fill="#fff" />
+            </svg>
+          )}
+          {!pickup && distanceKm != null && (
+            <span className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[12px] font-extrabold text-ink-900 shadow-fos-sm">
+              <Icon name="truck" size={13} strokeWidth={2.2} />{formatKm(Number(distanceKm))} from {shopName}
+            </span>
+          )}
+        </div>
+      )}
+      <div className="flex items-center gap-3 p-3.5">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-surface text-navy-700">
+          <Icon name={pickup ? "store" : "pin"} size={20} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[14px] font-extrabold text-ink-900">{pickup ? `Pick up at ${shopName}` : name || "Delivery"}</div>
+          <div className="line-clamp-2 text-caption text-ink-500">
+            {pickup ? shop?.address || "Shop address not set" : address || "No address"}
+            {!pickup && phone ? ` · ${phone}` : ""}
+          </div>
+        </div>
+        {pickup && shop?.phone && (
+          <a href={`tel:${shop.phone}`} aria-label={`Call ${shopName}`}
+            className="fos-press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#E7F8EF] text-[#067647]">
+            <Icon name="phone" size={18} />
+          </a>
+        )}
+      </div>
+    </section>
   );
 }

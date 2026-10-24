@@ -380,3 +380,15 @@ input:focus, select:focus, textarea:focus {
 
 .fos-no-scrollbar { scrollbar-width: none; }
 .fos-no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Paid screen: confetti burst + check stroke (handoff "PaidSuccess") */
+@keyframes fosConfetti {
+  0% { transform: translate(0, 0) rotate(0); opacity: 1; }
+  100% { transform: translate(var(--dx), calc(var(--dy) + 160px)) rotate(var(--rot)); opacity: 0; }
+}
+.fos-confetti { animation: fosConfetti 1.4s cubic-bezier(.2, .7, .3, 1) both; }
+@keyframes fosDraw { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+.fos-draw { stroke-dasharray: 24; animation: fosDraw 360ms 160ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .fos-confetti, .fos-draw, .fos-pop { animation: none !important; }
+}

@@ -6,10 +6,11 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
-import { EmptyState, Pill, Skeleton } from "@/components/shop";
+import { EmptyState, KhqrCard, PaidSuccess, Pill, Skeleton } from "@/components/shop";
+import type { KhqrData } from "@/components/shop/Khqr";
 import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote, type DeliveryChoice } from "@/lib/quote";
 import { deleteAddress, listAddresses, saveAddress, type SavedAddress } from "@/lib/addresses";
-import { MAPBOX_TOKEN, distanceKm, formatEta, formatKm, getCurrentPosition, reverseGeocode, type LatLng } from "@/lib/mapbox";
+import { distanceKm, staticMapUrl, formatEta, formatKm, getCurrentPosition, reverseGeocode, type LatLng } from "@/lib/mapbox";
 import { Icon, type IconName } from "@/components/shop/Icon";
 import { formatKhr } from "@/lib/currency";
 import { areaName, useHomeLocation } from "@/lib/useHomeLocation";
@@ -32,18 +33,8 @@ interface ShopInfo {
   delivery_radius_km?: number | null;
 }
 
-interface KhqrData {
-  qr_image?: string;
-  amount?: string | number;
-  deeplink?: string;
-  order_code?: string;
-  expires_in?: number;
-  payment_status?: string;
-}
-
 const ICON = { fill: "none", stroke: "currentColor", strokeWidth: 1.75, strokeLinecap: "round", strokeLinejoin: "round" } as const;
 
-/** Static map image for the address card — no map library needed for a preview. */
 const ADDRESS_LABELS: { label: string; icon: IconName }[] = [
   { label: "Home", icon: "home" },
   { label: "Work", icon: "work" },
@@ -55,12 +46,6 @@ function labelIcon(label: string): IconName {
   return ADDRESS_LABELS.find((l) => l.label.toLowerCase() === label.trim().toLowerCase())?.icon ?? "pin";
 }
 
-function staticMapUrl(p: LatLng) {
-  if (!MAPBOX_TOKEN) return null;
-  const at = `${p.lng.toFixed(5)},${p.lat.toFixed(5)}`;
-  return `https://api.mapbox.com/styles/v1/mapbox/light-v11/static/${at},15,0/686x300@2x?attribution=false&logo=false&access_token=${MAPBOX_TOKEN}`;
-}
-
 export default function CheckoutPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -68,6 +53,8 @@ export default function CheckoutPage() {
   const home = useHomeLocation(!!user);
 
   const [paying, setPaying] = useState(false); // KHQR screen
+  const [paid, setPaid] = useState(false); // every QR order paid: the success moment before the order page
+  const [paidSummary, setPaidSummary] = useState<{ amount: number | null; eta: string | null }>({ amount: null, eta: null });
   const [form, setForm] = useState({ name: "", phone: "", address: "", note: "" });
   const [payment, setPayment] = useState<"cod" | "khqr">("cod");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -276,7 +263,7 @@ export default function CheckoutPage() {
       setQrIndex(next);
       loadQr(qrOrderIds[next]);
     } else {
-      router.replace(`/shop/order/${qrOrderIds[0]}?placed=true`);
+      setPaid(true);
     }
   }
 
@@ -353,6 +340,11 @@ export default function CheckoutPage() {
         const ids = results.map((r) => r?.data?.order_id).filter(Boolean) as number[];
         setQrOrderIds(ids);
         setQrIndex(0);
+        const one = quote?.orders.length === 1 ? quote.orders[0] : null;
+        setPaidSummary({
+          amount: quote ? Number(quote.totals.total) : null,
+          eta: deliveryType === "delivery" && one?.eta_minutes != null && one.eta_max_minutes != null ? formatEta(one.eta_minutes, one.eta_max_minutes) : null,
+        });
         setPaying(true);
         window.scrollTo({ top: 0 });
         loadQr(ids[0]);
@@ -379,6 +371,14 @@ export default function CheckoutPage() {
     loading: placing,
     visible: !paying && !!user && items.length > 0,
   });
+
+  if (paid) {
+    return (
+      <PaidSuccess amount={paidSummary.amount} eta={paidSummary.eta}
+        note={qrOrderIds.length > 1 ? `${qrOrderIds.length} orders paid` : undefined}
+        onDone={() => router.replace(`/shop/order/${qrOrderIds[0]}?placed=true`)} />
+    );
+  }
 
   if (paying) {
     return (
@@ -453,7 +453,7 @@ export default function CheckoutPage() {
                   />
                 </div>
               ) : (
-                <MapPreview pin={pin} km={km} eta={eta} outOfArea={outOfArea} onOpen={() => setMapOpen(true)} />
+                <MapPreview pin={pin} shop={shopPoint} km={km} eta={eta} outOfArea={outOfArea} onOpen={() => setMapOpen(true)} />
               )}
 
               <div className="flex items-center gap-3 px-3.5 pt-3">
@@ -633,22 +633,37 @@ function TopBar({ onBack }: { onBack: () => void }) {
   );
 }
 
-function MapPreview({ pin, km, eta, outOfArea, onOpen }: { pin: LatLng | null; km: number | null; eta: string | null; outOfArea: boolean; onOpen: () => void }) {
-  const src = pin ? staticMapUrl(pin) : null;
+/**
+ * Address card map. With the shop's location known it frames both pins (you in
+ * mango, the shop in navy) so the distance chip has something to point at;
+ * otherwise it centres on your pin with a pulse.
+ */
+function MapPreview({ pin, shop, km, eta, outOfArea, onOpen }: {
+  pin: LatLng | null; shop: LatLng | null; km: number | null; eta: string | null; outOfArea: boolean; onOpen: () => void;
+}) {
+  const framed = !!pin && !!shop && !outOfArea;
+  const src = pin ? staticMapUrl(pin, framed ? shop : null) : null;
   return (
-    <button type="button" onClick={onOpen} aria-label="Edit location on map" className="relative block h-[150px] w-full overflow-hidden bg-[#E9EEF5]">
+    <button type="button" onClick={onOpen} aria-label="Edit location on map" className="group relative block h-[150px] w-full overflow-hidden bg-[#E9EEF5]">
       {src && <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />}
       {pin ? (
         <>
-          <span className="absolute left-1/2 top-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full bg-mango-500/25 motion-reduce:animate-none" aria-hidden />
-          <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full drop-shadow" width="36" height="36" viewBox="0 0 24 24" aria-hidden>
-            <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7z" fill="#FF7A1A" /><circle cx="12" cy="9" r="2.6" fill="#fff" />
-          </svg>
+          {!framed && (
+            <>
+              <span className="absolute left-1/2 top-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full bg-mango-500/25 motion-reduce:animate-none" aria-hidden />
+              <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full drop-shadow" width="36" height="36" viewBox="0 0 24 24" aria-hidden>
+                <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7z" fill="#FF7A1A" /><circle cx="12" cy="9" r="2.6" fill="#fff" />
+              </svg>
+            </>
+          )}
           {(km != null || outOfArea) && (
-            <span className={`absolute bottom-2.5 left-2.5 rounded-full px-2.5 py-1 text-[12px] font-extrabold shadow-fos-sm ${outOfArea ? "bg-ruby-500 text-white" : "bg-white text-ink-900"}`}>
-              {outOfArea ? "Outside delivery area" : `${formatKm(km!)}${eta ? ` · ${eta}` : ""}`}
+            <span className={`absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-extrabold shadow-fos-sm ${outOfArea ? "bg-ruby-500 text-white" : "bg-white text-ink-900"}`}>
+              {outOfArea ? <><Icon name="alert" size={13} strokeWidth={2.4} />Outside delivery area</> : <><Icon name="truck" size={13} strokeWidth={2.2} />{formatKm(km!)}{eta ? ` · ${eta}` : ""}</>}
             </span>
           )}
+          <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-extrabold text-navy-700 shadow-fos-sm transition-transform group-active:scale-95">
+            <Icon name="edit" size={12} strokeWidth={2.4} />Adjust pin
+          </span>
         </>
       ) : (
         <span className="absolute inset-0 grid place-items-center">
@@ -682,57 +697,35 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: "jad
   );
 }
 
-/** Full-screen KHQR: red-header card, QR, amount, countdown ring; polls until paid. */
+/** Full-screen KHQR on the navy hero: the shared KHQR card, which polls until paid. */
 function KhqrScreen({ data, loading, error, timer, index, count, onRetry, onLater }: {
   data: KhqrData | null; loading: boolean; error: string; timer: number; index: number; count: number;
   onRetry: () => void; onLater: () => void;
 }) {
-  const mmss = `${Math.floor(Math.max(timer, 0) / 60)}:${(Math.max(timer, 0) % 60).toString().padStart(2, "0")}`;
-  const expired = timer <= 0;
-  const C = 2 * Math.PI * 15;
   return (
     <div className="min-h-screen bg-grad-hero px-gutter pb-10 pt-6 text-white">
       <h1 className="text-center text-[20px] font-extrabold">Scan to pay</h1>
       <p className="mt-1 text-center text-caption text-white/70">
         {count > 1 ? `Order ${index + 1} of ${count}${data?.order_code ? ` · ${data.order_code}` : ""}` : "ABA Mobile or any KHQR bank app"}
       </p>
-
-      <div className="mx-auto mt-5 max-w-[340px] overflow-hidden rounded-sheet bg-white text-ink-900 shadow-fos-lg">
-        <div className="flex h-[34px] items-center justify-center bg-[#E1232E] text-[14px] font-extrabold tracking-wide text-white">KHQR</div>
-        <div className="p-4">
-          {loading ? (
-            <Skeleton className="mx-auto h-[260px] w-[260px] rounded-thumb" />
-          ) : data?.qr_image ? (
-            <img src={data.qr_image} alt="KHQR code" className={`mx-auto h-[260px] w-[260px] object-contain transition-opacity ${expired ? "opacity-20" : ""}`} />
-          ) : (
-            <div className="grid h-[260px] place-items-center text-center text-[14px] font-bold text-ruby-500">{error || "Could not create the QR"}</div>
-          )}
-          <div className="mt-3 flex items-center justify-between">
-            <span className="text-[26px] font-extrabold tabular-nums">{data?.amount != null ? `$${data.amount}` : "…"}</span>
-            {data && (
-              <span className={`flex items-center gap-1.5 text-[13px] font-extrabold tabular-nums ${expired ? "text-ruby-500" : "text-ink-900"}`}>
-                <svg width="28" height="28" viewBox="0 0 36 36" aria-hidden>
-                  <circle cx="18" cy="18" r="15" fill="none" stroke="#E3E8EF" strokeWidth="4" />
-                  <circle cx="18" cy="18" r="15" fill="none" stroke="#FF7A1A" strokeWidth="4" strokeLinecap="round" transform="rotate(-90 18 18)"
-                    strokeDasharray={C} strokeDashoffset={C * (1 - Math.max(timer, 0) / 900)} />
-                </svg>
-                {expired ? "Expired" : mmss}
-              </span>
-            )}
-          </div>
-          {data && !expired && <p className="mt-1 text-caption text-ink-500">Waiting for payment — this updates by itself</p>}
+      {count > 1 && (
+        <div className="mx-auto mt-3 flex max-w-[200px] gap-1.5" aria-hidden>
+          {Array.from({ length: count }, (_, i) => (
+            <span key={i} className={`h-1 flex-1 rounded-full ${i < index ? "bg-jade-500" : i === index ? "bg-white" : "bg-white/25"}`} />
+          ))}
         </div>
+      )}
+
+      <div className="mt-5">
+        <KhqrCard data={data} loading={loading} error={error} timer={timer} onRetry={onRetry} />
       </div>
 
-      <div className="mx-auto mt-5 flex max-w-[340px] flex-col gap-2.5">
-        {data?.deeplink && !expired && (
-          <a href={data.deeplink} className="fos-press flex h-[52px] items-center justify-center rounded-thumb bg-grad-promo text-[15px] font-extrabold text-white">Open ABA Mobile</a>
-        )}
-        {(expired || (!data && !loading)) && (
-          <button type="button" onClick={onRetry} className="fos-press h-[52px] rounded-thumb bg-white text-[15px] font-extrabold text-navy-700">New QR</button>
-        )}
-        <button type="button" onClick={onLater} className="fos-press h-[52px] rounded-thumb bg-white/10 text-[15px] font-bold text-white">Pay later</button>
-      </div>
+      <p className="mx-auto mt-4 flex max-w-[340px] items-center justify-center gap-1.5 text-center text-caption text-white/70">
+        <Icon name="lock" size={14} />Paid securely through ABA PayWay
+      </p>
+      <button type="button" onClick={onLater} className="fos-press mx-auto mt-3 block h-[52px] w-full max-w-[340px] rounded-thumb bg-white/10 text-[15px] font-bold text-white">
+        Pay later
+      </button>
     </div>
   );
 }

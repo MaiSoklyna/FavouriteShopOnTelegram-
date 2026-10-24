@@ -178,6 +178,14 @@ export interface Order {
   admin_note?: string;
   created_at?: string;
   updated_at?: string;
+  /** Live columns from the delivery/payment migrations */
+  delivery_type?: "delivery" | "pickup" | null;
+  delivery_name?: string | null;
+  delivery_phone?: string | null;
+  delivery_latitude?: number | null;
+  delivery_longitude?: number | null;
+  distance_km?: number | null;
+  paid_at?: string | null;
   items?: OrderItem[];
 }
 

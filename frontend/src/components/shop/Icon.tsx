@@ -34,6 +34,7 @@ const PATHS = {
   back: <path d="M15 18l-6-6 6-6" />,
   chevron: <path d="M9 18l6-6-6-6" />,
   down: <path d="m6 9 6 6 6-6" />,
+  download: <><path d="M12 4v11" /><path d="m7 10 5 5 5-5" /><path d="M5 20h14" /></>,
   map: <><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z" /><path d="M9 4v14M15 6v14" /></>,
   // Category cover art
   laptop: <><rect x="4" y="5" width="16" height="11" rx="1.5" /><path d="M2 19h20" /></>,
