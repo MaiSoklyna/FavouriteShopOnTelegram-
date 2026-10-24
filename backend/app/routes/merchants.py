@@ -31,8 +31,29 @@ NEARBY_PUBLIC_FIELDS = (
     "is_featured", "address", "latitude", "longitude", "delivery_radius_km",
     "min_order_amount", "rating",
 )
+# Fields any visitor may see on a shop. The rest of the row (owner_name, email,
+# telegram_token, telegram_group_id, plan, logo_update_history) is admin-only.
+# phone stays public: the shop page shows it as the shop's contact number.
+PUBLIC_FIELDS = (
+    "id", "name", "slug", "tagline", "description", "icon_emoji", "accent_color", "logo_url",
+    "is_featured", "status", "phone", "fb_page", "instagram", "deep_link_code", "created_at",
+    "address", "latitude", "longitude", "delivery_radius_km", "rating",
+    *DELIVERY_SETTING_FIELDS,
+)
 # ~1° of latitude in km; used to turn the search radius into a bounding box
 KM_PER_DEGREE = 111.0
+
+
+def public_view(merchant: dict) -> dict:
+    return {k: merchant[k] for k in PUBLIC_FIELDS if k in merchant}
+
+
+def sees_private_fields(user: TokenClaims | None, merchant_id: int) -> bool:
+    """Super admin sees every shop's full row; a merchant admin only their own."""
+    if not user:
+        return False
+    return user.is_super_admin or (user.role == Role.MERCHANT_ADMIN and user.merchant_id == merchant_id)
+
 
 # Logo update policy for merchant_admin role: max N updates per rolling window
 LOGO_UPDATE_MAX_PER_WINDOW = 2
@@ -74,7 +95,11 @@ async def list_merchants(
             orders = await db.from_("orders").eq("merchant_id", m["id"]).select("id")
             m["order_count"] = len(orders)
 
-    return merchants
+    return [
+        m if sees_private_fields(user, m["id"])
+        else {**public_view(m), "product_count": m["product_count"], "order_count": m["order_count"]}
+        for m in merchants
+    ]
 
 
 @router.get("/nearby")
@@ -134,12 +159,14 @@ async def nearby_merchants(
 
 
 @router.get("/{merchant_id}")
-async def get_merchant(merchant_id: int):
-    """Get merchant details (public for active merchants)."""
+async def get_merchant(merchant_id: int, user: TokenClaims | None = Depends(get_optional_user)):
+    """Get merchant details. Public visitors see active shops and public fields only."""
     async with SupabaseClient.service_role() as db:
         merchant = await db.from_("merchants").eq("id", merchant_id).select_one()
-        if not merchant:
+        if not merchant or (not (user and user.is_admin) and merchant.get("status") != "active"):
             raise NotFoundError("Merchant", merchant_id)
+        if not sees_private_fields(user, merchant_id):
+            merchant = public_view(merchant)
         products = await db.from_("products").eq("merchant_id", merchant_id).eq("is_active", True).select("id")
         merchant["product_count"] = len(products)
         orders = await db.from_("orders").eq("merchant_id", merchant_id).select("id")
