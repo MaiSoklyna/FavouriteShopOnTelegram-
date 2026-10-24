@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 import { isInTelegram } from "@/lib/telegram";
+import { Icon } from "./Icon";
 
 const BOT_USERNAME = process.env.NEXT_PUBLIC_BOT_USERNAME || "FavouriteOfShop_bot";
 
@@ -49,7 +50,7 @@ function TelegramLoginPrompt() {
   return (
     <div style={{ minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ textAlign: "center", maxWidth: 320 }}>
-        <div style={{ fontSize: 64, marginBottom: 16 }}>🛍️</div>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 16, color: "var(--shop-primary, #1E6BFF)" }}><Icon name="bag" size={56} strokeWidth={1.5} /></div>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--shop-black, #0B0B0F)", marginBottom: 8 }}>
           Welcome to Byme24
         </h2>

@@ -5,11 +5,12 @@ import { useAuth } from "@/providers/AuthProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
 import { api } from "@/lib/api";
 import type { LoyaltyAccount, LoyaltySettings } from "@/types";
+import { Icon, type IconName } from "@/components/shop/Icon";
 
-const TIERS: Record<string, { color: string; gradient: string; label: string; icon: string }> = {
-  bronze: { color: "#CD7F32", gradient: "linear-gradient(135deg, #C67B30 0%, #8B5E2B 100%)", label: "Bronze", icon: "🥉" },
-  silver: { color: "#C0C0C0", gradient: "linear-gradient(135deg, #B0B8C4 0%, #7B8794 100%)", label: "Silver", icon: "🥈" },
-  gold: { color: "#FFD700", gradient: "linear-gradient(135deg, #F5C842 0%, #D4960A 100%)", label: "Gold", icon: "🥇" },
+const TIERS: Record<string, { color: string; gradient: string; label: string; icon: IconName }> = {
+  bronze: { color: "#CD7F32", gradient: "linear-gradient(135deg, #C67B30 0%, #8B5E2B 100%)", label: "Bronze", icon: "trophy" },
+  silver: { color: "#C0C0C0", gradient: "linear-gradient(135deg, #B0B8C4 0%, #7B8794 100%)", label: "Silver", icon: "trophy" },
+  gold: { color: "#FFD700", gradient: "linear-gradient(135deg, #F5C842 0%, #D4960A 100%)", label: "Gold", icon: "trophy" },
 };
 
 interface PointsTransaction { id: number; type: string; points: number; description?: string; created_at: string; }
@@ -39,7 +40,7 @@ export default function RewardsPage() {
 
   if (!user) return <LoginGate><div /></LoginGate>;
   if (loading) return <Page><Skeleton /></Page>;
-  if (!account?.enabled) return <Page><Empty icon="🎁" msg="Rewards program coming soon!" /></Page>;
+  if (!account?.enabled) return <Page><Empty icon="gift" msg="Rewards program coming soon!" /></Page>;
 
   const tier = TIERS[account.tier] || TIERS.bronze;
 
@@ -97,7 +98,7 @@ export default function RewardsPage() {
           <div>
             <p style={{ fontSize: 11, opacity: 0.7, fontWeight: 500, letterSpacing: "0.5px", textTransform: "uppercase" }}>Your Tier</p>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-              <span style={{ fontSize: 28 }}>{tier.icon}</span>
+              <Icon name={tier.icon} size={28} />
               <span style={{ fontSize: 22, fontWeight: 700 }}>{tier.label}</span>
             </div>
           </div>
@@ -131,7 +132,7 @@ export default function RewardsPage() {
           </div>
         ) : (
           <p style={{ fontSize: 12, opacity: 0.85, marginTop: 4, fontWeight: 500 }}>
-            🏆 You reached the top tier!
+            You reached the top tier!
           </p>
         )}
       </div>
@@ -158,7 +159,7 @@ export default function RewardsPage() {
         <span style={{
           fontSize: 22,
           opacity: canRedeem ? 1 : 0.5,
-        }}>{canRedeem ? "🎉" : "🔒"}</span>
+        display: "flex" }}><Icon name={canRedeem ? "gift" : "lock"} size={22} /></span>
       </div>
 
       {/* Pill Tabs */}
@@ -228,7 +229,7 @@ export default function RewardsPage() {
             background: "var(--shop-surface)", borderRadius: "var(--shop-r-card)",
             padding: 32, textAlign: "center", boxShadow: "var(--shop-shadow)",
           }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 8, color: "var(--shop-muted)" }}><Icon name="list" size={32} strokeWidth={1.5} /></div>
             <p style={{ fontSize: 13, color: "var(--shop-muted)" }}>No transactions yet. Start shopping!</p>
           </div>
         ) : (
@@ -335,7 +336,7 @@ export default function RewardsPage() {
                     border: isActive ? "1.5px solid rgba(30,107,255,0.2)" : "1.5px solid transparent",
                     transition: "background 0.2s",
                   }}>
-                    <span style={{ fontSize: 22 }}>{cfg.icon}</span>
+                    <span style={{ color: cfg.color, display: "flex" }}><Icon name={cfg.icon} size={22} strokeWidth={2} /></span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: 13, fontWeight: 600, color: "var(--shop-black)" }}>{cfg.label}</p>
                       <p style={{ fontSize: 11, color: "var(--shop-muted)" }}>{tierBenefitLine(key)}</p>
@@ -380,10 +381,10 @@ function Page({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Empty({ icon, msg }: { icon: string; msg: string }) {
+function Empty({ icon, msg }: { icon: IconName; msg: string }) {
   return (
     <div style={{ textAlign: "center", paddingTop: 80 }}>
-      <div style={{ fontSize: 48, marginBottom: 12 }}>{icon}</div>
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 12, color: "var(--shop-muted)" }}><Icon name={icon} size={44} strokeWidth={1.5} /></div>
       <p style={{ color: "var(--shop-muted)", fontSize: 14 }}>{msg}</p>
     </div>
   );

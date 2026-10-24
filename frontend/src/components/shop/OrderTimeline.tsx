@@ -1,3 +1,4 @@
+import { Icon } from "./Icon";
 const STEPS = [
   { key: "pending", label: "Ordered", msg: "Your order has been placed" },
   { key: "confirmed", label: "Confirmed", msg: "Merchant confirmed your order" },
@@ -39,7 +40,7 @@ export function OrderTimeline({ currentStatus }: OrderTimelineProps) {
                   border: isCurrent ? "2px solid var(--shop-primary-dark, #1751C4)" : "none",
                 }}
               >
-                {done ? "✓" : i + 1}
+                {done ? <Icon name="check" size={14} strokeWidth={3} /> : i + 1}
               </div>
               {i < STEPS.length - 1 && (
                 <div style={{ width: 2, height: 32, background: done ? "var(--shop-primary, #1E6BFF)" : "var(--shop-divider, #ECEEF3)" }} />

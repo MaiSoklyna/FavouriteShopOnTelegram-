@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { Icon } from "./Icon";
 
 interface QrData {
   payment_status: string;
@@ -69,7 +70,7 @@ export function KhqrPayPanel({ orderId, total, onPaid }: { orderId: number; tota
       boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
       border: "1.5px solid #FFB74D", textAlign: "center",
     }}>
-      <p style={{ fontSize: 15, fontWeight: 700, color: "#E65100", margin: 0 }}>⏳ Awaiting payment</p>
+      <p style={{ fontSize: 15, fontWeight: 700, color: "#E65100", margin: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}><Icon name="clock" size={18} strokeWidth={2.2} />Awaiting payment</p>
       <p style={{ fontSize: 13, color: "var(--shop-muted, #8A8F9C)", margin: "6px 0 14px" }}>
         This order goes to the shop once your ABA KHQR payment is received.
       </p>

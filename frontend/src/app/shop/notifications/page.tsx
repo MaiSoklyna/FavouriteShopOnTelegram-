@@ -6,6 +6,7 @@ import { LoginGate } from "@/components/shop/LoginGate";
 import { api } from "@/lib/api";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { Notification } from "@/types";
+import { Icon, type IconName } from "@/components/shop/Icon";
 
 export default function ShopNotificationsPage() {
   const { user } = useAuth();
@@ -34,7 +35,7 @@ function NotificationsContent() {
 
   const unread = notifications.filter(n => !n.is_read).length;
 
-  const typeIcon: Record<string, string> = { promo: "🏷️", order: "📦", system: "⚙️", loyalty: "⭐" };
+  const typeIcon: Record<string, IconName> = { promo: "tag", order: "box", system: "gear", loyalty: "star" };
   const typeColor: Record<string, string> = {
     promo: "#F59E0B",
     order: "var(--shop-primary, #1E6BFF)",
@@ -116,7 +117,7 @@ function NotificationsContent() {
                       ? `2px solid var(--shop-primary, #1E6BFF)`
                       : "1px solid var(--shop-divider, #ECEEF3)",
                   }}>
-                    {typeIcon[n.type] || "📋"}
+                    <Icon name={typeIcon[n.type] || "bell"} size={20} />
                   </div>
 
                   {/* Content */}

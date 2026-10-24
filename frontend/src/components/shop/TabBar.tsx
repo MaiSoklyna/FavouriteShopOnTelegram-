@@ -21,7 +21,8 @@ const TABS = [
 
 /**
  * 84px tab bar: white 86% + blur, 5 tabs, centre Cart raised -22px (56² r20,
- * gradient, mango count badge that bumps when the count changes).
+ * gradient, mango count badge that bumps when the count changes). Active tab:
+ * blue icon + label on a light-blue pill (navy-700 vs ink-500 alone was too close to see).
  */
 export function TabBar() {
   const pathname = usePathname();
@@ -45,8 +46,8 @@ export function TabBar() {
           const active = t.match(pathname);
           if (t.key === "cart") {
             return (
-              <Link key={t.key} href={t.href} aria-label={`Cart${count ? `, ${count} items` : ""}`} className="fos-press relative -mt-[22px] flex w-16 flex-col items-center">
-                <span className="relative grid h-14 w-14 place-items-center rounded-[20px] bg-grad-cta text-white shadow-fos-cta">
+              <Link key={t.key} href={t.href} aria-label={`Cart${count ? `, ${count} items` : ""}`} aria-current={active ? "page" : undefined} className="fos-press relative -mt-[22px] flex w-16 flex-col items-center">
+                <span className={`relative grid h-14 w-14 place-items-center rounded-[20px] bg-grad-cta text-white shadow-fos-cta ${active ? "ring-4 ring-[#DCE7FB]" : ""}`}>
                   <svg width="26" height="26" viewBox="0 0 24 24" {...ICON} aria-hidden>
                     <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" />
                   </svg>
@@ -56,14 +57,16 @@ export function TabBar() {
                     </span>
                   )}
                 </span>
-                <span className={`mt-1 text-[10px] font-bold ${active ? "text-navy-700" : "text-ink-500"}`}>{t.label}</span>
+                <span className={`mt-1 text-[10px] ${active ? "font-extrabold text-navy-500" : "font-bold text-ink-500"}`}>{t.label}</span>
               </Link>
             );
           }
           return (
-            <Link key={t.key} href={t.href} aria-current={active ? "page" : undefined} className={`fos-press flex min-h-[44px] w-16 flex-col items-center gap-0.5 ${active ? "text-navy-700" : "text-ink-500"}`}>
-              <svg width="24" height="24" viewBox="0 0 24 24" {...ICON} aria-hidden>{t.icon}</svg>
-              <span className="text-[10px] font-bold">{t.label}</span>
+            <Link key={t.key} href={t.href} aria-current={active ? "page" : undefined} className={`fos-press flex min-h-[44px] w-16 flex-col items-center gap-0.5 ${active ? "text-navy-500" : "text-ink-500"}`}>
+              <span className={`grid h-7 w-12 place-items-center rounded-full transition-colors duration-200 ${active ? "bg-[#DCE7FB]" : ""}`}>
+                <svg width="24" height="24" viewBox="0 0 24 24" {...ICON} strokeWidth={active ? 2.2 : 1.8} aria-hidden>{t.icon}</svg>
+              </span>
+              <span className={`text-[10px] ${active ? "font-extrabold" : "font-bold"}`}>{t.label}</span>
             </Link>
           );
         })}

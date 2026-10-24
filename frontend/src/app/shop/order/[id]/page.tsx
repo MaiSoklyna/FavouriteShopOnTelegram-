@@ -8,6 +8,7 @@ import { LoginGate } from "@/components/shop/LoginGate";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { Order } from "@/types";
 import { KhqrPayPanel } from "@/components/shop/KhqrPayPanel";
+import { Icon } from "@/components/shop/Icon";
 
 const TIMELINE = [
   { key: "pending", label: "Ordered", msg: "Your order has been placed" },
@@ -134,7 +135,7 @@ function OrderDetailContent() {
         <span style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)" }}>Order Details</span>
       </div>
       <div style={{ textAlign: "center", padding: "80px 24px" }}>
-        <div style={{ fontSize: 48, marginBottom: 12 }}>📦</div>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12, color: "var(--shop-muted, #8A8F9C)" }}><Icon name="box" size={44} strokeWidth={1.5} /></div>
         <p style={{ fontSize: 15, fontWeight: 600, color: "var(--shop-black, #0B0B0F)", marginBottom: 6 }}>
           Order not found
         </p>
@@ -218,7 +219,7 @@ function OrderDetailContent() {
                       color: done ? "#FFFFFF" : "var(--shop-muted, #8A8F9C)",
                       transition: "all 0.3s",
                     }}>
-                      {done ? "✓" : i + 1}
+                      {done ? <Icon name="check" size={14} strokeWidth={3} /> : i + 1}
                     </div>
                     {i < TIMELINE.length - 1 && (
                       <div style={{
@@ -324,8 +325,8 @@ function OrderDetailContent() {
             <div style={{
               width: 36, height: 36, borderRadius: 10,
               background: "var(--shop-primary-tint, #E8F0FF)",
-              display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
-            }}>📍</div>
+              display: "flex", alignItems: "center", justifyContent: "center", color: "var(--shop-primary, #1E6BFF)",
+            }}><Icon name="pin" size={18} /></div>
             <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--shop-black, #0B0B0F)", margin: 0 }}>Delivery</h3>
           </div>
           <p style={{ fontSize: 14, fontWeight: 500, color: "var(--shop-black, #0B0B0F)" }}>

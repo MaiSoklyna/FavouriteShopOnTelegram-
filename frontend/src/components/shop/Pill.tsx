@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Icon } from "./Icon";
 
 type Variant = "neutral" | "jade" | "mango" | "gold" | "solid-mango";
 
@@ -21,6 +22,6 @@ export function Pill({ variant = "neutral", children, className = "" }: { varian
 
 /** "★ 4.8" — pass null to show the neutral "no rating yet" placeholder. */
 export function RatingPill({ rating }: { rating: number | null | undefined }) {
-  if (rating == null) return <Pill variant="neutral">★ —</Pill>;
-  return <Pill variant="gold">★ {Number(rating).toFixed(1)}</Pill>;
+  if (rating == null) return <Pill variant="neutral"><Icon name="star" size={12} filled />—</Pill>;
+  return <Pill variant="gold"><Icon name="star" size={12} filled />{Number(rating).toFixed(1)}</Pill>;
 }

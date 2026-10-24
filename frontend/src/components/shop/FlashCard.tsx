@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Product } from "@/types";
 import { isOutOfStock } from "./OutOfStock";
 import { PriceTag } from "./PriceTag";
+import { Icon } from "./Icon";
 
 /**
  * Flash-deal countdown: three navy boxes (h : m : s). The system stores no
@@ -43,7 +44,7 @@ export function FlashCard({ product }: { product: Product }) {
       <div className="relative h-[128px] w-[128px] overflow-hidden rounded-thumb bg-surface">
         {product.primary_image
           ? <img src={product.primary_image} alt={product.name} loading="lazy" className="h-full w-full object-cover" />
-          : <div className="grid h-full w-full place-items-center text-3xl">{product.icon_emoji || "📦"}</div>}
+          : <div className="grid h-full w-full place-items-center text-3xl">{product.icon_emoji || <Icon name="box" size={32} className="text-line" />}</div>}
         {discount > 0 && (
           <span className="absolute left-1.5 top-1.5 rounded-full bg-mango-500 px-2 py-0.5 text-[11px] font-extrabold text-white">-{discount}%</span>
         )}

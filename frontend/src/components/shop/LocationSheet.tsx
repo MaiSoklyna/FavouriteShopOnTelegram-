@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { areaName, type HomeLocation } from "@/lib/useHomeLocation";
 import type { LatLng } from "@/lib/mapbox";
 import { Skeleton } from "./Skeleton";
+import { Icon } from "./Icon";
 
 const MapPicker = dynamic(() => import("@/components/map/MapPicker"), {
   ssr: false,
@@ -30,7 +31,7 @@ export function LocationSheet({ current, onClose, onConfirm }: Props) {
         <div className="mt-3">
           <MapPicker value={pin} height={280} onChange={(p, addr) => { setPin(p); if (addr) setAddress(addr); }} />
         </div>
-        {address && <p className="mt-2 truncate text-[13px] font-semibold text-ink-900">📍 {address}</p>}
+        {address && <p className="mt-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink-900"><Icon name="pin" size={16} className="text-mango-500" /><span className="truncate">{address}</span></p>}
         <button
           type="button"
           disabled={!pin}

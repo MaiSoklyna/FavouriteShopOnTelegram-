@@ -6,6 +6,8 @@ import { api } from "@/lib/api";
 import { fetchNearbyShops } from "@/lib/addresses";
 import { FREE_DELIVERY_OVER_USD } from "@/lib/currency";
 import { useHomeLocation } from "@/lib/useHomeLocation";
+import { MAPBOX_TOKEN } from "@/lib/mapbox";
+import { SHOP_FILTERS, applyShopFilter, useShopExtras, type ShopFilter } from "@/lib/shopTheme";
 import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
 import {
@@ -14,6 +16,7 @@ import {
   type HeroSlide, type ShopCardData,
 } from "@/components/shop";
 import type { Product, Category, CategoryBanner, Merchant, PromoCode, Notification } from "@/types";
+import { Icon } from "@/components/shop/Icon";
 
 const PAGE_SIZE = 20;
 
@@ -42,6 +45,8 @@ export default function ShopHomePage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [nearby, setNearby] = useState<ShopCardData[] | null>(null);
   const [nearbyLoading, setNearbyLoading] = useState(false);
+  const [shopFilter, setShopFilter] = useState<ShopFilter>("All");
+  const [shopPins, setShopPins] = useState<{ lat: number; lng: number }[]>([]);
 
   useEffect(() => { fetchData(); }, []);
 
@@ -67,10 +72,14 @@ export default function ShopHomePage() {
     fetchNearbyShops(location.lat, location.lng)
       .then((rows) => {
         if (cancelled) return;
+        setShopPins(rows
+          .map((s) => s as { latitude?: number | null; longitude?: number | null })
+          .filter((s) => s.latitude != null && s.longitude != null)
+          .map((s) => ({ lat: Number(s.latitude), lng: Number(s.longitude) })));
         setNearby(rows.map((s) => ({
-          id: s.id, name: s.name, logo_url: s.logo_url, icon_emoji: s.icon_emoji,
+          id: s.id, name: s.name, tagline: s.tagline, logo_url: s.logo_url, icon_emoji: s.icon_emoji,
           distance_km: s.distance_km, can_deliver: s.can_deliver, delivery_fee: s.delivery_fee,
-          is_open: (s as { is_open?: boolean }).is_open,
+          eta_minutes: s.eta_minutes, eta_max_minutes: s.eta_max_minutes, is_open: s.is_open,
         })));
       })
       .catch(() => { if (!cancelled) setNearby(null); })
@@ -145,6 +154,18 @@ export default function ShopHomePage() {
   }
 
   // ── Error ──
+  const explicitlyFeatured = merchants.filter(m => m.is_featured);
+  const featuredShops = explicitlyFeatured.length > 0
+    ? explicitlyFeatured
+    : [...merchants].sort((a, b) => (b.product_count ?? 0) - (a.product_count ?? 0)).slice(0, 3);
+
+  // Shops rail: with a location, only shops we can show distance, time and fee for (nearest first);
+  // without one, the featured shops and a prompt to set it.
+  const baseCards: ShopCardData[] = nearby
+    ?? featuredShops.map(m => ({ id: m.id, name: m.name, tagline: m.tagline, logo_url: m.logo_url, icon_emoji: m.icon_emoji }));
+  // Before the early returns below: hooks must run on every render
+  const extras = useShopExtras(baseCards);
+
   if (loadError && !loading) {
     return (
       <div className="grid min-h-screen place-items-center bg-surface px-6">
@@ -183,11 +204,6 @@ export default function ShopHomePage() {
     .sort((a, b) => (b.product_count ?? 0) - (a.product_count ?? 0) || (a.sort_order ?? 0) - (b.sort_order ?? 0))
     .slice(0, 8);
 
-  const explicitlyFeatured = merchants.filter(m => m.is_featured);
-  const featuredShops = explicitlyFeatured.length > 0
-    ? explicitlyFeatured
-    : [...merchants].sort((a, b) => (b.product_count ?? 0) - (a.product_count ?? 0)).slice(0, 3);
-
   const flashDeals = products.filter(p => p.compare_price && p.compare_price > p.base_price);
 
   // Hero: admin banners first; the old generated slides are the fallback when none are uploaded
@@ -202,8 +218,9 @@ export default function ShopHomePage() {
           : { key: "deals", label: "Hot deals", title: "New every week", cta: "Browse", onClick: () => scrollTo("for-you") },
       ];
 
-  // Shops rail: by distance once there is a location, otherwise the featured shops (no distance known)
-  const shopCards: ShopCardData[] = nearby ?? featuredShops.map(m => ({ id: m.id, name: m.name, logo_url: m.logo_url, icon_emoji: m.icon_emoji }));
+  const enriched = baseCards.map(c => ({ ...c, theme: extras[c.id]?.theme, rating: extras[c.id]?.rating ?? null }));
+  const shopCards = nearby ? applyShopFilter(enriched, shopFilter) : enriched;
+  const delivering = (nearby ?? []).filter(s => s.can_deliver);
   const promo = promos[0];
 
   return (
@@ -224,30 +241,68 @@ export default function ShopHomePage() {
           </section>
         )}
 
-        {/* 5–6 · Flash deals */}
-        {flashDeals.length > 0 && (
-          <section className="mt-[22px]">
-            <SectionHeader title="⚡ Flash" extra={<Countdown />} href="/shop/search" />
-            <div className="fos-no-scrollbar -mx-4 mt-3 flex gap-2.5 overflow-x-auto px-4 pb-1">
-              {flashDeals.slice(0, 8).map(p => <FlashCard key={p.id} product={p} />)}
+        {/* Shops near you (Option A): cards first, the map is one tap away */}
+        {(baseCards.length > 0 || nearbyLoading || location) && (
+          <section id="shops-section" className="mt-6 scroll-mt-4">
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="truncate text-[20px] font-extrabold leading-[26px] tracking-[-0.01em] text-ink-900">{location ? "Shops near you" : "Featured shops"}</h2>
+                <p className="truncate text-[13px] font-semibold text-ink-500">
+                  {!location ? "Set your location to see delivery fees"
+                    : nearbyLoading ? "Finding shops near you…"
+                    : delivering.length > 0 ? `${delivering.length} ${delivering.length === 1 ? "shop delivers" : "shops deliver"} to ${location.area || "you"}`
+                    : `No shops deliver to ${location.area || "this spot"} yet`}
+                </p>
+              </div>
+              {location ? (
+                <Link href="/shop/nearby" className="fos-press flex min-h-[44px] shrink-0 items-center gap-1 text-[13px] font-extrabold text-navy-700">
+                  <Icon name="map" size={16} strokeWidth={2.2} />See map
+                </Link>
+              ) : locationResolved && (
+                <button type="button" onClick={() => setSheetOpen(true)} className="fos-press flex min-h-[44px] shrink-0 items-center gap-1 text-[13px] font-extrabold text-navy-700">
+                  <Icon name="pin" size={16} strokeWidth={2.2} />Set location
+                </button>
+              )}
+            </div>
+
+            {location && (
+              <MapPreview you={location} shops={shopPins} count={nearby?.length ?? 0} loading={nearbyLoading} />
+            )}
+
+            {location && (nearby?.length ?? 0) > 0 && (
+              <div className="fos-no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4" role="radiogroup" aria-label="Filter shops">
+                {SHOP_FILTERS.map(f => (
+                  <button key={f} type="button" role="radio" aria-checked={shopFilter === f} onClick={() => setShopFilter(f)}
+                    className={`fos-press h-9 shrink-0 rounded-full px-3.5 text-[13px] font-extrabold ${shopFilter === f ? "bg-navy-700 text-white" : "border-[1.5px] border-line bg-white text-ink-900"}`}>
+                    {f}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="fos-no-scrollbar -mx-4 mt-3.5 flex snap-x gap-3 overflow-x-auto scroll-px-4 px-4 pb-2">
+              {nearbyLoading
+                ? [0, 1].map(i => <ShopCardSkeleton key={i} />)
+                : shopCards.map(s => <ShopCard key={s.id} shop={s} />)}
+              {!nearbyLoading && location && nearby && shopCards.length === 0 && (
+                <div className="flex h-[120px] w-full flex-col items-center justify-center gap-1 rounded-hero bg-white text-center shadow-fos-sm">
+                  <p className="text-[14px] font-extrabold text-ink-900">{nearby.length ? "No shops match this filter" : "No shops nearby yet"}</p>
+                  <button type="button" onClick={() => (nearby.length ? setShopFilter("All") : setSheetOpen(true))} className="fos-press min-h-[36px] text-[13px] font-bold text-navy-500">
+                    {nearby.length ? "Show all shops" : "Try another location"}
+                  </button>
+                </div>
+              )}
             </div>
           </section>
         )}
 
-        {/* 7 · Shops near you */}
-        {(shopCards.length > 0 || nearbyLoading) && (
-          <section id="shops-section" className="mt-6 scroll-mt-4">
-            <SectionHeader title={location ? "Shops near you" : "Featured shops"} />
+        {/* 5–6 · Flash deals */}
+        {flashDeals.length > 0 && (
+          <section className="mt-[22px]">
+            <SectionHeader title={<span className="flex items-center gap-1"><Icon name="bolt" size={18} filled className="text-mango-500" />Flash</span>} extra={<Countdown />} href="/shop/search" />
             <div className="fos-no-scrollbar -mx-4 mt-3 flex gap-2.5 overflow-x-auto px-4 pb-1">
-              {nearbyLoading
-                ? [0, 1].map(i => <ShopCardSkeleton key={i} />)
-                : shopCards.map(s => <ShopCard key={s.id} shop={s} />)}
+              {flashDeals.slice(0, 8).map(p => <FlashCard key={p.id} product={p} />)}
             </div>
-            {!location && locationResolved && (
-              <button type="button" onClick={() => setSheetOpen(true)} className="fos-press mt-2 flex min-h-[44px] items-center gap-2 text-[13px] font-bold text-navy-700">
-                📍 Set location to sort by distance
-              </button>
-            )}
           </section>
         )}
 
@@ -259,7 +314,7 @@ export default function ShopHomePage() {
               onClick={() => copyPromo(promo.code)}
               className="fos-press flex h-24 w-full items-center gap-3.5 rounded-hero bg-grad-promo px-5 text-left text-white shadow-fos-md"
             >
-              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-thumb bg-white/25 text-2xl">🎟️</span>
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-thumb bg-white/25"><Icon name="ticket" size={24} /></span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[20px] font-extrabold leading-6">
                   {promo.type === "percent" ? `${promo.value}% off` : `$${promo.value} off`}
@@ -271,7 +326,7 @@ export default function ShopHomePage() {
             </button>
           ) : (
             <div className="flex h-24 items-center gap-3.5 rounded-hero bg-grad-promo px-5 text-white shadow-fos-md">
-              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-thumb bg-white/25 text-2xl">🚚</span>
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-thumb bg-white/25"><Icon name="truck" size={24} /></span>
               <span className="text-[20px] font-extrabold leading-6">Free delivery over ${FREE_DELIVERY_OVER_USD}</span>
             </div>
           )}
@@ -304,5 +359,33 @@ export default function ShopHomePage() {
         />
       )}
     </div>
+  );
+}
+
+/** Small static map of you and the nearby shops; tapping opens the full map screen. */
+function MapPreview({ you, shops, count, loading }: {
+  you: { lat: number; lng: number }; shops: { lat: number; lng: number }[]; count: number; loading: boolean;
+}) {
+  const at = (p: { lat: number; lng: number }) => `${p.lng.toFixed(5)},${p.lat.toFixed(5)}`;
+  const overlays = [`pin-l+ff7a1a(${at(you)})`, ...shops.slice(0, 20).map(p => `pin-s-shop+103562(${at(p)})`)].join(",");
+  // A lone pin would zoom to street level, so centre on it at neighbourhood zoom instead
+  const view = shops.length ? "auto" : `${at(you)},13.5,0`;
+  const src = MAPBOX_TOKEN
+    ? `https://api.mapbox.com/styles/v1/mapbox/light-v11/static/${overlays}/${view}/686x240@2x?padding=20,60,110,60&attribution=false&logo=false&access_token=${MAPBOX_TOKEN}`
+    : null;
+  return (
+    <Link href="/shop/nearby" aria-label="Open the map of nearby shops"
+      className="fos-press relative mt-3 block h-[120px] overflow-hidden rounded-hero bg-[#E9EEF5] shadow-fos-sm">
+      {src && <img src={src} alt="" className={`absolute inset-0 h-full w-full object-cover transition-opacity ${loading ? "opacity-60" : ""}`} />}
+      <span className="absolute inset-x-2.5 bottom-2.5 flex items-center gap-2 rounded-full bg-white/95 py-1.5 pl-3 pr-1.5 shadow-fos-sm">
+        <Icon name="map" size={16} strokeWidth={2.2} className="text-navy-700" />
+        <span className="min-w-0 flex-1 truncate text-[13px] font-extrabold text-ink-900">
+          {loading ? "Finding shops near you…" : `${count} ${count === 1 ? "shop" : "shops"} on the map`}
+        </span>
+        <span className="flex h-8 shrink-0 items-center gap-0.5 rounded-full bg-navy-700 px-3 text-[12px] font-extrabold text-white">
+          Open map<Icon name="chevron" size={14} strokeWidth={2.6} />
+        </span>
+      </span>
+    </Link>
   );
 }

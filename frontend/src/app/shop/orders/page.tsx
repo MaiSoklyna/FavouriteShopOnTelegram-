@@ -7,6 +7,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { LoginGate } from "@/components/shop/LoginGate";
 import type { Order } from "@/types";
+import { Icon } from "@/components/shop/Icon";
 
 const TABS = [
   { key: "all", label: "All" },
@@ -137,7 +138,7 @@ export default function OrdersPage() {
             ))}
           </div>
         ) : (
-          <Empty icon="🛍️" message="No orders yet" action="Start Shopping" onAction={() => router.push("/shop")} />
+          <Empty icon={<Icon name="bag" size={44} strokeWidth={1.5} />} message="No orders yet" action="Start Shopping" onAction={() => router.push("/shop")} />
         )}
       </div>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
@@ -145,10 +146,10 @@ export default function OrdersPage() {
   );
 }
 
-function Empty({ icon, message, action, onAction }: { icon: string; message: string; action?: string; onAction?: () => void }) {
+function Empty({ icon, message, action, onAction }: { icon: React.ReactNode; message: string; action?: string; onAction?: () => void }) {
   return (
     <div style={{ textAlign: "center", paddingTop: 60 }}>
-      <div style={{ fontSize: 48, marginBottom: 12 }}>{icon}</div>
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 12, color: "var(--shop-muted, #8A8F9C)" }}>{icon}</div>
       <p style={{ color: "var(--shop-muted, #8A8F9C)", fontSize: 14 }}>{message}</p>
       {action && onAction && (
         <button onClick={onAction} style={{

@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { ProductCard, CategoryIcon } from "@/components/shop";
 import { useCart } from "@/providers/CartProvider";
 import type { Merchant, Product, Category } from "@/types";
+import { Icon } from "@/components/shop/Icon";
 
 export default function MerchantDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -83,7 +84,7 @@ export default function MerchantDetailPage() {
   if (error || !merchant) {
     return (
       <div style={{ minHeight: "100vh", background: "var(--shop-bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center" }}>
-        <div style={{ fontSize: 56, marginBottom: 12 }}>🏪</div>
+        <div style={{ marginBottom: 12, color: "var(--shop-muted)" }}><Icon name="store" size={52} strokeWidth={1.5} /></div>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--shop-black)", marginBottom: 6 }}>{error || "Shop unavailable"}</h2>
         <p style={{ fontSize: 13, color: "var(--shop-muted)", marginBottom: 20 }}>The shop you’re looking for doesn’t exist or is no longer active.</p>
         <button
@@ -258,7 +259,7 @@ export default function MerchantDetailPage() {
       <section style={{ padding: "8px 16px" }}>
         {visibleProducts.length === 0 ? (
           <div style={{ textAlign: "center", padding: "48px 0" }}>
-            <div style={{ fontSize: 48, marginBottom: 10 }}>🛍️</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 10, color: "var(--shop-muted)" }}><Icon name="bag" size={44} strokeWidth={1.5} /></div>
             <p style={{ fontSize: 14, fontWeight: 600, color: "var(--shop-black)" }}>No products yet</p>
             <p style={{ fontSize: 12, color: "var(--shop-muted)", marginTop: 4 }}>Check back soon for new arrivals</p>
           </div>
@@ -282,7 +283,7 @@ export default function MerchantDetailPage() {
           <h2 style={{ fontSize: 14, fontWeight: 700, color: "var(--shop-black)", marginBottom: 10 }}>Contact</h2>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {merchant.phone && (
-              <Link href={`tel:${merchant.phone}`} style={contactPill}>📞 {merchant.phone}</Link>
+              <Link href={`tel:${merchant.phone}`} style={{ ...contactPill, display: "inline-flex", alignItems: "center", gap: 6 }}><Icon name="phone" size={14} />{merchant.phone}</Link>
             )}
             {merchant.fb_page && (
               <a href={merchant.fb_page} target="_blank" rel="noreferrer" style={contactPill}>Facebook</a>

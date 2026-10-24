@@ -1,38 +1,67 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
-import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote } from "@/lib/quote";
+import { EmptyState, Pill, Skeleton } from "@/components/shop";
+import { api } from "@/lib/api";
+import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote, type ShopQuote } from "@/lib/quote";
+import { FREE_DELIVERY_OVER_USD, formatKhr } from "@/lib/currency";
+import { useHomeLocation } from "@/lib/useHomeLocation";
+import { lightHaptic } from "@/lib/haptics";
+import type { CartItem } from "@/types";
+import { Icon } from "@/components/shop/Icon";
+
+interface ShopBrief { id: number; name: string; logo_url?: string | null; icon_emoji?: string | null }
+
+const ICON = { fill: "none", stroke: "currentColor", strokeWidth: 1.75, strokeLinecap: "round", strokeLinejoin: "round" } as const;
 
 export default function CartPage() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { items, total, loading, updateQuantity, removeItem } = useCart();
+  const { user, loading: authLoading } = useAuth();
+  const { items, loading, updateQuantity, removeItem } = useCart();
+  const { location, resolved } = useHomeLocation(!!user);
 
+  const [promoOpen, setPromoOpen] = useState(false);
   const [promoCode, setPromoCode] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoError, setPromoError] = useState("");
   const [promoSuccess, setPromoSuccess] = useState(false);
   const [quote, setQuote] = useState<CartQuote | null>(null);
+  /** Set when a shop in the cart can't deliver to the customer's location. */
+  const [deliveryError, setDeliveryError] = useState("");
+  const [shops, setShops] = useState<Record<number, ShopBrief>>({});
 
-  // Price from the backend — same computation as placing the order
+  // Price from the backend — same computation as placing the order. With a
+  // known location the fee is the real distance fee; without one the backend
+  // returns its default, which we don't show (the pin is set at checkout).
   const refreshQuote = useCallback(async (code: string | null) => {
+    const where = location ? { delivery_type: "delivery" as const, lat: location.lat, lng: location.lng } : undefined;
     try {
-      const q = await fetchQuote(code);
+      const q = await fetchQuote(code, where);
       setQuote(q);
+      setDeliveryError("");
       return q;
-    } catch {
+    } catch (e) {
+      if (where) {
+        // Out of a shop's delivery area: still price the items, flag delivery.
+        setDeliveryError(e instanceof Error ? e.message.replace(/^Delivery unavailable for this location\.\s*/, "") : "");
+        try {
+          const q = await fetchQuote(code);
+          setQuote(q);
+          return q;
+        } catch { /* fall through */ }
+      }
       setQuote(null);
       return null;
     }
-  }, []);
+  }, [location]);
 
-  // Restore an applied code and re-price whenever the cart changes
+  // Restore an applied code and re-price whenever the cart or location changes
   useEffect(() => {
-    if (!user || items.length === 0) return;
+    if (!user || items.length === 0 || !resolved) return;
     const saved = getSavedPromo();
     refreshQuote(saved).then((q) => {
       if (saved && q?.promo?.applied) {
@@ -44,7 +73,20 @@ export default function CartPage() {
         if (q?.promo?.error) setPromoError(q.promo.error);
       }
     });
-  }, [user, items, refreshQuote]);
+  }, [user, items, resolved, refreshQuote]);
+
+  // Shop name + logo for each group header
+  const merchantIds = useMemo(
+    () => Array.from(new Set(items.map((i) => i.merchant_id).filter((id): id is number => id != null))),
+    [items],
+  );
+  useEffect(() => {
+    merchantIds.filter((id) => !shops[id]).forEach((id) => {
+      api.get<ShopBrief>(`/merchants/${id}`)
+        .then((m) => setShops((s) => ({ ...s, [id]: { id, name: m.name, logo_url: m.logo_url, icon_emoji: m.icon_emoji } })))
+        .catch(() => {});
+    });
+  }, [merchantIds, shops]);
 
   const handleApplyPromo = async () => {
     const code = promoCode.trim();
@@ -70,265 +112,256 @@ export default function CartPage() {
     refreshQuote(null);
   };
 
+  if (authLoading) return <LoadingPage />;
   if (!user) return <LoginGate><div /></LoginGate>;
   if (loading) return <LoadingPage />;
-  if (items.length === 0) return <EmptyPage onAction={() => router.push("/shop")} />;
+  if (items.length === 0) {
+    return (
+      <div className="min-h-screen bg-surface px-gutter pt-6">
+        <h1 className="text-display text-ink-900">Cart</h1>
+        <EmptyState className="mt-10" title="Your cart is empty" action={{ label: "Start shopping", href: "/shop" }} />
+      </div>
+    );
+  }
 
+  const groups = groupByShop(items);
+  const quoteFor = (merchantId: number | undefined) => quote?.orders.find((o) => o.merchant_id === merchantId);
+  // Delivery is only priced for real when we know where the customer is.
+  const priced = !!location && !deliveryError;
   const t = quote?.totals;
-  const deliveryFee = Number(t?.delivery_fee ?? 0);
   const discount = Number(t?.discount ?? 0);
+  const total = t ? (priced ? Number(t.total) : Number(t.subtotal) - discount) : null;
+  const itemCount = items.reduce((n, i) => n + i.quantity, 0);
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
-      {/* Top bar */}
-      <div style={{
-        height: 56, display: "flex", alignItems: "center", gap: 12,
-        padding: "0 16px", background: "var(--shop-surface, #FFFFFF)",
-        borderBottom: "1px solid var(--shop-divider, #ECEEF3)",
-        position: "sticky", top: 0, zIndex: 50,
-      }}>
-        <button onClick={() => router.back()} style={{
-          width: 36, height: 36, borderRadius: 10, border: "none",
-          background: "var(--shop-bg, #F7F8FB)", cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 18, color: "var(--shop-black, #0B0B0F)",
-        }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-        </button>
-        <span style={{ flex: 1, fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)" }}>My Cart</span>
-        <span style={{
-          fontSize: 13, fontWeight: 600, color: "var(--shop-primary, #1E6BFF)",
-          background: "var(--shop-primary-tint, #E8F0FF)",
-          padding: "4px 10px", borderRadius: "var(--shop-r-pill, 999px)",
-        }}>
-          {items.length} {items.length === 1 ? "item" : "items"}
-        </span>
-      </div>
+    <div className="min-h-screen bg-surface">
+      <div className="px-gutter pb-[120px] pt-6">
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-display text-ink-900">Cart</h1>
+          <span className="text-caption text-ink-500">{itemCount} {itemCount === 1 ? "item" : "items"}</span>
+        </div>
 
-      <div style={{ padding: "16px 16px 160px" }}>
-        {/* Cart items */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {items.map(item => (
-            <div key={item.id} style={{
-              display: "flex", gap: 14, padding: 14,
-              background: "var(--shop-surface, #FFFFFF)",
-              borderRadius: "var(--shop-r-card, 16px)",
-              boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-            }}>
-              {/* Image */}
-              <div style={{
-                width: 72, height: 72, borderRadius: 12, flexShrink: 0,
-                overflow: "hidden", background: "var(--shop-bg, #F7F8FB)",
-              }}>
-                {item.primary_image ? (
-                  <img src={item.primary_image} alt={item.product_name}
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : (
-                  <div style={{
-                    width: "100%", height: "100%", display: "flex",
-                    alignItems: "center", justifyContent: "center",
-                    fontSize: 24, fontWeight: 700, color: "var(--shop-muted, #8A8F9C)",
-                  }}>
-                    {item.product_name?.[0]?.toUpperCase() || "?"}
-                  </div>
-                )}
-              </div>
+        <DeliveryBar
+          location={location?.area ?? null}
+          error={deliveryError}
+          orders={quote?.orders ?? []}
+          shopName={(id) => shops[id]?.name}
+        />
 
-              {/* Info */}
-              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                <div>
-                  <h3 style={{
-                    fontSize: 14, fontWeight: 600, color: "var(--shop-black, #0B0B0F)",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    margin: 0,
-                  }}>{item.product_name}</h3>
-                  {item.merchant_name && (
-                    <p style={{ fontSize: 12, color: "var(--shop-muted, #8A8F9C)", margin: "2px 0 0" }}>{item.merchant_name}</p>
-                  )}
-                  {Array.isArray(item.selected_variants) && item.selected_variants.length > 0 && (
-                    <p style={{ fontSize: 11, color: "var(--shop-muted, #8A8F9C)", margin: "4px 0 0", display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {(item.selected_variants as Array<{ group_name?: string; label?: string }>).map((sv, i) => (
-                        <span key={i} style={{ background: "var(--shop-bg, #F7F8FB)", padding: "2px 8px", borderRadius: 999, fontWeight: 500 }}>
-                          {sv.group_name ? `${sv.group_name}: ` : ""}{sv.label}
-                        </span>
-                      ))}
-                    </p>
-                  )}
-                </div>
-                <span style={{ fontSize: 15, fontWeight: 700, color: "var(--shop-primary, #1E6BFF)" }}>
-                  ${item.line_total.toFixed(2)}
-                </span>
-              </div>
-
-              {/* Actions column */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "space-between", flexShrink: 0 }}>
-                <button onClick={() => removeItem(item.id)} style={{
-                  background: "none", border: "none", cursor: "pointer",
-                  fontSize: 12, fontWeight: 600, color: "#EF4444",
-                  padding: "2px 0",
-                }}>
-                  Remove
-                </button>
-                {/* Qty stepper */}
-                <div style={{
-                  display: "flex", alignItems: "center",
-                  border: "1px solid var(--shop-divider, #ECEEF3)",
-                  borderRadius: "var(--shop-r-pill, 999px)", overflow: "hidden",
-                }}>
-                  <button onClick={() => updateQuantity(item.id, item.quantity - 1)} style={{
-                    width: 30, height: 30, background: "none", border: "none",
-                    cursor: "pointer", fontSize: 15, color: "var(--shop-muted, #8A8F9C)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>-</button>
-                  <span style={{
-                    width: 28, textAlign: "center", fontWeight: 700,
-                    fontSize: 13, color: "var(--shop-black, #0B0B0F)",
-                  }}>{item.quantity}</span>
-                  <button onClick={() => updateQuantity(item.id, item.quantity + 1)} style={{
-                    width: 30, height: 30, background: "none", border: "none",
-                    cursor: "pointer", fontSize: 15, color: "var(--shop-primary, #1E6BFF)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>+</button>
-                </div>
-              </div>
-            </div>
+        <div className="mt-4 flex flex-col gap-3">
+          {groups.map(({ merchantId, lines }) => (
+            <ShopGroup
+              key={merchantId ?? "none"}
+              shop={merchantId != null ? shops[merchantId] : undefined}
+              fallbackName={lines[0]?.merchant_name}
+              quote={quoteFor(merchantId)}
+              priced={priced}
+              lines={lines}
+              onQty={(line, q) => { lightHaptic(); updateQuantity(line.id, q); }}
+              onRemove={(line) => { lightHaptic(); removeItem(line.id); }}
+            />
           ))}
         </div>
 
-        {/* Promo box */}
-        <div style={{
-          marginTop: 20, padding: 14,
-          background: "var(--shop-surface, #FFFFFF)",
-          borderRadius: "var(--shop-r-card, 16px)",
-          boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-        }}>
-          <p style={{ fontSize: 14, fontWeight: 600, color: "var(--shop-black, #0B0B0F)", margin: "0 0 10px" }}>Promo Code</p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input type="text" value={promoCode} onChange={(e) => setPromoCode(e.target.value)}
-              placeholder="Enter code" disabled={promoSuccess}
-              style={{
-                flex: 1, padding: "10px 14px",
-                borderRadius: "var(--shop-r-input, 12px)",
-                border: "1px solid var(--shop-divider, #ECEEF3)",
-                background: "var(--shop-bg, #F7F8FB)",
-                color: "var(--shop-black, #0B0B0F)", fontSize: 14,
-                outline: "none",
-              }} />
-            {promoSuccess ? (
-              <button onClick={clearPromo}
-                style={{
-                  padding: "10px 18px",
-                  borderRadius: "var(--shop-r-input, 12px)",
-                  border: "1.5px solid #EF4444",
-                  background: "transparent",
-                  color: "#EF4444", fontWeight: 600, fontSize: 13,
-                  cursor: "pointer", whiteSpace: "nowrap",
-                }}>
-                Clear
-              </button>
-            ) : (
-              <button onClick={handleApplyPromo}
-                disabled={promoLoading || !promoCode.trim()}
-                style={{
-                  padding: "10px 18px",
-                  borderRadius: "var(--shop-r-input, 12px)",
-                  border: "none",
-                  background: "var(--shop-primary, #1E6BFF)",
-                  color: "#FFFFFF", fontWeight: 600, fontSize: 13,
-                  cursor: "pointer",
-                  opacity: promoLoading || !promoCode.trim() ? 0.4 : 1,
-                  whiteSpace: "nowrap",
-                }}>
-                {promoLoading ? "..." : "Apply"}
-              </button>
-            )}
+        {/* Promo */}
+        {promoSuccess ? (
+          <div className="mt-3 flex h-14 items-center gap-3 rounded-[18px] bg-[#E7F8EF] px-4">
+            <Icon name="ticket" size={20} className="text-[#067647]" />
+            <span className="flex-1 truncate text-[14px] font-bold text-[#067647]">{quote?.promo?.code ?? promoCode} · −{money(discount)}</span>
+            <button type="button" onClick={clearPromo} className="fos-press h-11 px-2 text-[13px] font-bold text-ruby-500">Remove</button>
           </div>
-          {promoError && <p style={{ color: "#EF4444", fontSize: 12, marginTop: 6, marginBottom: 0 }}>{promoError}</p>}
-          {promoSuccess && <p style={{ color: "#16a34a", fontSize: 12, marginTop: 6, marginBottom: 0 }}>Promo code applied!</p>}
-        </div>
-
-        {/* Summary card */}
-        <div style={{
-          marginTop: 16, padding: 16,
-          background: "var(--shop-surface, #FFFFFF)",
-          borderRadius: "var(--shop-r-card, 16px)",
-          boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-        }}>
-          <Row label="Subtotal" value={t ? money(t.subtotal) : `$${total.toFixed(2)}`} />
-          <Row label="Shipping" value={!t ? "…" : deliveryFee === 0 ? "Free" : money(deliveryFee)} valueColor={t && deliveryFee === 0 ? "#16a34a" : undefined} />
-          {discount > 0 && <Row label={`Discount (${quote?.promo?.code})`} value={`-${money(discount)}`} valueColor="#16a34a" />}
-          <div style={{ height: 1, background: "var(--shop-divider, #ECEEF3)", margin: "12px 0" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ fontWeight: 700, fontSize: 15, color: "var(--shop-black, #0B0B0F)" }}>Total</span>
-            <span style={{ fontWeight: 700, fontSize: 17, color: "var(--shop-primary, #1E6BFF)" }}>{t ? money(t.total) : "…"}</span>
+        ) : promoOpen ? (
+          <div className="mt-3 rounded-[18px] border border-dashed border-gold-400 bg-white p-2">
+            <div className="flex gap-2">
+              <input
+                autoFocus value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => { if (e.key === "Enter") handleApplyPromo(); }}
+                placeholder="Promo code" aria-label="Promo code"
+                className="h-11 min-w-0 flex-1 rounded-md bg-surface px-3 text-[15px] font-semibold uppercase tracking-wide text-ink-900 outline-none placeholder:normal-case placeholder:font-medium placeholder:tracking-normal placeholder:text-ink-500"
+              />
+              <button
+                type="button" onClick={handleApplyPromo} disabled={promoLoading || !promoCode.trim()}
+                className="fos-press h-11 rounded-md bg-navy-700 px-4 text-[14px] font-bold text-white disabled:opacity-40"
+              >{promoLoading ? "…" : "Apply"}</button>
+            </div>
+            {promoError && <p className="px-1 pt-1.5 text-caption text-ruby-500">{promoError}</p>}
           </div>
-        </div>
+        ) : (
+          <button
+            type="button" onClick={() => setPromoOpen(true)}
+            className="fos-press mt-3 flex h-14 w-full items-center gap-3 rounded-[18px] border border-dashed border-gold-400 bg-white px-4 text-left"
+          >
+            <Icon name="ticket" size={20} className="text-gold-700" />
+            <span className="flex-1 text-[14px] font-bold text-ink-900">Promo code</span>
+            <span className="text-ink-500" aria-hidden>→</span>
+          </button>
+        )}
       </div>
 
-      {/* Checkout button - fixed bottom */}
-      <div style={{
-        position: "fixed", bottom: 60, left: 0, right: 0, zIndex: 40,
-        padding: "12px 16px 16px",
-        background: "var(--shop-surface, #FFFFFF)",
-        borderTop: "1px solid var(--shop-divider, #ECEEF3)",
-      }}>
-        <button onClick={() => router.push("/shop/checkout")} style={{
-          width: "100%", padding: "16px",
-          borderRadius: "var(--shop-r-card, 16px)",
-          border: "none",
-          background: "var(--shop-primary, #1E6BFF)",
-          color: "#FFFFFF", fontWeight: 700, fontSize: 15,
-          cursor: "pointer",
-          boxShadow: "0 4px 16px rgba(30,107,255,0.3)",
-        }}>
-          Checkout{t ? <> &middot; {money(t.total)}</> : null}
-        </button>
+      {/* Summary bar — sits above the tab bar */}
+      <div
+        className="fixed inset-x-0 z-[90] rounded-t-hero bg-white shadow-fos-lg"
+        style={{ bottom: "calc(84px + env(safe-area-inset-bottom, 0px))" }}
+      >
+        <div className="mx-auto flex max-w-[640px] items-center gap-3 px-gutter py-3">
+          <div className="min-w-0 flex-1 tabular-nums">
+            <div className="truncate text-caption text-ink-500">
+              {total == null ? "Total" : priced ? `Total · ${formatKhr(total)}` : "Items · delivery at checkout"}
+            </div>
+            <div className="text-[24px] font-extrabold leading-7 text-ink-900">{total == null ? "…" : money(total)}</div>
+          </div>
+          <button
+            type="button" onClick={() => router.push("/shop/checkout")}
+            className="fos-press h-[52px] shrink-0 rounded-thumb bg-grad-cta px-6 text-[15px] font-bold text-white shadow-fos-cta"
+          >
+            Checkout →
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-function Row({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+function groupByShop(items: CartItem[]) {
+  const map = new Map<number | undefined, CartItem[]>();
+  for (const it of items) map.set(it.merchant_id, [...(map.get(it.merchant_id) ?? []), it]);
+  return Array.from(map, ([merchantId, lines]) => ({ merchantId, lines }));
+}
+
+/** Where the order goes + how far each shop is from free delivery. */
+function DeliveryBar({ location, error, orders, shopName }: {
+  location: string | null;
+  error: string;
+  orders: ShopQuote[];
+  shopName: (id: number) => string | undefined;
+}) {
+  const truck = (
+    <svg width="22" height="22" viewBox="0 0 24 24" {...ICON} aria-hidden>
+      <path d="M3 7h11v9H3zM14 10h4l3 3v3h-7" /><circle cx="7" cy="18" r="2" /><circle cx="17" cy="18" r="2" />
+    </svg>
+  );
+
+  if (error) {
+    return (
+      <div className="mt-4 flex items-center gap-3 rounded-card bg-[#FDECEC] p-3.5">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-white text-ruby-500">{truck}</div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-extrabold text-ink-900">Can&apos;t deliver to {location ?? "your location"}</div>
+          <div className="truncate text-caption text-ink-500">{error} · pickup available</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Closest shop to the free-delivery threshold that hasn't reached it yet
+  const pending = orders
+    .map((o) => ({ id: o.merchant_id, left: FREE_DELIVERY_OVER_USD - Number(o.subtotal) }))
+    .filter((o) => o.left > 0)
+    .sort((a, b) => a.left - b.left)[0];
+  const unlocked = orders.length > 0 && !pending;
+  const progress = pending ? Math.max(0.04, 1 - pending.left / FREE_DELIVERY_OVER_USD) : 1;
+  const name = pending && orders.length > 1 ? shopName(pending.id) : undefined;
+
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 10 }}>
-      <span style={{ color: "var(--shop-text, #4A4E5A)" }}>{label}</span>
-      <span style={{ fontWeight: 600, color: valueColor || "var(--shop-black, #0B0B0F)" }}>{value}</span>
+    <div className="mt-4 flex items-center gap-3 rounded-card bg-[#E7F8EF] p-3.5">
+      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-white text-[#067647]">{truck}</div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[13px] font-extrabold text-ink-900">
+          {unlocked
+            ? <span className="text-[#067647]">Free delivery unlocked</span>
+            : pending
+              ? <>+{money(pending.left)}{name ? ` at ${name}` : ""} → <span className="text-[#067647]">Free delivery</span></>
+              : "Delivery"}
+        </div>
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white">
+          <i className="block h-full rounded-full bg-jade-500 transition-[width] duration-300" style={{ width: `${progress * 100}%` }} />
+        </div>
+        <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-ink-500">
+          <Icon name="pin" size={12} strokeWidth={2.2} /><span className="truncate">{location ? `To ${location}` : "Set your location at checkout"}</span>
+        </div>
+      </div>
     </div>
   );
 }
 
-function EmptyPage({ onAction }: { onAction: () => void }) {
+function ShopGroup({ shop, fallbackName, quote, priced, lines, onQty, onRemove }: {
+  shop?: ShopBrief;
+  fallbackName?: string;
+  quote?: ShopQuote;
+  priced: boolean;
+  lines: CartItem[];
+  onQty: (line: CartItem, quantity: number) => void;
+  onRemove: (line: CartItem) => void;
+}) {
+  const name = shop?.name ?? fallbackName ?? "Shop";
+  const fee = quote ? Number(quote.delivery_fee) : null;
+  const km = quote?.distance_km != null ? Number(quote.distance_km) : null;
+
+  let feePill = null;
+  if (quote && Number(quote.subtotal) >= FREE_DELIVERY_OVER_USD) feePill = <Pill variant="jade">Free delivery</Pill>;
+  else if (priced && fee != null) feePill = <Pill variant="jade">{money(fee)}{km != null ? ` · ${km.toFixed(1)} km` : ""}</Pill>;
+  else if (quote) feePill = <Pill variant="neutral">Fee at checkout</Pill>;
+
   return (
-    <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
-      <div style={{
-        height: 56, display: "flex", alignItems: "center", gap: 12,
-        padding: "0 16px", background: "var(--shop-surface, #FFFFFF)",
-        borderBottom: "1px solid var(--shop-divider, #ECEEF3)",
-      }}>
-        <span style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)" }}>My Cart</span>
+    <section className="rounded-hero bg-white p-3.5 shadow-fos-sm">
+      <header className="mb-1 flex items-center gap-2.5">
+        <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-surface text-[14px]">
+          {shop?.logo_url
+            ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" />
+            : shop?.icon_emoji || <span className="text-[12px] font-extrabold text-navy-700">{name[0]?.toUpperCase()}</span>}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[14px] font-extrabold text-ink-900">{name}</span>
+        {feePill}
+      </header>
+      {quote && !quote.is_open && (
+        <div className="mb-1 mt-2"><Pill variant="mango">Closed now · order opens later</Pill></div>
+      )}
+      {quote?.min_order_amount && Number(quote.subtotal) < Number(quote.min_order_amount) && (
+        <div className="mb-1 mt-2"><Pill variant="mango">Min. order {money(quote.min_order_amount)}</Pill></div>
+      )}
+      <div className="divide-y divide-line">
+        {lines.map((line) => <CartLine key={line.id} line={line} onQty={onQty} onRemove={onRemove} />)}
       </div>
-      <div style={{ textAlign: "center", paddingTop: 100 }}>
-        <div style={{
-          width: 72, height: 72, borderRadius: "50%", margin: "0 auto 16px",
-          background: "var(--shop-primary-tint, #E8F0FF)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--shop-primary, #1E6BFF)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
-            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
-          </svg>
-        </div>
-        <p style={{ fontSize: 16, fontWeight: 600, color: "var(--shop-black, #0B0B0F)", margin: "0 0 4px" }}>Your cart is empty</p>
-        <p style={{ fontSize: 13, color: "var(--shop-muted, #8A8F9C)", margin: "0 0 24px" }}>Add items to get started</p>
-        <button onClick={onAction} style={{
-          padding: "12px 32px",
-          background: "var(--shop-primary, #1E6BFF)", color: "#FFFFFF",
-          border: "none", borderRadius: "var(--shop-r-pill, 999px)",
-          fontWeight: 600, fontSize: 14, cursor: "pointer",
-          boxShadow: "0 4px 16px rgba(30,107,255,0.3)",
-        }}>
-          Start Shopping
+    </section>
+  );
+}
+
+function CartLine({ line, onQty, onRemove }: {
+  line: CartItem;
+  onQty: (line: CartItem, quantity: number) => void;
+  onRemove: (line: CartItem) => void;
+}) {
+  const variants = Array.isArray(line.selected_variants)
+    ? (line.selected_variants as Array<{ label?: string }>).map((v) => v.label).filter(Boolean).join(" · ")
+    : "";
+  return (
+    <div className="flex items-center gap-3 py-2">
+      <div className="h-20 w-20 shrink-0 overflow-hidden rounded-thumb bg-surface">
+        {line.primary_image
+          ? <img src={line.primary_image} alt={line.product_name ?? ""} className="h-full w-full object-cover" />
+          : <div className="grid h-full w-full place-items-center text-[24px] font-extrabold text-ink-500">{line.icon_emoji || line.product_name?.[0]?.toUpperCase() || "?"}</div>}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="truncate text-[14px] font-bold text-ink-900">{line.product_name}</div>
+        {variants && <span className="inline-flex h-5 max-w-full self-start truncate rounded-sm bg-surface px-1.5 text-[11px] font-semibold leading-5 text-ink-500">{variants}</span>}
+        <div className="text-[16px] font-extrabold tabular-nums text-ink-900">{money(line.line_total)}</div>
+      </div>
+      <div className="flex h-8 w-24 shrink-0 items-center justify-between rounded-md bg-surface">
+        <button
+          type="button"
+          onClick={() => (line.quantity <= 1 ? onRemove(line) : onQty(line, line.quantity - 1))}
+          aria-label={line.quantity <= 1 ? "Remove" : "Decrease"}
+          className={`fos-press grid h-8 w-8 place-items-center ${line.quantity <= 1 ? "text-ruby-500" : "text-ink-900"}`}
+        >
+          {line.quantity <= 1
+            ? <svg width="16" height="16" viewBox="0 0 24 24" {...ICON} aria-hidden><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
+            : <span className="text-[18px] font-bold leading-none">−</span>}
         </button>
+        <span className="text-[14px] font-extrabold tabular-nums text-ink-900">{line.quantity}</span>
+        <button
+          type="button" onClick={() => onQty(line, line.quantity + 1)} aria-label="Increase"
+          className="fos-press grid h-8 w-8 place-items-center text-[18px] font-bold leading-none text-navy-700"
+        >+</button>
       </div>
     </div>
   );
@@ -336,25 +369,10 @@ function EmptyPage({ onAction }: { onAction: () => void }) {
 
 function LoadingPage() {
   return (
-    <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
-      <div style={{
-        height: 56, display: "flex", alignItems: "center", gap: 12,
-        padding: "0 16px", background: "var(--shop-surface, #FFFFFF)",
-        borderBottom: "1px solid var(--shop-divider, #ECEEF3)",
-      }}>
-        <span style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)" }}>My Cart</span>
-      </div>
-      <div style={{ padding: 16 }}>
-        {[1, 2, 3].map(i => (
-          <div key={i} style={{
-            height: 100, background: "var(--shop-surface, #FFFFFF)",
-            borderRadius: "var(--shop-r-card, 16px)",
-            boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-            marginBottom: 12, animation: "cartPulse 1.5s infinite",
-          }} />
-        ))}
-      </div>
-      <style>{`@keyframes cartPulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
+    <div className="min-h-screen bg-surface px-gutter pt-6">
+      <h1 className="text-display text-ink-900">Cart</h1>
+      <Skeleton className="mt-4 h-[72px] rounded-card" />
+      {[1, 2].map((i) => <Skeleton key={i} className="mt-3 h-[140px] rounded-hero" />)}
     </div>
   );
 }

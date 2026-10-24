@@ -6,6 +6,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
 import { api } from "@/lib/api";
 import type { SellerApplication } from "@/types";
+import { Icon } from "@/components/shop/Icon";
 
 const NAVY = "#103562";
 const GOLD = "#71541A";
@@ -354,7 +355,7 @@ function StepStore({ form, set, logoPreview, uploadingLogo, fileRef, onLogoPick 
       </div>
       {(logoPreview || uploadingLogo) && (
         <p style={{ textAlign: "center", fontSize: 11, color: form.logo_url ? "#1E7A43" : "var(--shop-muted)", marginTop: -8, marginBottom: 12 }}>
-          {uploadingLogo ? "Uploading logo…" : form.logo_url ? "✓ Logo uploaded" : "Tap to add your store logo"}
+          {uploadingLogo ? "Uploading logo…" : form.logo_url ? "Logo uploaded" : "Tap to add your store logo"}
         </p>
       )}
       <style>{`.sp-spin{animation:spin .6s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -433,7 +434,7 @@ function StatusScreen({ app, onBack }: { app: SellerApplication; onBack: () => v
           border: `1px solid ${approved ? "#A7E0BD" : GOLD_LIGHT}`,
           borderRadius: 16, padding: 20, marginBottom: 16, textAlign: "center",
         }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>{approved ? "🎉" : "⏳"}</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 8, color: approved ? "#1E7A43" : GOLD }}><Icon name={approved ? "party" : "clock"} size={36} /></div>
           <p style={{ fontSize: 16, fontWeight: 700, color: approved ? "#1E7A43" : GOLD, margin: 0 }}>
             {approved ? "You're approved!" : "Under review"}
           </p>
@@ -454,7 +455,7 @@ function StatusScreen({ app, onBack }: { app: SellerApplication; onBack: () => v
                   display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700,
                   background: s.done ? "#2E7D32" : (s as any).current ? GOLD : "var(--shop-divider)",
                   color: s.done || (s as any).current ? "#fff" : "var(--shop-muted)",
-                }}>{s.done ? "✓" : i + 1}</div>
+                }}>{s.done ? <Icon name="check" size={14} strokeWidth={3} /> : i + 1}</div>
                 {i < stages.length - 1 && <div style={{ width: 2, height: 28, background: s.done ? "#2E7D32" : "var(--shop-divider)" }} />}
               </div>
               <div style={{ paddingBottom: 14 }}>

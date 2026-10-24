@@ -17,6 +17,7 @@ export { EmptyState } from "./EmptyState";
 export { HeroCarousel, type HeroSlide } from "./HeroCarousel";
 export { FlashCard, Countdown } from "./FlashCard";
 export { ShopCard, ShopCardSkeleton, type ShopCardData } from "./ShopCard";
+export { ShopCover } from "./ShopCover";
 export { TabBar } from "./TabBar";
 export { HomeTopBar, SearchBar } from "./HomeTopBar";
 export { LocationSheet } from "./LocationSheet";

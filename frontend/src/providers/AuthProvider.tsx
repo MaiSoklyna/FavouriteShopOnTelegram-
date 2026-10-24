@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from "react";
-import { api, setToken, clearToken, getToken } from "@/lib/api";
+import { api, ApiError, setToken, clearToken, getToken } from "@/lib/api";
 import { getTelegramUser, initTelegram, isInTelegram } from "@/lib/telegram";
 import type { AdminUser, TelegramUser } from "@/types";
 
@@ -60,8 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(me);
           setLoading(false);
           return;
-        } catch {
-          clearToken();
+        } catch (e) {
+          // Only a rejected token logs you out; a slow or dropped request keeps it for the next load.
+          if (e instanceof ApiError && (e.status === 401 || e.status === 403)) clearToken();
         }
       }
 
