@@ -22,7 +22,7 @@ export function SectionHeader({ title, extra, href, className = "" }: Props) {
         <Link
           href={href}
           aria-label="See all"
-          className="fos-press relative grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-white text-navy-900 shadow-fos-sm before:absolute before:-inset-[7px] before:content-['']"
+          className="fos-press relative grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-card text-ink-900 shadow-fos-sm before:absolute before:-inset-[7px] before:content-['']"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M9 18l6-6-6-6" />

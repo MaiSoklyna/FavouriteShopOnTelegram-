@@ -38,7 +38,7 @@ export function TabBar() {
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-[100] border-t border-line bg-white/[0.86] backdrop-blur-[20px]"
+      className="fixed inset-x-0 bottom-0 z-[100] border-t border-line bg-card/[0.86] backdrop-blur-[20px]"
       style={{ height: "calc(84px + env(safe-area-inset-bottom))", paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="mx-auto flex h-[84px] max-w-[640px] items-start justify-around px-2 pt-2.5">
@@ -47,12 +47,12 @@ export function TabBar() {
           if (t.key === "cart") {
             return (
               <Link key={t.key} href={t.href} aria-label={`Cart${count ? `, ${count} items` : ""}`} aria-current={active ? "page" : undefined} className="fos-press relative -mt-[22px] flex w-16 flex-col items-center">
-                <span className={`relative grid h-14 w-14 place-items-center rounded-[20px] bg-grad-cta text-white shadow-fos-cta ${active ? "ring-4 ring-[#DCE7FB]" : ""}`}>
+                <span className={`relative grid h-14 w-14 place-items-center rounded-[20px] bg-grad-cta text-white shadow-fos-cta ${active ? "ring-4 ring-tint-navy" : ""}`}>
                   <svg width="26" height="26" viewBox="0 0 24 24" {...ICON} aria-hidden>
                     <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" />
                   </svg>
                   {count > 0 && (
-                    <span key={bump} className="fos-bump absolute -right-1.5 -top-1.5 grid h-5 min-w-[20px] place-items-center rounded-full border-2 border-white bg-mango-500 px-1 text-[10px] font-extrabold text-white">
+                    <span key={bump} className="fos-bump absolute -right-1.5 -top-1.5 grid h-5 min-w-[20px] place-items-center rounded-full border-2 border-card bg-mango-500 px-1 text-[10px] font-extrabold text-white">
                       {count > 99 ? "99+" : count}
                     </span>
                   )}
@@ -63,7 +63,7 @@ export function TabBar() {
           }
           return (
             <Link key={t.key} href={t.href} aria-current={active ? "page" : undefined} className={`fos-press flex min-h-[44px] w-16 flex-col items-center gap-0.5 ${active ? "text-navy-500" : "text-ink-500"}`}>
-              <span className={`grid h-7 w-12 place-items-center rounded-full transition-colors duration-200 ${active ? "bg-[#DCE7FB]" : ""}`}>
+              <span className={`grid h-7 w-12 place-items-center rounded-full transition-colors duration-200 ${active ? "bg-tint-navy" : ""}`}>
                 <svg width="24" height="24" viewBox="0 0 24 24" {...ICON} strokeWidth={active ? 2.2 : 1.8} aria-hidden>{t.icon}</svg>
               </span>
               <span className={`text-[10px] ${active ? "font-extrabold" : "font-bold"}`}>{t.label}</span>

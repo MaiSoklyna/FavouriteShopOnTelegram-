@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { fetchNearbyShops } from "@/lib/addresses";
 import { FREE_DELIVERY_OVER_USD } from "@/lib/currency";
 import { useHomeLocation } from "@/lib/useHomeLocation";
-import { MAPBOX_TOKEN } from "@/lib/mapbox";
+import { MAPBOX_TOKEN, mapStyleId } from "@/lib/mapbox";
 import { SHOP_FILTERS, applyShopFilter, useShopExtras, type ShopFilter } from "@/lib/shopTheme";
 import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
@@ -273,7 +273,7 @@ export default function ShopHomePage() {
               <div className="fos-no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4" role="radiogroup" aria-label="Filter shops">
                 {SHOP_FILTERS.map(f => (
                   <button key={f} type="button" role="radio" aria-checked={shopFilter === f} onClick={() => setShopFilter(f)}
-                    className={`fos-press h-9 shrink-0 rounded-full px-3.5 text-[13px] font-extrabold ${shopFilter === f ? "bg-navy-700 text-white" : "border-[1.5px] border-line bg-white text-ink-900"}`}>
+                    className={`fos-press h-9 shrink-0 rounded-full px-3.5 text-[13px] font-extrabold ${shopFilter === f ? "bg-navy-700 text-white" : "border-[1.5px] border-line bg-card text-ink-900"}`}>
                     {f}
                   </button>
                 ))}
@@ -285,7 +285,7 @@ export default function ShopHomePage() {
                 ? [0, 1].map(i => <ShopCardSkeleton key={i} />)
                 : shopCards.map(s => <ShopCard key={s.id} shop={s} />)}
               {!nearbyLoading && location && nearby && shopCards.length === 0 && (
-                <div className="flex h-[120px] w-full flex-col items-center justify-center gap-1 rounded-hero bg-white text-center shadow-fos-sm">
+                <div className="flex h-[120px] w-full flex-col items-center justify-center gap-1 rounded-hero bg-card text-center shadow-fos-sm">
                   <p className="text-[14px] font-extrabold text-ink-900">{nearby.length ? "No shops match this filter" : "No shops nearby yet"}</p>
                   <button type="button" onClick={() => (nearby.length ? setShopFilter("All") : setSheetOpen(true))} className="fos-press min-h-[36px] text-[13px] font-bold text-navy-500">
                     {nearby.length ? "Show all shops" : "Try another location"}
@@ -371,13 +371,13 @@ function MapPreview({ you, shops, count, loading }: {
   // A lone pin would zoom to street level, so centre on it at neighbourhood zoom instead
   const view = shops.length ? "auto" : `${at(you)},13.5,0`;
   const src = MAPBOX_TOKEN
-    ? `https://api.mapbox.com/styles/v1/mapbox/light-v11/static/${overlays}/${view}/686x240@2x?padding=20,60,110,60&attribution=false&logo=false&access_token=${MAPBOX_TOKEN}`
+    ? `https://api.mapbox.com/styles/v1/mapbox/${mapStyleId()}/static/${overlays}/${view}/686x240@2x?padding=20,60,110,60&attribution=false&logo=false&access_token=${MAPBOX_TOKEN}`
     : null;
   return (
     <Link href="/shop/nearby" aria-label="Open the map of nearby shops"
-      className="fos-press relative mt-3 block h-[120px] overflow-hidden rounded-hero bg-[#E9EEF5] shadow-fos-sm">
+      className="fos-press relative mt-3 block h-[120px] overflow-hidden rounded-hero bg-tint-map shadow-fos-sm">
       {src && <img src={src} alt="" className={`absolute inset-0 h-full w-full object-cover transition-opacity ${loading ? "opacity-60" : ""}`} />}
-      <span className="absolute inset-x-2.5 bottom-2.5 flex items-center gap-2 rounded-full bg-white/95 py-1.5 pl-3 pr-1.5 shadow-fos-sm">
+      <span className="absolute inset-x-2.5 bottom-2.5 flex items-center gap-2 rounded-full bg-card/95 py-1.5 pl-3 pr-1.5 shadow-fos-sm">
         <Icon name="map" size={16} strokeWidth={2.2} className="text-navy-700" />
         <span className="min-w-0 flex-1 truncate text-[13px] font-extrabold text-ink-900">
           {loading ? "Finding shops near you…" : `${count} ${count === 1 ? "shop" : "shops"} on the map`}

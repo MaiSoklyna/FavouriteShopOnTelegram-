@@ -66,7 +66,7 @@ export function KhqrPayPanel({ orderId, total, onPaid }: { orderId: number; tota
 
   if (!open) {
     return (
-      <section className="flex items-center gap-3 rounded-hero bg-white p-3.5 shadow-fos-sm ring-2 ring-mango-500/40">
+      <section className="flex items-center gap-3 rounded-hero bg-card p-3.5 shadow-fos-sm ring-2 ring-mango-500/40">
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#E1232E] text-[10px] font-black tracking-wide text-white">KHQR</span>
         <div className="min-w-0 flex-1">
           <div className="text-[14px] font-extrabold text-ink-900">Pay to send your order</div>

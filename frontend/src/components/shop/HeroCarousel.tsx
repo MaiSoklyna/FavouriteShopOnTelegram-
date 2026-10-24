@@ -60,7 +60,7 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
       >
         {slides.map((s) => {
           const cta = (
-            <span className="inline-flex h-11 items-center rounded-full bg-white px-5 text-[14px] font-extrabold text-navy-900">
+            <span className="inline-flex h-11 items-center rounded-full bg-white px-5 text-[14px] font-extrabold text-[#081D3C]">
               {s.cta || "Shop now"}
             </span>
           );

@@ -62,7 +62,7 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
       tabIndex={0}
       onClick={open}
       onKeyDown={(e) => { if (e.key === "Enter") open(); }}
-      className="fos-press cursor-pointer overflow-hidden rounded-card bg-white shadow-fos-md"
+      className="fos-press cursor-pointer overflow-hidden rounded-card bg-card shadow-fos-md"
     >
       {/* Image 1:1 on a tinted background */}
       <div className="relative aspect-square bg-surface">
@@ -81,7 +81,7 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
           aria-label={hearted ? "Remove from favourites" : "Add to favourites"}
           aria-pressed={hearted}
           onClick={handleHeart}
-          className="absolute right-2 top-2 grid h-[30px] w-[30px] place-items-center rounded-full bg-white/90 before:absolute before:-inset-[7px] before:content-['']"
+          className="absolute right-2 top-2 grid h-[30px] w-[30px] place-items-center rounded-full bg-card/90 before:absolute before:-inset-[7px] before:content-['']"
         >
           <svg key={popKey} className={popKey ? "fos-pop" : ""} width="16" height="16" viewBox="0 0 24 24" fill={hearted ? "#E5484D" : "none"} stroke={hearted ? "#E5484D" : "#0E1A2B"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z" />

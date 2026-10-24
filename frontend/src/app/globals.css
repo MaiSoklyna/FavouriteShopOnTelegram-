@@ -392,3 +392,54 @@ input:focus, select:focus, textarea:focus {
 @media (prefers-reduced-motion: reduce) {
   .fos-confetti, .fos-draw, .fos-pop { animation: none !important; }
 }
+
+/* ═══════ FOS THEME TOKENS (light / dark) ═══════
+   Space-separated RGB so Tailwind can add opacity: bg-surface/90 → rgb(var(--fos-c-surface) / .9).
+   Brand colours that read on both themes (mango, jade, ruby, KHQR red, the navy gradients) stay fixed. */
+:root {
+  --fos-c-surface: 246 248 251;
+  --fos-c-card: 255 255 255;
+  --fos-c-line: 227 232 239;
+  --fos-c-ink-900: 14 26 43;
+  --fos-c-ink-500: 91 100 114;
+  --fos-c-navy-700: 16 53 98;
+  --fos-c-navy-500: 27 75 138;
+  --fos-c-tint-jade: 231 248 239;
+  --fos-c-tint-mango: 255 241 230;
+  --fos-c-tint-ruby: 253 236 236;
+  --fos-c-tint-gold: 251 244 228;
+  --fos-c-tint-neutral: 241 244 248;
+  --fos-c-tint-navy: 238 243 252;
+  --fos-c-tint-map: 233 238 245;
+  --fos-c-tone-jade: 6 118 71;
+  --fos-c-tone-mango: 181 71 8;
+  --fos-c-tone-navy: 16 53 98;
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  --fos-c-surface: 10 22 40;
+  --fos-c-card: 19 39 68;
+  --fos-c-line: 31 58 95;
+  --fos-c-ink-900: 234 239 243;
+  --fos-c-ink-500: 148 163 184;
+  --fos-c-navy-700: 46 95 166;
+  --fos-c-navy-500: 120 160 225;
+  --fos-c-tint-jade: 18 64 52;
+  --fos-c-tint-mango: 74 45 20;
+  --fos-c-tint-ruby: 77 30 34;
+  --fos-c-tint-gold: 66 54 28;
+  --fos-c-tint-neutral: 26 48 82;
+  --fos-c-tint-navy: 28 52 92;
+  --fos-c-tint-map: 23 42 70;
+  --fos-c-tone-jade: 74 222 128;
+  --fos-c-tone-mango: 253 186 116;
+  --fos-c-tone-navy: 150 186 240;
+  color-scheme: dark;
+}
+/* navy-700 is both a fill (buttons, active tabs) and a text colour; a fill bright
+   enough for dark mode is too dim as text on a dark card, so text gets the light tone */
+[data-theme="dark"] .text-navy-700,
+[data-theme="dark"] .text-navy-500 { color: rgb(var(--fos-c-tone-navy)); }
+[data-theme="dark"] .shadow-fos-sm { box-shadow: 0 1px 2px rgba(0, 0, 0, .35); }
+[data-theme="dark"] .shadow-fos-md { box-shadow: 0 8px 24px rgba(0, 0, 0, .35); }
+[data-theme="dark"] .fos-shimmer { background: linear-gradient(90deg, #172A46 0%, #1F3A5F 50%, #172A46 100%); background-size: 200% 100%; }

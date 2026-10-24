@@ -10,17 +10,17 @@ import { EmptyState, KhqrCard, PaidSuccess, Pill, Skeleton } from "@/components/
 import type { KhqrData } from "@/components/shop/Khqr";
 import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote, type DeliveryChoice } from "@/lib/quote";
 import { deleteAddress, listAddresses, saveAddress, type SavedAddress } from "@/lib/addresses";
-import { distanceKm, staticMapUrl, formatEta, formatKm, getCurrentPosition, reverseGeocode, type LatLng } from "@/lib/mapbox";
+import { distanceKm, staticMapUrl, formatEta, formatKm, getCurrentPosition, type LatLng } from "@/lib/mapbox";
+import { describePoint, placeLabel } from "@/lib/places";
+import type { PickedLocation, Zone } from "@/components/map/LocationPicker";
 import { Icon, type IconName } from "@/components/shop/Icon";
 import { formatKhr } from "@/lib/currency";
 import { areaName, useHomeLocation } from "@/lib/useHomeLocation";
 import { haptic, useMainButton } from "@/lib/telegram";
 
 // Same look as the map's own loading state, so there is no flash of an empty box
-const MapPicker = dynamic(() => import("@/components/map/MapPicker"), {
-  ssr: false,
-  loading: () => <Skeleton className="h-[260px] rounded-card" />,
-});
+// Full-screen picker (search places or move the map); nothing to show until it opens
+const LocationPicker = dynamic(() => import("@/components/map/LocationPicker"), { ssr: false });
 
 interface ShopInfo {
   id: number;
@@ -71,6 +71,10 @@ export default function CheckoutPage() {
   const [quoteError, setQuoteError] = useState("");
   const [deliveryType, setDeliveryType] = useState<"delivery" | "pickup">("delivery");
   const [pin, setPin] = useState<LatLng | null>(null);
+  /** The place under the pin, for the preview card: "AEON Mall 1" + its address */
+  const [place, setPlace] = useState<{ name: string; address: string } | null>(null);
+  /** House no., floor, gate — added in front of the place in delivery_address */
+  const [details, setDetails] = useState("");
   const [saved, setSaved] = useState<SavedAddress[]>([]);
   // "Save address" panel: pick a label, then save the current pin right away
   const [newOpen, setNewOpen] = useState(false);
@@ -136,22 +140,46 @@ export default function CheckoutPage() {
     if (!loc) return;
     setPin({ lat: loc.lat, lng: loc.lng });
     const match = saved.find((a) => a.latitude === loc.lat && a.longitude === loc.lng);
-    if (match) setForm((f) => ({ ...f, address: match.address }));
-    else reverseGeocode(loc).then((addr) => addr && setForm((f) => (f.address ? f : { ...f, address: addr }))).catch(() => {});
+    if (match) setPlace({ name: match.label, address: match.address });
+    else describePoint(loc).then((d) => setPlace((cur) => cur ?? d)).catch(() => {});
   }, [home.resolved, home.location, saved]);
 
   // The saved address's text arrives after the pin when the list loads second
   useEffect(() => {
-    if (!pin || form.address) return;
+    if (!pin) return;
     const match = saved.find((a) => a.latitude === pin.lat && a.longitude === pin.lng);
-    if (match) setForm((f) => ({ ...f, address: match.address }));
-  }, [saved, pin, form.address]);
+    if (match) setPlace((cur) => (cur && cur.name === match.label ? cur : { name: match.label, address: match.address }));
+  }, [saved, pin]);
 
   /** New pin: also becomes the Home location, so Home and Cart show the same distance next time. */
-  function movePin(p: LatLng, addr?: string) {
+  function movePin(p: LatLng, where: { name: string; address: string }) {
     setPin(p);
-    if (addr) setForm((f) => ({ ...f, address: addr }));
-    home.save({ lat: p.lat, lng: p.lng, area: addr ? areaName(addr) : "Pinned location" });
+    setPlace(where);
+    home.save({ lat: p.lat, lng: p.lng, area: where.name.length <= 24 ? where.name : areaName(where.address) });
+  }
+
+  function confirmPicked(loc: PickedLocation) {
+    movePin(loc.pos, { name: loc.name, address: loc.address });
+    setDetails("");
+    setMapOpen(false);
+  }
+
+  /** Delivery check for the picker's preview card — the backend's own quote, so it matches checkout. */
+  async function zoneAt(pos: LatLng): Promise<Zone | null> {
+    try {
+      const q = await fetchQuote(getSavedPromo(), { delivery_type: "delivery", lat: pos.lat, lng: pos.lng });
+      const fee = Number(q.totals.delivery_fee);
+      const one = q.orders.length === 1 ? q.orders[0] : null;
+      const parts = [
+        one?.distance_km != null ? formatKm(Number(one.distance_km)) : null,
+        fee > 0 ? `${money(fee)} delivery` : "Free delivery",
+        one?.eta_minutes != null && one.eta_max_minutes != null ? formatEta(one.eta_minutes, one.eta_max_minutes) : null,
+      ].filter(Boolean);
+      return { ok: true, text: `Delivers here · ${parts.join(" · ")}` };
+    } catch (e) {
+      const msg = (e instanceof Error && e.message) || "";
+      return { ok: false, text: msg.replace(/^Delivery unavailable for this location\.\s*/, "") || "Outside the delivery area" };
+    }
   }
 
   async function useMyLocation() {
@@ -159,14 +187,16 @@ export default function CheckoutPage() {
     const p = await getCurrentPosition();
     if (!p) { setLocating(false); setLocError(true); haptic("error"); return; }
     haptic("success");
-    const addr = await reverseGeocode(p).catch(() => "");
-    movePin(p, addr || undefined);
+    const where = await describePoint(p).catch(() => ({ name: "My location", address: "" }));
+    movePin(p, where);
+    setDetails("");
     setLocating(false);
   }
 
   function pickSaved(a: SavedAddress) {
     haptic("select");
-    movePin({ lat: a.latitude, lng: a.longitude }, a.address);
+    movePin({ lat: a.latitude, lng: a.longitude }, { name: a.label, address: a.address });
+    setDetails("");
     setMapOpen(false);
   }
 
@@ -181,13 +211,13 @@ export default function CheckoutPage() {
   }
 
   async function saveNewAddress() {
-    if (!pin) { setSaveErr("Drop a pin on the map first"); return; }
+    if (!pin) { setSaveErr("Choose the place first"); return; }
     const label = newLabel === "Other" ? customLabel.trim() : newLabel;
     if (!label) { setSaveErr("Give this place a name"); return; }
     setSavingAddr(true); setSaveErr("");
     try {
       const row = await saveAddress({
-        label, address: form.address.trim() || "Pinned location",
+        label, address: place ? placeLabel(place, details) : "Pinned location",
         latitude: pin.lat, longitude: pin.lng, is_default: saved.length === 0,
       });
       setSaved((rows) => [...rows, row]);
@@ -283,7 +313,7 @@ export default function CheckoutPage() {
     if (!form.name.trim()) e.name = "Enter your name";
     if (form.phone.length < 8) e.phone = "Enter a valid phone number";
     if (deliveryType === "delivery" && !pin) e.address = "Choose your location";
-    else if (deliveryType === "delivery" && !form.address.trim()) e.address = "Add an address or landmark";
+    else if (deliveryType === "delivery" && !place) e.address = "Choose your location";
     if (deliveryType === "delivery" && !quote && quoteError) e.address = quoteError;
     setErrors(e);
     const ok = Object.keys(e).length === 0 && blockers.length === 0;
@@ -316,7 +346,7 @@ export default function CheckoutPage() {
           api.post<{ data: { order_id: number } }>("/orders", {
             merchant_id: Number(mid),
             delivery_type: deliveryType,
-            delivery_address: deliveryType === "pickup" ? "Pickup at shop" : form.address,
+            delivery_address: deliveryType === "pickup" ? "Pickup at shop" : place ? placeLabel(place, details) : "Pinned location",
             lat: deliveryType === "delivery" ? pin?.lat : undefined,
             lng: deliveryType === "delivery" ? pin?.lng : undefined,
             delivery_phone: "+855" + form.phone,
@@ -369,7 +399,7 @@ export default function CheckoutPage() {
     onClick: handlePlaceOrder,
     disabled: ctaDisabled,
     loading: placing,
-    visible: !paying && !!user && items.length > 0,
+    visible: !paying && !mapOpen && !!user && items.length > 0,
   });
 
   if (paid) {
@@ -387,6 +417,20 @@ export default function CheckoutPage() {
         index={qrIndex} count={qrOrderIds.length}
         onRetry={() => orderId && loadQr(orderId)}
         onLater={() => router.push("/shop/orders")}
+      />
+    );
+  }
+
+  // Choosing a location: the picker is the whole screen — no checkout title, bar or Telegram button behind it
+  if (mapOpen) {
+    return (
+      <LocationPicker
+        initial={pin ? { pos: pin, name: place?.name, address: place?.address } : home.location ? { pos: { lat: home.location.lat, lng: home.location.lng } } : null}
+        shop={shopPoint} shopInfo={shop} radiusKm={shop?.delivery_radius_km ?? null}
+        zone={zoneAt}
+        suggestions={saved.map((a) => ({ id: a.id, name: a.label, address: a.address, pos: { lat: a.latitude, lng: a.longitude }, icon: labelIcon(a.label) }))}
+        onConfirm={confirmPicked}
+        onClose={() => { setMapOpen(false); setNewOpen(false); }}
       />
     );
   }
@@ -409,7 +453,7 @@ export default function CheckoutPage() {
   const outOfArea = deliveryType === "delivery" && !!pin && !quote && !!quoteError;
   // Progress: details → payment → pay
   const contactDone = !!form.name.trim() && form.phone.length >= 8;
-  const whereDone = deliveryType === "pickup" || (!!pin && !!form.address.trim() && !outOfArea);
+  const whereDone = deliveryType === "pickup" || (!!pin && !!place && !outOfArea);
   const progress = contactDone && whereDone ? 2 : 1;
 
   return (
@@ -423,7 +467,7 @@ export default function CheckoutPage() {
         </div>
 
         {/* Delivery / pickup */}
-        <div role="radiogroup" aria-label="Delivery method" className="mt-4 grid grid-cols-2 gap-1.5 rounded-card bg-white p-1.5 shadow-fos-sm">
+        <div role="radiogroup" aria-label="Delivery method" className="mt-4 grid grid-cols-2 gap-1.5 rounded-card bg-card p-1.5 shadow-fos-sm">
           {([["delivery", "Delivery", eta ?? "To your door"], ["pickup", "Pickup", "Free · at the shop"]] as const).map(([key, title, sub]) => {
             const on = deliveryType === key;
             return (
@@ -439,35 +483,49 @@ export default function CheckoutPage() {
         {/* Where */}
         <div ref={addressRef}>
           {deliveryType === "delivery" ? (
-            <section className="mt-3 overflow-hidden rounded-hero bg-white shadow-fos-sm">
-              {mapOpen ? (
-                <div className="p-2">
-                  <MapPicker
-                    value={pin}
-                    onChange={(p, addr) => movePin(p, addr || undefined)}
-                    shop={shopPoint}
-                    shopInfo={shop}
-                    radiusKm={shop?.delivery_radius_km ?? null}
-                    showLocate={false}
-                    height={260}
-                  />
-                </div>
-              ) : (
-                <MapPreview pin={pin} shop={shopPoint} km={km} eta={eta} outOfArea={outOfArea} onOpen={() => setMapOpen(true)} />
-              )}
+            <section className="mt-3 overflow-hidden rounded-hero bg-card shadow-fos-sm">
+              <MapPreview pin={pin} shop={shopPoint} km={km} eta={eta} outOfArea={outOfArea} onOpen={() => setMapOpen(true)} />
 
-              <div className="flex items-center gap-3 px-3.5 pt-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-surface text-navy-700"><Icon name={labelIcon(saved.find((a) => a.latitude === pin?.lat && a.longitude === pin?.lng)?.label ?? "")} /></span>
-                <input
-                  value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })}
-                  placeholder={pin ? "Street, house no. or landmark" : "Choose your location"} aria-label="Delivery address"
-                  className="h-11 min-w-0 flex-1 truncate bg-transparent text-[14px] font-bold text-ink-900 outline-none placeholder:font-semibold placeholder:text-ink-500"
-                />
-                <button type="button" onClick={() => setMapOpen((o) => !o)} aria-label={mapOpen ? "Done" : "Edit on map"}
-                  className="fos-press grid h-9 min-w-9 place-items-center rounded-full bg-surface px-2 text-[12px] font-bold text-navy-700">
-                  {mapOpen ? "Done" : <Icon name="edit" size={16} />}
-                </button>
-              </div>
+              {/* Preview: the place, its address and whether the shop delivers there */}
+              <button type="button" onClick={() => setMapOpen(true)} className="flex w-full items-start gap-3 px-3.5 pt-3 text-left">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-tint-mango text-mango-500">
+                  <Icon name={labelIcon(saved.find((a) => a.latitude === pin?.lat && a.longitude === pin?.lng)?.label ?? "")} size={20} strokeWidth={2} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  {place ? (
+                    <>
+                      <span className="block truncate text-[15px] font-extrabold text-ink-900">{place.name}</span>
+                      <span className="line-clamp-2 block text-caption text-ink-500">{place.address || "Pinned on the map"}</span>
+                    </>
+                  ) : pin ? (
+                    <><span className="fos-shimmer block h-4 w-1/2 rounded" /><span className="fos-shimmer mt-1.5 block h-3 w-4/5 rounded" /></>
+                  ) : (
+                    <>
+                      <span className="block text-[15px] font-extrabold text-ink-900">Where should we deliver?</span>
+                      <span className="block text-caption text-ink-500">Search a place or drop a pin</span>
+                    </>
+                  )}
+                  {pin && (
+                    outOfArea ? (
+                      <span className="mt-1.5 inline-flex h-6 items-center gap-1 rounded-full bg-tint-ruby px-2.5 text-[11px] font-bold text-ruby-500"><Icon name="alert" size={12} strokeWidth={2.6} />Outside delivery area</span>
+                    ) : quote ? (
+                      <span className="mt-1.5 inline-flex h-6 items-center gap-1 rounded-full bg-tint-jade px-2.5 text-[11px] font-bold text-tone-jade"><Icon name="check" size={12} strokeWidth={2.6} />
+                        {multiShop ? "All shops deliver here" : `Delivers here${km != null ? ` · ${formatKm(km)}` : ""}`}
+                      </span>
+                    ) : (
+                      <span className="mt-1.5 inline-flex h-6 items-center rounded-full bg-tint-neutral px-2.5 text-[11px] font-bold text-ink-500">Checking delivery…</span>
+                    )
+                  )}
+                </span>
+                <span className="mt-0.5 shrink-0 rounded-full bg-surface px-3 py-1.5 text-[12px] font-extrabold text-navy-700">{pin ? "Change" : "Choose"}</span>
+              </button>
+              {pin && (
+                <div className="px-3.5 pt-2.5">
+                  <input value={details} onChange={(e) => setDetails(e.target.value)} maxLength={120}
+                    placeholder="House no., floor, gate (optional)" aria-label="House number, floor or gate"
+                    className="h-11 w-full rounded-md bg-surface px-3 text-[14px] font-semibold text-ink-900 outline-none placeholder:font-medium placeholder:text-ink-500 focus:ring-2 focus:ring-navy-500" />
+                </div>
+              )}
               {errors.address && <p className="px-3.5 pt-1 text-caption text-ruby-500">{errors.address}</p>}
               {outOfArea && (
                 <p className="px-3.5 pt-1 text-caption font-semibold text-ruby-500">{quoteError} · move the pin or choose Pickup</p>
@@ -494,13 +552,13 @@ export default function CheckoutPage() {
               {newOpen ? (
                 <div className="border-t border-line px-3.5 py-3">
                   <p className="text-[13px] font-extrabold text-ink-900">Save this place as</p>
-                  <p className="text-caption text-ink-500">{pin ? "Move the pin on the map if needed, then save." : "Drop a pin on the map first."}</p>
+                  <p className="text-caption text-ink-500">{pin ? "Change the place if needed, then save." : "Choose the place first."}</p>
                   <div role="radiogroup" aria-label="Address label" className="mt-2.5 grid grid-cols-4 gap-2">
                     {ADDRESS_LABELS.map((l) => {
                       const on = newLabel === l.label;
                       return (
                         <button key={l.label} type="button" role="radio" aria-checked={on} onClick={() => { setNewLabel(l.label); setSaveErr(""); }}
-                          className={`fos-press flex h-16 flex-col items-center justify-center gap-1 rounded-thumb border-[1.5px] text-[12px] font-bold ${on ? "border-navy-700 bg-[#EEF3FC] text-navy-700" : "border-line bg-white text-ink-500"}`}>
+                          className={`fos-press flex h-16 flex-col items-center justify-center gap-1 rounded-thumb border-[1.5px] text-[12px] font-bold ${on ? "border-navy-700 bg-tint-navy text-navy-700" : "border-line bg-card text-ink-500"}`}>
                           <Icon name={l.icon} size={20} />{l.label}
                         </button>
                       );
@@ -529,7 +587,7 @@ export default function CheckoutPage() {
               )}
             </section>
           ) : (
-            <section className="mt-3 flex items-center gap-3 rounded-hero bg-white p-3.5 shadow-fos-sm">
+            <section className="mt-3 flex items-center gap-3 rounded-hero bg-card p-3.5 shadow-fos-sm">
               <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-thumb bg-surface text-[22px]">
                 {shop?.logo_url ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" /> : shop?.icon_emoji || <Icon name="store" size={22} className="text-navy-700" />}
               </span>
@@ -543,7 +601,7 @@ export default function CheckoutPage() {
         </div>
 
         {/* Contact */}
-        <section ref={contactRef} className="mt-3 rounded-card bg-white p-3.5 shadow-fos-sm">
+        <section ref={contactRef} className="mt-3 rounded-card bg-card p-3.5 shadow-fos-sm">
           <div className="flex gap-2">
             <label className="min-w-0 flex-1">
               <span className="sr-only">Name</span>
@@ -577,7 +635,7 @@ export default function CheckoutPage() {
         </div>
 
         {/* Summary */}
-        <section className="mt-3 rounded-card bg-white p-3.5 text-[14px] shadow-fos-sm tabular-nums">
+        <section className="mt-3 rounded-card bg-card p-3.5 text-[14px] shadow-fos-sm tabular-nums">
           <Row label={`Items · ${items.reduce((n, i) => n + i.quantity, 0)}`} value={qt ? money(qt.subtotal) : money(total)} />
           <Row
             label={deliveryType === "pickup" ? "Pickup" : `Delivery${km != null && !multiShop ? ` · ${formatKm(km)}` : ""}`}
@@ -585,7 +643,7 @@ export default function CheckoutPage() {
             tone={qt && deliveryFee === 0 ? "jade" : undefined}
           />
           {discount > 0 && (
-            <div className="flex items-center justify-between py-1 font-bold text-[#067647]">
+            <div className="flex items-center justify-between py-1 font-bold text-tone-jade">
               <span className="flex items-center gap-2">
                 {quote?.promo?.code}
                 <button type="button" onClick={removePromo} className="text-[12px] font-bold text-ruby-500">Remove</button>
@@ -604,12 +662,12 @@ export default function CheckoutPage() {
         </section>
 
         {[...blockers, ...(orderError ? [orderError] : []), ...(quoteError && !outOfArea && quote ? [quoteError] : [])].map((m) => (
-          <div key={m} role="alert" className="mt-3 rounded-card bg-[#FDECEC] px-3.5 py-3 text-[13px] font-bold text-ruby-500">{m}</div>
+          <div key={m} role="alert" className="mt-3 rounded-card bg-tint-ruby px-3.5 py-3 text-[13px] font-bold text-ruby-500">{m}</div>
         ))}
       </div>
 
       {!inTelegram && (
-        <div className="fixed inset-x-0 bottom-0 z-[90] border-t border-line bg-white/95 backdrop-blur" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+        <div className="fixed inset-x-0 bottom-0 z-[90] border-t border-line bg-card/95 backdrop-blur" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
           <div className="mx-auto max-w-[640px] px-gutter py-[21px]">
             <button type="button" onClick={handlePlaceOrder} disabled={ctaDisabled}
               className={`fos-press h-[52px] w-full rounded-thumb text-[16px] font-extrabold text-white disabled:opacity-50 ${payment === "khqr" ? "bg-grad-promo shadow-[0_10px_24px_rgba(255,122,26,.35)]" : "bg-grad-cta shadow-fos-cta"}`}>
@@ -625,7 +683,7 @@ export default function CheckoutPage() {
 function TopBar({ onBack }: { onBack: () => void }) {
   return (
     <div className="flex items-center gap-3">
-      <button type="button" onClick={onBack} aria-label="Back" className="fos-press grid h-10 w-10 place-items-center rounded-full bg-white text-ink-900 shadow-fos-sm">
+      <button type="button" onClick={onBack} aria-label="Back" className="fos-press grid h-10 w-10 place-items-center rounded-full bg-card text-ink-900 shadow-fos-sm">
         <svg width="20" height="20" viewBox="0 0 24 24" {...ICON} strokeWidth={2} aria-hidden><path d="M15 18l-6-6 6-6" /></svg>
       </button>
       <h1 className="text-[22px] font-extrabold text-ink-900">Checkout</h1>
@@ -644,7 +702,7 @@ function MapPreview({ pin, shop, km, eta, outOfArea, onOpen }: {
   const framed = !!pin && !!shop && !outOfArea;
   const src = pin ? staticMapUrl(pin, framed ? shop : null) : null;
   return (
-    <button type="button" onClick={onOpen} aria-label="Edit location on map" className="group relative block h-[150px] w-full overflow-hidden bg-[#E9EEF5]">
+    <button type="button" onClick={onOpen} aria-label="Edit location on map" className="group relative block h-[150px] w-full overflow-hidden bg-tint-map">
       {src && <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />}
       {pin ? (
         <>
@@ -657,17 +715,17 @@ function MapPreview({ pin, shop, km, eta, outOfArea, onOpen }: {
             </>
           )}
           {(km != null || outOfArea) && (
-            <span className={`absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-extrabold shadow-fos-sm ${outOfArea ? "bg-ruby-500 text-white" : "bg-white text-ink-900"}`}>
+            <span className={`absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-extrabold shadow-fos-sm ${outOfArea ? "bg-ruby-500 text-white" : "bg-card text-ink-900"}`}>
               {outOfArea ? <><Icon name="alert" size={13} strokeWidth={2.4} />Outside delivery area</> : <><Icon name="truck" size={13} strokeWidth={2.2} />{formatKm(km!)}{eta ? ` · ${eta}` : ""}</>}
             </span>
           )}
-          <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-extrabold text-navy-700 shadow-fos-sm transition-transform group-active:scale-95">
+          <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-full bg-card/95 px-2.5 py-1 text-[11px] font-extrabold text-navy-700 shadow-fos-sm transition-transform group-active:scale-95">
             <Icon name="edit" size={12} strokeWidth={2.4} />Adjust pin
           </span>
         </>
       ) : (
         <span className="absolute inset-0 grid place-items-center">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-[13px] font-extrabold text-navy-700 shadow-fos-md"><Icon name="pin" size={16} />Choose your location</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-card px-4 py-2 text-[13px] font-extrabold text-navy-700 shadow-fos-md"><Icon name="pin" size={16} />Choose your location</span>
         </span>
       )}
     </button>
@@ -677,7 +735,7 @@ function MapPreview({ pin, shop, km, eta, outOfArea, onOpen }: {
 function PayOption({ on, onPick, logo, title, sub }: { on: boolean; onPick: () => void; logo: React.ReactNode; title: string; sub: string }) {
   return (
     <button type="button" role="radio" aria-checked={on} onClick={onPick}
-      className={`fos-press flex h-16 w-full items-center gap-3 rounded-card bg-white px-3 text-left shadow-fos-sm ${on ? "ring-2 ring-navy-700" : ""}`}>
+      className={`fos-press flex h-16 w-full items-center gap-3 rounded-card bg-card px-3 text-left shadow-fos-sm ${on ? "ring-2 ring-navy-700" : ""}`}>
       {logo}
       <span className="min-w-0 flex-1">
         <span className="block text-[14px] font-extrabold text-ink-900">{title}</span>
@@ -692,7 +750,7 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: "jad
   return (
     <div className="flex justify-between py-1">
       <span className="text-ink-500">{label}</span>
-      <span className={`font-bold ${tone === "jade" ? "text-[#067647]" : "text-ink-900"}`}>{value}</span>
+      <span className={`font-bold ${tone === "jade" ? "text-tone-jade" : "text-ink-900"}`}>{value}</span>
     </div>
   );
 }
@@ -711,7 +769,7 @@ function KhqrScreen({ data, loading, error, timer, index, count, onRetry, onLate
       {count > 1 && (
         <div className="mx-auto mt-3 flex max-w-[200px] gap-1.5" aria-hidden>
           {Array.from({ length: count }, (_, i) => (
-            <span key={i} className={`h-1 flex-1 rounded-full ${i < index ? "bg-jade-500" : i === index ? "bg-white" : "bg-white/25"}`} />
+            <span key={i} className={`h-1 flex-1 rounded-full ${i < index ? "bg-jade-500" : i === index ? "bg-card" : "bg-white/25"}`} />
           ))}
         </div>
       )}

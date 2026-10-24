@@ -42,12 +42,12 @@ export function ShopCard({ shop, variant = "rail", selected = false }: { shop: S
   return (
     <Link
       href={`/shop/merchant/${shop.id}`}
-      className={`fos-press flex shrink-0 flex-col overflow-hidden rounded-hero bg-white shadow-fos-md ${wide ? "w-[84vw] max-w-[340px] snap-center" : "w-[268px] snap-start"} ${selected ? "ring-2 ring-navy-700" : ""}`}
+      className={`fos-press flex shrink-0 flex-col overflow-hidden rounded-hero bg-card shadow-fos-md ${wide ? "w-[84vw] max-w-[340px] snap-center" : "w-[268px] snap-start"} ${selected ? "ring-2 ring-navy-700" : ""}`}
     >
       <div className={`relative w-full ${wide ? "h-[150px]" : "h-[136px]"}`}>
         <ShopCover url={shop.cover_url} theme={theme} />
         {shop.is_open != null && (
-          <span className={`absolute left-2.5 top-2.5 inline-flex h-6 items-center gap-1.5 rounded-full bg-white px-2.5 text-[11px] font-extrabold ${shop.is_open ? "text-[#067647]" : "text-ink-500"}`}>
+          <span className={`absolute left-2.5 top-2.5 inline-flex h-6 items-center gap-1.5 rounded-full bg-card px-2.5 text-[11px] font-extrabold ${shop.is_open ? "text-tone-jade" : "text-ink-500"}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${shop.is_open ? "bg-jade-500" : "bg-ink-500"}`} />
             {shop.is_open ? "Open" : "Closed"}
           </span>
@@ -66,15 +66,15 @@ export function ShopCard({ shop, variant = "rail", selected = false }: { shop: S
 
       <div className="flex flex-1 flex-col px-3.5 pb-3.5">
         <div className="relative z-[1] -mt-[26px] flex items-end justify-between">
-          <div className="grid h-[52px] w-[52px] place-items-center overflow-hidden rounded-thumb border-[3px] border-white bg-[#EEF2F8] text-[17px] font-extrabold text-navy-700">
+          <div className="grid h-[52px] w-[52px] place-items-center overflow-hidden rounded-thumb border-[3px] border-card bg-tint-navy text-[17px] font-extrabold text-navy-700">
             {shop.logo_url ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" /> : (shop.icon_emoji || initials(shop.name) || <Icon name="store" size={22} />)}
           </div>
           {shop.rating != null ? (
-            <span className="inline-flex h-6 items-center gap-1 rounded-full bg-[#FBF4E4] px-2 text-[11px] font-extrabold text-gold-700">
+            <span className="inline-flex h-6 items-center gap-1 rounded-full bg-tint-gold px-2 text-[11px] font-extrabold text-gold-700">
               <Icon name="star" size={12} filled />{shop.rating.toFixed(1)}
             </span>
           ) : (
-            <span className="inline-flex h-6 items-center rounded-full bg-[#EEF3FC] px-2 text-[11px] font-extrabold text-navy-500">New</span>
+            <span className="inline-flex h-6 items-center rounded-full bg-tint-navy px-2 text-[11px] font-extrabold text-navy-500">New</span>
           )}
         </div>
         <p className={`mt-2 truncate font-extrabold leading-5 text-ink-900 ${wide ? "text-[17px]" : "text-[16px]"}`}>{shop.name}</p>
@@ -82,15 +82,15 @@ export function ShopCard({ shop, variant = "rail", selected = false }: { shop: S
 
         {known ? (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
-            <span className="inline-flex h-6 items-center gap-1 rounded-full bg-[#EEF2F8] px-2 text-[11px] font-extrabold text-navy-700">
+            <span className="inline-flex h-6 items-center gap-1 rounded-full bg-tint-navy px-2 text-[11px] font-extrabold text-navy-700">
               <Icon name="pin" size={12} strokeWidth={2.4} />{formatKm(shop.distance_km!)}
             </span>
             {shop.eta_minutes != null && shop.eta_max_minutes != null && (
-              <span className="inline-flex h-6 items-center gap-1 rounded-full bg-[#EEF2F8] px-2 text-[11px] font-extrabold text-navy-700">
+              <span className="inline-flex h-6 items-center gap-1 rounded-full bg-tint-navy px-2 text-[11px] font-extrabold text-navy-700">
                 <Icon name="clock" size={12} strokeWidth={2.4} />{formatEta(shop.eta_minutes, shop.eta_max_minutes)}
               </span>
             )}
-            <span className={`inline-flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-extrabold ${shop.can_deliver === false ? "bg-[#FFF1E6] text-[#B54708]" : "bg-[#E7F8EF] text-[#067647]"}`}>
+            <span className={`inline-flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-extrabold ${shop.can_deliver === false ? "bg-tint-mango text-tone-mango" : "bg-tint-jade text-tone-jade"}`}>
               <Icon name="truck" size={13} strokeWidth={2.2} />{feeLabel}
             </span>
           </div>
@@ -113,10 +113,10 @@ export function ShopCard({ shop, variant = "rail", selected = false }: { shop: S
 
 export function ShopCardSkeleton({ variant = "rail" }: { variant?: "rail" | "wide" }) {
   return (
-    <div className={`shrink-0 overflow-hidden rounded-hero bg-white shadow-fos-md ${variant === "wide" ? "w-[84vw] max-w-[340px]" : "w-[268px]"}`} aria-hidden>
+    <div className={`shrink-0 overflow-hidden rounded-hero bg-card shadow-fos-md ${variant === "wide" ? "w-[84vw] max-w-[340px]" : "w-[268px]"}`} aria-hidden>
       <div className="fos-shimmer h-[136px] w-full" />
       <div className="px-3.5 pb-3.5">
-        <div className="fos-shimmer -mt-[26px] h-[52px] w-[52px] rounded-thumb border-[3px] border-white" />
+        <div className="fos-shimmer -mt-[26px] h-[52px] w-[52px] rounded-thumb border-[3px] border-card" />
         <div className="fos-shimmer mt-2 h-4 w-32 rounded-md" />
         <div className="fos-shimmer mt-1.5 h-3 w-20 rounded-md" />
         <div className="mt-2.5 flex gap-1.5">

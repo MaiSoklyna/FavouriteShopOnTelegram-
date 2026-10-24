@@ -159,17 +159,17 @@ function OrderDetailContent() {
   return (
     <div className="min-h-screen bg-surface pb-10">
       <TopBar title="Order" code={order.order_code} pill={
-        <Pill variant={cancelled ? "neutral" : order.status === "delivered" ? "jade" : "mango"} className={cancelled ? "!bg-[#FDECEC] !text-ruby-500" : ""}>
+        <Pill variant={cancelled ? "neutral" : order.status === "delivered" ? "jade" : "mango"} className={cancelled ? "!bg-tint-ruby !text-ruby-500" : ""}>
           {statusLabel(order)}
         </Pill>
       } />
 
       <div className="flex flex-col gap-3 px-gutter pt-2">
         {showSuccess && !unpaid && (
-          <div className="shop-fade-up flex items-center gap-3 rounded-card bg-[#E7F8EF] p-3.5" role="status">
+          <div className="shop-fade-up flex items-center gap-3 rounded-card bg-tint-jade p-3.5" role="status">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-jade-500 text-white"><Icon name="check" size={20} strokeWidth={3} /></span>
             <div className="min-w-0">
-              <div className="text-[14px] font-extrabold text-[#067647]">Order placed!</div>
+              <div className="text-[14px] font-extrabold text-tone-jade">Order placed!</div>
               <div className="text-caption text-ink-500">We&apos;ll message you in Telegram as it moves</div>
             </div>
           </div>
@@ -187,7 +187,7 @@ function OrderDetailContent() {
         {!cancelled && <OrderTimeline order={track} />}
 
         {/* Shop + items */}
-        <section className="rounded-hero bg-white p-4 shadow-fos-sm">
+        <section className="rounded-hero bg-card p-4 shadow-fos-sm">
           <header className="mb-1 flex items-center gap-2.5">
             <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[10px] bg-surface text-[15px]">
               {shop?.logo_url
@@ -221,7 +221,7 @@ function OrderDetailContent() {
         </section>
 
         {/* Price + payment */}
-        <section className="rounded-hero bg-white p-4 text-[14px] shadow-fos-sm">
+        <section className="rounded-hero bg-card p-4 text-[14px] shadow-fos-sm">
           <Row label="Items" value={money(order.subtotal || order.total)} />
           <Row label={pickup ? "Pickup" : `Delivery${order.distance_km != null ? ` · ${formatKm(Number(order.distance_km))}` : ""}`}
             value={deliveryFee > 0 ? money(deliveryFee) : "Free"} tone={deliveryFee > 0 ? undefined : "jade"} />
@@ -245,7 +245,7 @@ function OrderDetailContent() {
             )}
           </div>
           {order.customer_note && (
-            <p className="mt-3 rounded-thumb bg-[#FBF4E4] p-2.5 text-[13px] text-ink-900">
+            <p className="mt-3 rounded-thumb bg-tint-gold p-2.5 text-[13px] text-ink-900">
               <span className="font-bold">Note: </span>{order.customer_note}
             </p>
           )}
@@ -260,7 +260,7 @@ function OrderDetailContent() {
                 <Icon name="star" size={18} filled />Rate your order
               </button>
             ) : (
-              <section className="rounded-hero bg-white p-4 shadow-fos-sm">
+              <section className="rounded-hero bg-card p-4 shadow-fos-sm">
                 <h3 className="mb-2 text-[14px] font-extrabold text-ink-900">Rate your items</h3>
                 <div className="flex flex-col gap-2">
                   {order.items?.map(item => (
@@ -276,12 +276,12 @@ function OrderDetailContent() {
           )}
           <div className="flex gap-2.5">
             <button type="button" onClick={() => router.push("/shop/support")}
-              className="fos-press flex h-12 flex-1 items-center justify-center gap-2 rounded-thumb bg-white text-[14px] font-extrabold text-navy-700 shadow-fos-sm">
+              className="fos-press flex h-12 flex-1 items-center justify-center gap-2 rounded-thumb bg-card text-[14px] font-extrabold text-navy-700 shadow-fos-sm">
               <Icon name="chat" size={18} />Need help?
             </button>
             {order.status === "pending" && (
               <button type="button" onClick={handleCancel} disabled={cancelling}
-                className="fos-press h-12 flex-1 rounded-thumb bg-white text-[14px] font-extrabold text-ruby-500 shadow-fos-sm disabled:opacity-50">
+                className="fos-press h-12 flex-1 rounded-thumb bg-card text-[14px] font-extrabold text-ruby-500 shadow-fos-sm disabled:opacity-50">
                 {cancelling ? "Cancelling…" : "Cancel order"}
               </button>
             )}
@@ -293,14 +293,14 @@ function OrderDetailContent() {
       {/* Review sheet */}
       {showReview && (
         <div className="fixed inset-0 z-50 flex items-end bg-navy-900/40" onClick={() => setShowReview(false)}>
-          <div className="w-full rounded-t-sheet bg-white p-5 pb-[max(20px,env(safe-area-inset-bottom))]" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full rounded-t-sheet bg-card p-5 pb-[max(20px,env(safe-area-inset-bottom))]" onClick={(e) => e.stopPropagation()}>
             <span className="mx-auto mb-4 block h-1 w-10 rounded-full bg-line" aria-hidden />
             <h3 className="text-title text-ink-900">How was it?</h3>
             <div className="my-4 flex justify-center gap-2" role="radiogroup" aria-label="Rating">
               {[1, 2, 3, 4, 5].map(s => (
                 <button key={s} type="button" role="radio" aria-checked={s === reviewRating} aria-label={`${s} star${s > 1 ? "s" : ""}`}
                   onClick={() => setReviewRating(s)}
-                  className={`fos-press grid h-12 w-12 place-items-center rounded-full ${s <= reviewRating ? "bg-[#FBF4E4] text-[#F59E0B]" : "bg-surface text-line"}`}>
+                  className={`fos-press grid h-12 w-12 place-items-center rounded-full ${s <= reviewRating ? "bg-tint-gold text-[#F59E0B]" : "bg-surface text-line"}`}>
                   <Icon name="star" size={26} filled />
                 </button>
               ))}
@@ -325,7 +325,7 @@ function TopBar({ title, code, pill }: { title: string; code?: string; pill?: Re
   return (
     <div className="sticky top-0 z-10 flex items-center gap-3 bg-surface/90 px-gutter pb-3 pt-5 backdrop-blur">
       <button type="button" onClick={() => router.back()} aria-label="Back"
-        className="fos-press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-ink-900 shadow-fos-sm">
+        className="fos-press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-card text-ink-900 shadow-fos-sm">
         <Icon name="back" size={20} strokeWidth={2} />
       </button>
       <div className="min-w-0 flex-1">
@@ -341,7 +341,7 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: "jad
   return (
     <div className="flex justify-between py-1">
       <span className="text-ink-500">{label}</span>
-      <span className={`font-bold tabular-nums ${tone === "jade" ? "text-[#067647]" : "text-ink-900"}`}>{value}</span>
+      <span className={`font-bold tabular-nums ${tone === "jade" ? "text-tone-jade" : "text-ink-900"}`}>{value}</span>
     </div>
   );
 }
@@ -354,9 +354,9 @@ function PlaceCard({ pickup, you, shopPoint, shop, shopName, address, name, phon
   const focus = pickup ? shopPoint : you;
   const src = focus ? staticMapUrl(focus, pickup ? null : shopPoint, "686x260") : null;
   return (
-    <section className="overflow-hidden rounded-hero bg-white shadow-fos-sm">
+    <section className="overflow-hidden rounded-hero bg-card shadow-fos-sm">
       {focus && (
-        <div className="relative h-[130px] bg-[#E9EEF5]">
+        <div className="relative h-[130px] bg-tint-map">
           {src && <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />}
           {(pickup || !shopPoint) && (
             <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full drop-shadow" width="34" height="34" viewBox="0 0 24 24" aria-hidden>
@@ -364,7 +364,7 @@ function PlaceCard({ pickup, you, shopPoint, shop, shopName, address, name, phon
             </svg>
           )}
           {!pickup && distanceKm != null && (
-            <span className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[12px] font-extrabold text-ink-900 shadow-fos-sm">
+            <span className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-full bg-card px-2.5 py-1 text-[12px] font-extrabold text-ink-900 shadow-fos-sm">
               <Icon name="truck" size={13} strokeWidth={2.2} />{formatKm(Number(distanceKm))} from {shopName}
             </span>
           )}
@@ -383,7 +383,7 @@ function PlaceCard({ pickup, you, shopPoint, shop, shopName, address, name, phon
         </div>
         {pickup && shop?.phone && (
           <a href={`tel:${shop.phone}`} aria-label={`Call ${shopName}`}
-            className="fos-press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#E7F8EF] text-[#067647]">
+            className="fos-press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-tint-jade text-tone-jade">
             <Icon name="phone" size={18} />
           </a>
         )}

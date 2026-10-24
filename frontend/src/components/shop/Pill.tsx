@@ -4,10 +4,10 @@ import { Icon } from "./Icon";
 type Variant = "neutral" | "jade" | "mango" | "gold" | "solid-mango";
 
 const STYLES: Record<Variant, string> = {
-  neutral: "bg-[#F1F4F8] text-ink-500",
-  jade: "bg-[#E7F8EF] text-[#067647]",
-  mango: "bg-[#FFF1E6] text-[#B54708]",
-  gold: "bg-[#FBF4E4] text-gold-700",
+  neutral: "bg-tint-neutral text-ink-500",
+  jade: "bg-tint-jade text-tone-jade",
+  mango: "bg-tint-mango text-tone-mango",
+  gold: "bg-tint-gold text-gold-700",
   "solid-mango": "bg-mango-500 text-white",
 };
 

@@ -25,7 +25,7 @@ export function OrderStatusHero({ order, eta }: { order: TrackOrder; eta?: strin
           <p className="truncate text-[13px] font-medium text-white/80">{h.sub}</p>
         </div>
         {eta && !cancelled && order.status !== "delivered" && (
-          <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[12px] font-extrabold text-ink-900">{eta}</span>
+          <span className="shrink-0 rounded-full bg-card px-2.5 py-1 text-[12px] font-extrabold text-ink-900">{eta}</span>
         )}
       </div>
       {!cancelled && (
@@ -33,7 +33,7 @@ export function OrderStatusHero({ order, eta }: { order: TrackOrder; eta?: strin
           aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={steps.filter((s) => s.state === "done").length}>
           {steps.map((s) => (
             <span key={s.key} className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/25">
-              <i className={`block h-full rounded-full bg-white ${s.state === "done" ? "w-full" : s.state === "current" ? "w-1/2 animate-pulse motion-reduce:animate-none" : "w-0"}`} />
+              <i className={`block h-full rounded-full bg-card ${s.state === "done" ? "w-full" : s.state === "current" ? "w-1/2 animate-pulse motion-reduce:animate-none" : "w-0"}`} />
             </span>
           ))}
         </div>
@@ -46,7 +46,7 @@ export function OrderStatusHero({ order, eta }: { order: TrackOrder; eta?: strin
 export function OrderTimeline({ order }: { order: TrackOrder }) {
   const steps = trackSteps(order);
   return (
-    <section className="rounded-hero bg-white p-4 shadow-fos-sm">
+    <section className="rounded-hero bg-card p-4 shadow-fos-sm">
       <h3 className="mb-3 text-section text-ink-900">Tracking</h3>
       <ol>
         {steps.map((s, i) => {
@@ -65,7 +65,7 @@ export function OrderTimeline({ order }: { order: TrackOrder }) {
                 <div className="flex items-baseline justify-between gap-2">
                   <span className={`text-[14px] font-extrabold ${s.state === "todo" ? "text-ink-500" : "text-ink-900"}`}>{s.label}</span>
                   {s.at && s.state === "done" && <span className="shrink-0 text-[11px] font-semibold tabular-nums text-ink-500">{formatWhen(s.at)}</span>}
-                  {s.state === "current" && <span className="shrink-0 text-[11px] font-extrabold text-[#B54708]">Now</span>}
+                  {s.state === "current" && <span className="shrink-0 text-[11px] font-extrabold text-tone-mango">Now</span>}
                 </div>
                 <p className="text-caption text-ink-500">{s.state === "current" && s.waiting ? s.waiting : s.detail}</p>
               </div>

@@ -72,7 +72,7 @@ export default function OrdersPage() {
             return (
               <button key={t.key} type="button" role="tab" aria-selected={on} onClick={() => setTab(t.key)}
                 className={`fos-press inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-[13px] font-extrabold transition-colors ${
-                  on ? "bg-navy-700 text-white shadow-fos-cta" : "bg-white text-ink-500 shadow-fos-sm"}`}>
+                  on ? "bg-navy-700 text-white shadow-fos-cta" : "bg-card text-ink-500 shadow-fos-sm"}`}>
                 {t.label}
                 <span className={`min-w-[20px] rounded-full px-1.5 text-[11px] tabular-nums ${on ? "bg-white/20" : "bg-surface"}`}>{n}</span>
               </button>
@@ -107,7 +107,7 @@ function OrderCard({ order, shop }: { order: Order; shop?: ShopBrief }) {
   const h = headline(track);
 
   return (
-    <Link href={`/shop/order/${order.id}`} className="fos-press block rounded-hero bg-white p-3.5 shadow-fos-sm">
+    <Link href={`/shop/order/${order.id}`} className="fos-press block rounded-hero bg-card p-3.5 shadow-fos-sm">
       <div className="flex items-center gap-2.5">
         <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-[12px] bg-surface text-[16px]">
           {shop?.logo_url
@@ -118,7 +118,7 @@ function OrderCard({ order, shop }: { order: Order; shop?: ShopBrief }) {
           <div className="truncate text-[15px] font-extrabold text-ink-900">{name}</div>
           <div className="truncate text-caption text-ink-500">{order.order_code} · {formatWhen(order.created_at)}</div>
         </div>
-        <Pill variant={cancelled ? "neutral" : order.status === "delivered" ? "jade" : "mango"} className={cancelled ? "!bg-[#FDECEC] !text-ruby-500" : ""}>
+        <Pill variant={cancelled ? "neutral" : order.status === "delivered" ? "jade" : "mango"} className={cancelled ? "!bg-tint-ruby !text-ruby-500" : ""}>
           {statusLabel(order)}
         </Pill>
       </div>
@@ -126,7 +126,7 @@ function OrderCard({ order, shop }: { order: Order; shop?: ShopBrief }) {
       {active && (
         <div className="mt-3 rounded-thumb bg-surface p-2.5">
           <div className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-ink-900">
-            <Icon name={h.icon} size={16} className={unpaid ? "text-[#B54708]" : "text-navy-700"} strokeWidth={2} />
+            <Icon name={h.icon} size={16} className={unpaid ? "text-tone-mango" : "text-navy-700"} strokeWidth={2} />
             <span className="truncate">{h.title}</span>
           </div>
           <OrderProgress order={track} />

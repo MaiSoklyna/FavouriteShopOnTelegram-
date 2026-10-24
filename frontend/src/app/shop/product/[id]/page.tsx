@@ -159,7 +159,7 @@ export default function ProductDetailPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white pb-[120px]">
+    <div className="min-h-screen bg-card pb-[120px]">
       {/* Gallery */}
       <div className="relative h-[420px] bg-surface">
         <div ref={galleryRef} onScroll={onGalleryScroll} className="fos-no-scrollbar flex h-full snap-x snap-mandatory overflow-x-auto">
@@ -201,7 +201,7 @@ export default function ProductDetailPage() {
               const extra = i === 3 && images.length > 4 ? images.length - 3 : 0;
               return (
                 <button key={src + i} type="button" onClick={() => goToImage(i)} aria-label={`Photo ${i + 1}`}
-                  className={`fos-press relative h-11 w-11 overflow-hidden rounded-md border-2 ${imgIdx === i ? "border-white shadow-fos-md" : "border-transparent opacity-80"}`}>
+                  className={`fos-press relative h-11 w-11 overflow-hidden rounded-md border-2 ${imgIdx === i ? "border-card shadow-fos-md" : "border-transparent opacity-80"}`}>
                   <img src={src} alt="" className="h-full w-full object-cover" />
                   {extra > 0 && <span className="absolute inset-0 grid place-items-center bg-navy-900/60 text-[13px] font-extrabold text-white">+{extra}</span>}
                 </button>
@@ -212,7 +212,7 @@ export default function ProductDetailPage() {
       </div>
 
       {/* Info sheet */}
-      <div className="relative -mt-5 rounded-t-sheet bg-white px-gutter pt-[18px]">
+      <div className="relative -mt-5 rounded-t-sheet bg-card px-gutter pt-[18px]">
         <div className="flex items-center gap-2 tabular-nums">
           <span className="text-[30px] font-extrabold leading-9 text-ink-900">{formatUsd(price)}</span>
           {discountPct > 0 && <span className="text-[14px] font-medium text-ink-500 line-through">{formatUsd(comparePrice)}</span>}
@@ -237,7 +237,7 @@ export default function ProductDetailPage() {
 
         {/* Shop strip */}
         <Link href={`/shop/merchant/${product.merchant_id}`} className="fos-press mt-4 flex h-[60px] items-center gap-3 rounded-[18px] bg-surface px-2.5">
-          <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-md bg-white text-[18px]">
+          <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-md bg-card text-[18px]">
             {shop?.logo_url || product.merchant_logo_url
               ? <img src={(shop?.logo_url || product.merchant_logo_url)!} alt="" className="h-full w-full object-cover" />
               : shop?.icon_emoji || product.merchant_icon || <span className="text-[15px] font-extrabold text-navy-700">{(product.merchant_name || "S")[0]}</span>}
@@ -249,7 +249,7 @@ export default function ProductDetailPage() {
               {shop?.product_count ? <Pill variant="neutral" className="h-5">{shop.product_count} items</Pill> : null}
             </div>
           </div>
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-white text-ink-900 shadow-fos-sm" aria-hidden>→</span>
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-card text-ink-900 shadow-fos-sm" aria-hidden>→</span>
         </Link>
 
         {/* Trust tiles */}
@@ -292,7 +292,7 @@ export default function ProductDetailPage() {
       )}
 
       {/* Sticky CTA */}
-      <div className="fixed inset-x-0 bottom-0 z-[90] border-t border-line bg-white/95 backdrop-blur" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      <div className="fixed inset-x-0 bottom-0 z-[90] border-t border-line bg-card/95 backdrop-blur" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         <div className="mx-auto flex max-w-[640px] items-center gap-2.5 px-gutter py-[21px]">
           {inStock ? (
             <>
@@ -329,7 +329,7 @@ export default function ProductDetailPage() {
 function GlassButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button type="button" aria-label={label} onClick={onClick}
-      className="fos-press grid h-10 w-10 place-items-center rounded-full bg-white/80 text-ink-900 shadow-fos-sm backdrop-blur-[10px]">
+      className="fos-press grid h-10 w-10 place-items-center rounded-full bg-card/80 text-ink-900 shadow-fos-sm backdrop-blur-[10px]">
       {children}
     </button>
   );
@@ -339,7 +339,7 @@ function VariantPicker({ group, selected, missing, onPick }: { group: VariantGro
   const isColor = group.type === "color";
   const chosen = group.options.find((o) => o.id === selected);
   return (
-    <div id={`variant-${group.id}`} className={`mt-4 rounded-thumb transition-colors ${missing ? "-mx-2 bg-[#FDECEC] p-2 ring-1 ring-ruby-500" : ""}`}>
+    <div id={`variant-${group.id}`} className={`mt-4 rounded-thumb transition-colors ${missing ? "-mx-2 bg-tint-ruby p-2 ring-1 ring-ruby-500" : ""}`}>
       <div className="mb-2 flex items-baseline gap-2">
         <span className="text-[13px] font-extrabold text-ink-900">{group.group_name}</span>
         {missing
@@ -362,7 +362,7 @@ function VariantPicker({ group, selected, missing, onPick }: { group: VariantGro
           }
           return (
             <button key={opt.id} type="button" disabled={oos} onClick={() => onPick(opt.id)} aria-pressed={on}
-              className={`fos-press h-[38px] min-w-[46px] rounded-md border-[1.5px] px-3 text-[13px] ${on ? "border-navy-700 bg-navy-700 font-extrabold text-white" : "border-line bg-white font-semibold text-ink-900"} ${oos ? "text-ink-500 line-through opacity-50" : ""}`}>
+              className={`fos-press h-[38px] min-w-[46px] rounded-md border-[1.5px] px-3 text-[13px] ${on ? "border-navy-700 bg-navy-700 font-extrabold text-white" : "border-line bg-card font-semibold text-ink-900"} ${oos ? "text-ink-500 line-through opacity-50" : ""}`}>
               {opt.label}
               {opt.price_adjust > 0 && <span className="ml-1 text-[10px] opacity-75">+${opt.price_adjust}</span>}
             </button>
@@ -375,7 +375,7 @@ function VariantPicker({ group, selected, missing, onPick }: { group: VariantGro
 
 function TrustTile({ icon, tone = "default", children }: { icon: React.ReactNode; tone?: "default" | "warn"; children: React.ReactNode }) {
   return (
-    <div className={`flex h-16 flex-col items-center justify-center gap-1 rounded-thumb px-1 text-center ${tone === "warn" ? "bg-[#FFF1E6] text-[#B54708]" : "bg-surface text-ink-900"}`}>
+    <div className={`flex h-16 flex-col items-center justify-center gap-1 rounded-thumb px-1 text-center ${tone === "warn" ? "bg-tint-mango text-tone-mango" : "bg-surface text-ink-900"}`}>
       <svg width="20" height="20" viewBox="0 0 24 24" {...ICON} className={tone === "warn" ? "" : "text-navy-700"} aria-hidden>{icon}</svg>
       <span className="w-full truncate text-[11px] font-bold">{children}</span>
     </div>
@@ -448,9 +448,9 @@ function Reviews({ productId, signedIn }: { productId: number; signedIn: boolean
             ))}
           </div>
           <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} placeholder="How was it?"
-            className="mt-2 w-full resize-none rounded-md border border-line bg-white p-3 text-[14px] text-ink-900 outline-none focus:border-navy-500" />
+            className="mt-2 w-full resize-none rounded-md border border-line bg-card p-3 text-[14px] text-ink-900 outline-none focus:border-navy-500" />
           <div className="mt-2 flex gap-2">
-            <button type="button" onClick={() => setWriting(false)} className="fos-press h-11 flex-1 rounded-md bg-white text-[14px] font-bold text-ink-500">Cancel</button>
+            <button type="button" onClick={() => setWriting(false)} className="fos-press h-11 flex-1 rounded-md bg-card text-[14px] font-bold text-ink-500">Cancel</button>
             <button type="button" onClick={submit} disabled={busy} className="fos-press h-11 flex-[2] rounded-md bg-navy-700 text-[14px] font-bold text-white disabled:opacity-50">
               {busy ? "Sending…" : "Send review"}
             </button>
@@ -480,9 +480,9 @@ function Reviews({ productId, signedIn }: { productId: number; signedIn: boolean
 
 function LoadingPage() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-card">
       <Skeleton className="h-[420px] w-full" />
-      <div className="relative -mt-5 rounded-t-sheet bg-white px-gutter pt-[18px]">
+      <div className="relative -mt-5 rounded-t-sheet bg-card px-gutter pt-[18px]">
         <Skeleton className="h-9 w-36 rounded-md" />
         <Skeleton className="mt-3 h-5 w-3/4 rounded-md" />
         <div className="mt-3 flex gap-1.5">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-6 w-16 rounded-full" />)}</div>

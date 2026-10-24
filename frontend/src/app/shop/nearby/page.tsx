@@ -111,19 +111,19 @@ export default function NearbyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white font-sans">
+    <div className="min-h-screen bg-card font-sans">
       {/* Map: about a quarter of the screen */}
       <div className="relative">
         {location
           ? <ShopsMap you={location} shops={pins} selectedId={selected} onSelect={pickFromMap} height={MAP_HEIGHT} />
-          : <div className="w-full bg-[#E9EEF5]" style={{ height: MAP_HEIGHT }} />}
+          : <div className="w-full bg-tint-map" style={{ height: MAP_HEIGHT }} />}
         <div className="absolute inset-x-4 top-3 flex items-center gap-2.5">
           <button type="button" onClick={() => router.back()} aria-label="Back"
-            className="fos-press grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-ink-900 shadow-fos-md">
+            className="fos-press grid h-11 w-11 shrink-0 place-items-center rounded-full bg-card text-ink-900 shadow-fos-md">
             <Icon name="back" size={20} strokeWidth={2.4} />
           </button>
           <button type="button" onClick={() => setSheetOpen(true)}
-            className="fos-press flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full bg-white px-3.5 shadow-fos-md">
+            className="fos-press flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full bg-card px-3.5 shadow-fos-md">
             <Icon name="pin" size={16} strokeWidth={2.2} className="text-mango-500" />
             <span className="min-w-0 flex-1 truncate text-left text-[14px] font-extrabold text-ink-900">{location?.area || "Set your location"}</span>
             <span className="text-[12px] font-extrabold text-navy-500">Change</span>
@@ -132,7 +132,7 @@ export default function NearbyPage() {
       </div>
 
       {/* Sheet: the cards are the main thing */}
-      <div className="relative z-[1] -mt-6 rounded-t-[28px] bg-white pb-6 shadow-[0_-10px_30px_rgba(8,29,60,0.10)]">
+      <div className="relative z-[1] -mt-6 rounded-t-[28px] bg-card pb-6 shadow-[0_-10px_30px_rgba(8,29,60,0.10)]">
         <div className="mx-auto h-1 w-10 rounded-full bg-line pt-0" style={{ transform: "translateY(10px)" }} />
 
         <div className="flex items-end justify-between gap-3 px-4 pt-6">
@@ -154,7 +154,7 @@ export default function NearbyPage() {
         <div className="fos-no-scrollbar mt-3 flex gap-2 overflow-x-auto px-4" role="radiogroup" aria-label="Filter shops">
           {SHOP_FILTERS.map((f) => (
             <button key={f} type="button" role="radio" aria-checked={filter === f} onClick={() => setFilter(f)}
-              className={`fos-press h-9 shrink-0 rounded-full px-3.5 text-[13px] font-extrabold ${filter === f ? "bg-navy-700 text-white" : "border-[1.5px] border-line bg-white text-ink-900"}`}>
+              className={`fos-press h-9 shrink-0 rounded-full px-3.5 text-[13px] font-extrabold ${filter === f ? "bg-navy-700 text-white" : "border-[1.5px] border-line bg-card text-ink-900"}`}>
               {f}
             </button>
           ))}
@@ -194,14 +194,14 @@ export default function NearbyPage() {
                   <Link href={`/shop/merchant/${s.id}`} className="fos-press flex items-center gap-3 py-3">
                     <span className="relative h-16 w-16 shrink-0 overflow-hidden rounded-thumb">
                       <ShopCover theme={s.theme ?? "general"} url={s.cover_url} />
-                      {s.logo_url && <img src={s.logo_url} alt="" className="absolute bottom-1 right-1 h-7 w-7 rounded-lg border-2 border-white object-cover" />}
+                      {s.logo_url && <img src={s.logo_url} alt="" className="absolute bottom-1 right-1 h-7 w-7 rounded-lg border-2 border-card object-cover" />}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
                         <span className="truncate text-[15px] font-extrabold text-ink-900">{s.name}</span>
                         {s.rating != null
                           ? <span className="inline-flex shrink-0 items-center gap-0.5 text-[12px] font-extrabold text-gold-700"><Icon name="star" size={12} filled />{s.rating.toFixed(1)}</span>
-                          : <span className="shrink-0 rounded-full bg-[#EEF3FC] px-1.5 text-[10px] font-extrabold text-navy-500">New</span>}
+                          : <span className="shrink-0 rounded-full bg-tint-navy px-1.5 text-[10px] font-extrabold text-navy-500">New</span>}
                       </span>
                       <span className="block truncate text-[12px] font-semibold text-ink-500">{s.tagline || THEMES[s.theme ?? "general"].label}{s.is_open === false ? " · Closed" : ""}</span>
                       <span className="mt-1 flex items-center gap-2.5 text-[12px] font-extrabold text-navy-700">
@@ -209,7 +209,7 @@ export default function NearbyPage() {
                         {s.eta_minutes != null && s.eta_max_minutes != null && (
                           <span className="inline-flex items-center gap-0.5"><Icon name="clock" size={12} strokeWidth={2.4} />{formatEta(s.eta_minutes, s.eta_max_minutes)}</span>
                         )}
-                        <span className={`inline-flex items-center gap-0.5 ${s.can_deliver === false ? "text-[#B54708]" : "text-[#067647]"}`}>
+                        <span className={`inline-flex items-center gap-0.5 ${s.can_deliver === false ? "text-tone-mango" : "text-tone-jade"}`}>
                           <Icon name="truck" size={13} strokeWidth={2.2} />
                           {s.can_deliver === false ? "Pickup only" : Number(s.delivery_fee) === 0 ? "Free" : `$${Number(s.delivery_fee).toFixed(2)}`}
                         </span>

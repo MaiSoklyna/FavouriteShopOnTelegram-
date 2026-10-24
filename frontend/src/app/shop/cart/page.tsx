@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
-import { EmptyState, Pill, Skeleton } from "@/components/shop";
+import { EmptyState, LocationSheet, Pill, Skeleton } from "@/components/shop";
 import { api } from "@/lib/api";
 import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote, type ShopQuote } from "@/lib/quote";
 import { FREE_DELIVERY_OVER_USD, formatKhr } from "@/lib/currency";
@@ -22,7 +22,8 @@ export default function CartPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { items, loading, updateQuantity, removeItem } = useCart();
-  const { location, resolved } = useHomeLocation(!!user);
+  const { location, resolved, save: saveLocation } = useHomeLocation(!!user);
+  const [locOpen, setLocOpen] = useState(false);
 
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoCode, setPromoCode] = useState("");
@@ -146,7 +147,12 @@ export default function CartPage() {
           error={deliveryError}
           orders={quote?.orders ?? []}
           shopName={(id) => shops[id]?.name}
+          onChangeLocation={() => setLocOpen(true)}
         />
+        {locOpen && (
+          <LocationSheet current={location} onClose={() => setLocOpen(false)}
+            onConfirm={(loc) => { saveLocation(loc); setLocOpen(false); }} />
+        )}
 
         <div className="mt-4 flex flex-col gap-3">
           {groups.map(({ merchantId, lines }) => (
@@ -165,13 +171,13 @@ export default function CartPage() {
 
         {/* Promo */}
         {promoSuccess ? (
-          <div className="mt-3 flex h-14 items-center gap-3 rounded-[18px] bg-[#E7F8EF] px-4">
-            <Icon name="ticket" size={20} className="text-[#067647]" />
-            <span className="flex-1 truncate text-[14px] font-bold text-[#067647]">{quote?.promo?.code ?? promoCode} · −{money(discount)}</span>
+          <div className="mt-3 flex h-14 items-center gap-3 rounded-[18px] bg-tint-jade px-4">
+            <Icon name="ticket" size={20} className="text-tone-jade" />
+            <span className="flex-1 truncate text-[14px] font-bold text-tone-jade">{quote?.promo?.code ?? promoCode} · −{money(discount)}</span>
             <button type="button" onClick={clearPromo} className="fos-press h-11 px-2 text-[13px] font-bold text-ruby-500">Remove</button>
           </div>
         ) : promoOpen ? (
-          <div className="mt-3 rounded-[18px] border border-dashed border-gold-400 bg-white p-2">
+          <div className="mt-3 rounded-[18px] border border-dashed border-gold-400 bg-card p-2">
             <div className="flex gap-2">
               <input
                 autoFocus value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
@@ -189,7 +195,7 @@ export default function CartPage() {
         ) : (
           <button
             type="button" onClick={() => setPromoOpen(true)}
-            className="fos-press mt-3 flex h-14 w-full items-center gap-3 rounded-[18px] border border-dashed border-gold-400 bg-white px-4 text-left"
+            className="fos-press mt-3 flex h-14 w-full items-center gap-3 rounded-[18px] border border-dashed border-gold-400 bg-card px-4 text-left"
           >
             <Icon name="ticket" size={20} className="text-gold-700" />
             <span className="flex-1 text-[14px] font-bold text-ink-900">Promo code</span>
@@ -200,7 +206,7 @@ export default function CartPage() {
 
       {/* Summary bar — sits above the tab bar */}
       <div
-        className="fixed inset-x-0 z-[90] rounded-t-hero bg-white shadow-fos-lg"
+        className="fixed inset-x-0 z-[90] rounded-t-hero bg-card shadow-fos-lg"
         style={{ bottom: "calc(84px + env(safe-area-inset-bottom, 0px))" }}
       >
         <div className="mx-auto flex max-w-[640px] items-center gap-3 px-gutter py-3">
@@ -229,11 +235,12 @@ function groupByShop(items: CartItem[]) {
 }
 
 /** Where the order goes + how far each shop is from free delivery. */
-function DeliveryBar({ location, error, orders, shopName }: {
+function DeliveryBar({ location, error, orders, shopName, onChangeLocation }: {
   location: string | null;
   error: string;
   orders: ShopQuote[];
   shopName: (id: number) => string | undefined;
+  onChangeLocation: () => void;
 }) {
   const truck = (
     <svg width="22" height="22" viewBox="0 0 24 24" {...ICON} aria-hidden>
@@ -243,12 +250,13 @@ function DeliveryBar({ location, error, orders, shopName }: {
 
   if (error) {
     return (
-      <div className="mt-4 flex items-center gap-3 rounded-card bg-[#FDECEC] p-3.5">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-white text-ruby-500">{truck}</div>
+      <div className="mt-4 flex items-center gap-3 rounded-card bg-tint-ruby p-3.5">
+        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-card text-ruby-500">{truck}</div>
         <div className="min-w-0 flex-1">
           <div className="text-[13px] font-extrabold text-ink-900">Can&apos;t deliver to {location ?? "your location"}</div>
           <div className="truncate text-caption text-ink-500">{error} · pickup available</div>
         </div>
+        <button type="button" onClick={onChangeLocation} className="fos-press shrink-0 rounded-full bg-card px-3 py-1.5 text-[12px] font-extrabold text-navy-700">Change</button>
       </div>
     );
   }
@@ -263,22 +271,23 @@ function DeliveryBar({ location, error, orders, shopName }: {
   const name = pending && orders.length > 1 ? shopName(pending.id) : undefined;
 
   return (
-    <div className="mt-4 flex items-center gap-3 rounded-card bg-[#E7F8EF] p-3.5">
-      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-white text-[#067647]">{truck}</div>
+    <div className="mt-4 flex items-center gap-3 rounded-card bg-tint-jade p-3.5">
+      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-card text-tone-jade">{truck}</div>
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13px] font-extrabold text-ink-900">
           {unlocked
-            ? <span className="text-[#067647]">Free delivery unlocked</span>
+            ? <span className="text-tone-jade">Free delivery unlocked</span>
             : pending
-              ? <>+{money(pending.left)}{name ? ` at ${name}` : ""} → <span className="text-[#067647]">Free delivery</span></>
+              ? <>+{money(pending.left)}{name ? ` at ${name}` : ""} → <span className="text-tone-jade">Free delivery</span></>
               : "Delivery"}
         </div>
-        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white">
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-card">
           <i className="block h-full rounded-full bg-jade-500 transition-[width] duration-300" style={{ width: `${progress * 100}%` }} />
         </div>
-        <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-ink-500">
-          <Icon name="pin" size={12} strokeWidth={2.2} /><span className="truncate">{location ? `To ${location}` : "Set your location at checkout"}</span>
-        </div>
+        <button type="button" onClick={onChangeLocation} className="mt-1 flex max-w-full items-center gap-1 text-[11px] font-semibold text-ink-500">
+          <Icon name="pin" size={12} strokeWidth={2.2} /><span className="truncate">{location ? `To ${location}` : "Set your delivery location"}</span>
+          <span className="shrink-0 font-extrabold text-navy-700">· Change</span>
+        </button>
       </div>
     </div>
   );
@@ -303,7 +312,7 @@ function ShopGroup({ shop, fallbackName, quote, priced, lines, onQty, onRemove }
   else if (quote) feePill = <Pill variant="neutral">Fee at checkout</Pill>;
 
   return (
-    <section className="rounded-hero bg-white p-3.5 shadow-fos-sm">
+    <section className="rounded-hero bg-card p-3.5 shadow-fos-sm">
       <header className="mb-1 flex items-center gap-2.5">
         <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-surface text-[14px]">
           {shop?.logo_url

@@ -19,7 +19,7 @@ export function CategoryPhotoIcon({ href, label, imageUrl, emoji }: Props) {
   const photo = imageUrl || (emoji && URL_RE.test(emoji) ? emoji : null);
   return (
     <Link href={href} className="fos-press flex min-h-[44px] flex-col items-center gap-1.5">
-      <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-cat bg-[#EEF2F8]">
+      <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-cat bg-tint-navy">
         {photo ? (
           <img src={photo} alt="" loading="lazy" className="h-full w-full object-cover" />
         ) : emoji ? (

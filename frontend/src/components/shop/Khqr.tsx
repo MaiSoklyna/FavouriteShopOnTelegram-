@@ -34,7 +34,7 @@ export function KhqrCard({ data, loading, error, timer, onRetry }: {
   const fileName = `KHQR-${data?.order_code || "order"}.png`;
 
   return (
-    <div className="mx-auto w-full max-w-[340px] overflow-hidden rounded-sheet bg-white text-ink-900 shadow-fos-lg">
+    <div className="mx-auto w-full max-w-[340px] overflow-hidden rounded-sheet bg-card text-ink-900 shadow-fos-lg">
       <div className="flex h-[34px] items-center justify-center gap-1.5 bg-[#E1232E] text-[14px] font-extrabold tracking-[.06em] text-white">
         KHQR
       </div>
@@ -55,7 +55,7 @@ export function KhqrCard({ data, loading, error, timer, onRetry }: {
           ) : (
             <div className="grid h-full place-items-center rounded-thumb bg-surface p-6 text-center">
               <div>
-                <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[#FDECEC] text-ruby-500"><Icon name="alert" size={24} /></span>
+                <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-tint-ruby text-ruby-500"><Icon name="alert" size={24} /></span>
                 <p className="mt-2 text-[14px] font-bold text-ink-900">{error || "Could not create the QR"}</p>
                 <button type="button" onClick={onRetry} className="fos-press mt-3 h-10 rounded-full bg-navy-700 px-5 text-[13px] font-extrabold text-white">Try again</button>
               </div>
@@ -125,7 +125,7 @@ export function PaidSuccess({ amount, eta, note, cta = "View order", onDone, aut
   }, [onDone, autoMs]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden bg-[linear-gradient(160deg,#E7F8EF,#FFFFFF_60%)] px-gutter text-center"
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden bg-[linear-gradient(160deg,rgb(var(--fos-c-tint-jade)),rgb(var(--fos-c-card))_60%)] px-gutter text-center"
       role="status" aria-live="polite">
       <div className="pointer-events-none absolute inset-x-0 top-1/3 h-0 motion-reduce:hidden" aria-hidden>
         {Array.from({ length: 18 }, (_, i) => (
@@ -147,8 +147,8 @@ export function PaidSuccess({ amount, eta, note, cta = "View order", onDone, aut
       <h1 className="mt-5 text-display text-ink-900">Paid</h1>
       {amount != null && <p className="mt-1 text-[15px] font-bold tabular-nums text-ink-500">${amount.toFixed(2)} · {formatKhr(amount)}</p>}
       <div className="mt-3 flex flex-wrap justify-center gap-2">
-        {eta && <span className="inline-flex h-7 items-center gap-1 rounded-full bg-[#E7F8EF] px-3 text-[12px] font-extrabold text-[#067647]"><Icon name="truck" size={14} />Arrives in {eta}</span>}
-        {note && <span className="inline-flex h-7 items-center rounded-full bg-[#F1F4F8] px-3 text-[12px] font-bold text-ink-500">{note}</span>}
+        {eta && <span className="inline-flex h-7 items-center gap-1 rounded-full bg-tint-jade px-3 text-[12px] font-extrabold text-tone-jade"><Icon name="truck" size={14} />Arrives in {eta}</span>}
+        {note && <span className="inline-flex h-7 items-center rounded-full bg-tint-neutral px-3 text-[12px] font-bold text-ink-500">{note}</span>}
       </div>
       <button type="button" onClick={onDone}
         className="fos-press mt-8 h-[52px] w-full max-w-[340px] rounded-thumb bg-grad-cta text-[15px] font-extrabold text-white shadow-fos-cta">

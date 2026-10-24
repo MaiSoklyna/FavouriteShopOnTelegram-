@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MAPBOX_TOKEN, MAP_STYLE, formatKm, type LatLng } from "@/lib/mapbox";
+import { MAPBOX_TOKEN, mapStyle, formatKm, type LatLng } from "@/lib/mapbox";
 
 export interface MapShop {
   id: number;
@@ -85,7 +85,7 @@ export default function ShopsMap({ you, shops, selectedId, onSelect, height }: P
     if (!box.current || !MAPBOX_TOKEN) return;
     mapboxgl.accessToken = MAPBOX_TOKEN;
     const m = new mapboxgl.Map({
-      container: box.current, style: MAP_STYLE, center: [you.lng, you.lat], zoom: 13.5, attributionControl: false,
+      container: box.current, style: mapStyle(), center: [you.lng, you.lat], zoom: 13.5, attributionControl: false,
     });
     m.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-left");
     new mapboxgl.Marker({ element: youEl(), anchor: "center" }).setLngLat([you.lng, you.lat]).addTo(m);
@@ -126,7 +126,7 @@ export default function ShopsMap({ you, shops, selectedId, onSelect, height }: P
   }, [selectedId]);
 
   return (
-    <div className="relative w-full bg-[#E9EEF5]" style={{ height }}>
+    <div className="relative w-full bg-tint-map" style={{ height }}>
       <div ref={box} className="h-full w-full" />
       {failed && (
         <p className="absolute inset-0 grid place-items-center px-6 text-center text-[13px] font-semibold text-ink-500">Map unavailable. The shops are listed below.</p>
