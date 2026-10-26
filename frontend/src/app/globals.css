@@ -361,3 +361,46 @@ input:focus, select:focus, textarea:focus {
 .shop-h-scroll > * { scroll-snap-align: start; }
 .shop-scroll-area { flex: 1; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
 .shop-scroll-area::-webkit-scrollbar { display: none; }
+
+/* ═══════ BYME24 BRAND (brand/HANDOFF.md) ═══════ */
+:root {
+  --brand-navy: #081D3C;
+  --brand-gold: #D6BA80;
+  --brand-gold-dark: #71541A;
+}
+
+/* Spinner — the knot turns in three 120° steps every 2.4s, around the ring's centre */
+.brand-spinner__knot { transform-box: view-box; transform-origin: 50% 58%; }
+.brand-spinner--rotate .brand-spinner__knot,
+.brand-spinner--glow .brand-spinner__knot { animation: brand-rotate 2.4s cubic-bezier(.65,0,.35,1) infinite; }
+.brand-spinner--pulse .brand-spinner__knot { animation: brand-pulse 1.6s ease-in-out infinite; }
+.brand-spinner--glow { filter: drop-shadow(0 0 6px rgba(214,186,128,.55)); }
+@keyframes brand-rotate {
+  0% { transform: rotate(0deg); }
+  33.333% { transform: rotate(120deg); }
+  66.666% { transform: rotate(240deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes brand-pulse {
+  0%, 100% { transform: scale(.86); opacity: .55; }
+  50% { transform: scale(1); opacity: 1; }
+}
+
+/* Full-page loader: gold progress sweep under the knot */
+.brand-sweep { width: 132px; height: 3px; border-radius: 3px; background: rgba(214,186,128,.18); overflow: hidden; }
+.brand-sweep span { display: block; width: 40%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, transparent, var(--brand-gold), transparent); animation: brand-sweep 1.4s ease-in-out infinite; }
+@keyframes brand-sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+
+/* Order placed: soft gold halo around SuccessIcon */
+.brand-success-glow { border-radius: 50%; animation: brand-glow 2s ease-in-out infinite; }
+@keyframes brand-glow {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(214,186,128,.35)); }
+  50% { filter: drop-shadow(0 0 14px rgba(214,186,128,.75)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-spinner__knot, .brand-sweep span, .brand-success-glow { animation: none !important; }
+}
+
+/* Buttons carry an icon + label side by side */
+.btn-primary, .btn-outline, .btn-danger, .btn-gold { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }

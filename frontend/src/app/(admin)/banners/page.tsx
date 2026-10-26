@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 import type { Category, CategoryBanner } from "@/types";
+import { AddIcon, DeleteIcon, EditIcon } from "@/components/brand/Icons";
 
 export default function BannersPage() {
   const [banners, setBanners] = useState<CategoryBanner[]>([]);
@@ -105,7 +106,7 @@ export default function BannersPage() {
             Promotional banners linked to categories — displayed on home page or category pages
           </p>
         </div>
-        <button className="btn-primary" onClick={openCreate}>+ Add Banner</button>
+        <button className="btn-primary" onClick={openCreate}><AddIcon size={16} />Add Banner</button>
       </div>
 
       {/* Banner cards grid */}
@@ -188,7 +189,7 @@ export default function BannersPage() {
                     padding: "6px 10px", borderRadius: 6, border: "none",
                     background: "var(--accent-light)", color: "var(--accent)",
                     fontSize: 12, cursor: "pointer",
-                  }}>Edit</button>
+                  }}><span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><EditIcon size={14} />Edit</span></button>
                   <button onClick={() => toggleActive(b)} style={{
                     padding: "6px 10px", borderRadius: 6, border: "none",
                     background: b.is_active ? "rgba(239, 68, 68, 0.08)" : "rgba(16, 181, 129, 0.08)",
@@ -199,7 +200,7 @@ export default function BannersPage() {
                     padding: "6px 10px", borderRadius: 6, border: "none",
                     background: "rgba(239, 68, 68, 0.08)", color: "#EF4444",
                     fontSize: 12, cursor: "pointer",
-                  }}>Del</button>
+                  }}><span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><DeleteIcon size={14} />Delete</span></button>
                 </div>
               </div>
             </div>

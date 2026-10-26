@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import type { SellerApplication } from "@/types";
+import { ApproveIcon } from "@/components/brand/Icons";
 
 const TABS = ["pending", "approved", "rejected", "all"] as const;
 type Tab = (typeof TABS)[number];
@@ -160,7 +161,7 @@ export default function SellerApplicationsPage() {
                       flex: 1, padding: 10, borderRadius: 8, border: "none", cursor: "pointer",
                       background: "var(--success)", color: "#fff", fontWeight: 600, fontSize: 13,
                       opacity: busy === a.id ? 0.6 : 1,
-                    }}>Approve</button>
+                    }}><span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><ApproveIcon size={16} />Approve</span></button>
                     <button onClick={() => reject(a.id)} disabled={busy === a.id} style={{
                       flex: 1, padding: 10, borderRadius: 8, cursor: "pointer",
                       border: "1px solid var(--danger)", background: "transparent", color: "var(--danger)",

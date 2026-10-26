@@ -5,6 +5,7 @@ import { AuthProvider } from "@/providers/AuthProvider";
 export const metadata: Metadata = {
   title: "Byme24",
   description: "Byme24 — Your Favourite Shop",
+  icons: { icon: "/brand/favicon.svg", apple: "/brand/app-icon.svg" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

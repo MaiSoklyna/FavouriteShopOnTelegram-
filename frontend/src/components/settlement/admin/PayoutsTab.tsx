@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { adminSettlements, downloadCsv, errorMessage, type Payout, type PayoutStatus } from "@/lib/settlements";
 import { BTN, INPUT, Pager, Panel, Tabs } from "../ui";
 import { PayoutsTable } from "../tables";
+import { ExportIcon } from "@/components/brand/Icons";
 
 const PAGE_SIZE = 25;
 type Filter = "pending" | "paid" | "failed" | "cancelled" | "reversed" | "all";
@@ -61,7 +62,7 @@ export function PayoutsTab({ merchantNames, onOpen, refreshKey, flash }: {
               .sort((a, b) => a[1].localeCompare(b[1]))
               .map(([id, name]) => <option key={id} value={id}>{name}</option>)}
           </select>
-          <button className={BTN.outlineSm} onClick={exportCsv} disabled={rows.length === 0}>Export CSV</button>
+          <button className={BTN.outlineSm} onClick={exportCsv} disabled={rows.length === 0}><ExportIcon size={16} />Export CSV</button>
         </>
       }
     >

@@ -10,6 +10,7 @@ import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote, type Deliv
 import { deleteAddress, listAddresses, saveAddress, type SavedAddress } from "@/lib/addresses";
 import { distanceKm, formatEta, formatKm, getCurrentPosition, reverseGeocode, type LatLng } from "@/lib/mapbox";
 import { haptic, useMainButton } from "@/lib/telegram";
+import { DeliveryIcon, LocationIcon, PayoutIcon, QrIcon, StoreIcon } from "@/components/brand/Icons";
 
 // Same look as the map's own loading state, so there is no flash of an empty box
 const MapPicker = dynamic(() => import("@/components/map/MapPicker"), {
@@ -374,9 +375,9 @@ export default function CheckoutPage() {
             <SectionTitle>Delivery method</SectionTitle>
             <div role="radiogroup" aria-label="Delivery method" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
               {([
-                ["delivery", "🛵", "Delivery", "To your door"],
-                ["pickup", "🏪", "Pickup", "Collect at the shop · Free"],
-              ] as const).map(([key, icon, title, sub]) => {
+                ["delivery", DeliveryIcon, "Delivery", "To your door"],
+                ["pickup", StoreIcon, "Pickup", "Collect at the shop · Free"],
+              ] as const).map(([key, MethodIcon, title, sub]) => {
                 const on = deliveryType === key;
                 return (
                   <button key={key} role="radio" aria-checked={on} onClick={() => { haptic("select"); setDeliveryType(key); }} className="shop-press" style={{
@@ -390,7 +391,7 @@ export default function CheckoutPage() {
                       position: "absolute", top: 12, right: 12, width: 18, height: 18, borderRadius: "50%",
                       border: on ? "5px solid var(--shop-primary)" : "2px solid var(--shop-divider)", background: "var(--shop-surface)",
                     }} />
-                    <div style={{ fontSize: 22 }}>{icon}</div>
+                    <MethodIcon size={26} style={{ display: "block", color: on ? "var(--shop-primary)" : "var(--shop-black)" }} />
                     <div style={{ fontWeight: 700, fontSize: 14, color: "var(--shop-black)", marginTop: 4 }}>{title}</div>
                     <div style={{ fontSize: 11, color: "var(--shop-muted)", marginTop: 1 }}>{sub}</div>
                   </button>
@@ -434,7 +435,7 @@ export default function CheckoutPage() {
 
             {deliveryType === "delivery" && (
               <Card>
-                <SectionTitle small>📍 Delivery address</SectionTitle>
+                <SectionTitle small><span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><LocationIcon size={18} style={{ color: "var(--shop-primary)" }} />Delivery address</span></SectionTitle>
 
                 {saved.length > 0 && (
                   <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, marginBottom: 12 }} className="shop-h-scroll">
@@ -537,7 +538,7 @@ export default function CheckoutPage() {
             }}>Payment Method</h2>
             {[
               { key: "cod", label: "Cash on Delivery", desc: "Pay when you receive", icon: "💵" },
-              { key: "khqr", label: "ABA KHQR", desc: "Scan with ABA Mobile or any KHQR banking app", icon: "📱" },
+              { key: "khqr", label: "ABA KHQR", desc: "Scan with ABA Mobile or any KHQR banking app", icon: <QrIcon size={20} /> },
             ].map(m => {
               const selected = payment === m.key;
               return (
@@ -555,6 +556,7 @@ export default function CheckoutPage() {
                     background: selected ? "var(--shop-primary, #1E6BFF)" : "var(--shop-primary-tint, #E8F0FF)",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: 18, flexShrink: 0,
+                    color: selected ? "#FFFFFF" : "var(--shop-primary, #1E6BFF)",
                   }}>{m.icon}</div>
                   <div>
                     <div style={{
@@ -795,7 +797,7 @@ function ShopBadge({ shop }: { shop: ShopInfo | null }) {
       width: 48, height: 48, borderRadius: 12, flexShrink: 0, overflow: "hidden", fontSize: 24,
       background: "var(--shop-primary-tint)", display: "flex", alignItems: "center", justifyContent: "center",
     }}>
-      {shop?.logo_url ? <img src={shop.logo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (shop?.icon_emoji || "🏪")}
+      {shop?.logo_url ? <img src={shop.logo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : (shop?.icon_emoji || <StoreIcon size={24} style={{ color: "var(--shop-primary)" }} />)}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { LoginGate } from "@/components/shop/LoginGate";
 import type { Order } from "@/types";
+import { EmptyStateIcon } from "@/components/brand/Icons";
 
 const TABS = [
   { key: "all", label: "All" },
@@ -137,7 +138,7 @@ export default function OrdersPage() {
             ))}
           </div>
         ) : (
-          <Empty icon="🛍️" message="No orders yet" action="Start Shopping" onAction={() => router.push("/shop")} />
+          <Empty icon={<EmptyStateIcon size={88} style={{ display: "block", margin: "0 auto", color: "var(--shop-primary, #1E6BFF)" }} />} message="No orders yet" action="Start Shopping" onAction={() => router.push("/shop")} />
         )}
       </div>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
@@ -145,7 +146,7 @@ export default function OrdersPage() {
   );
 }
 
-function Empty({ icon, message, action, onAction }: { icon: string; message: string; action?: string; onAction?: () => void }) {
+function Empty({ icon, message, action, onAction }: { icon: React.ReactNode; message: string; action?: string; onAction?: () => void }) {
   return (
     <div style={{ textAlign: "center", paddingTop: 60 }}>
       <div style={{ fontSize: 48, marginBottom: 12 }}>{icon}</div>

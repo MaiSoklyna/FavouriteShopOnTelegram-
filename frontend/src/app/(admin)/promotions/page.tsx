@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import type { PromoCode, Merchant } from "@/types";
+import { AddIcon, DeleteIcon, EditIcon } from "@/components/brand/Icons";
 
 export default function PromotionsPage() {
   const { isSuperAdmin } = useAuth();
@@ -101,7 +102,7 @@ export default function PromotionsPage() {
       {toast.show && <div className={`toast ${toast.ok ? "toast-success" : "toast-error"}`}>{toast.msg}</div>}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div><h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text)" }}>Promotions</h1><p style={{ fontSize: 13, color: "var(--text-muted)" }}>{promos.length} promo codes</p></div>
-        <button className="btn-primary" onClick={openCreate}>+ Add Promo</button>
+        <button className="btn-primary" onClick={openCreate}><AddIcon size={16} />Add Promo</button>
       </div>
 
       <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
@@ -126,7 +127,7 @@ export default function PromotionsPage() {
                   <td>{p.used_count}{p.max_uses ? `/${p.max_uses}` : ""}</td>
                   <td style={{ fontSize: 12, color: "var(--text-muted)" }}>{p.expires_at ? new Date(p.expires_at).toLocaleDateString() : "Never"}</td>
                   <td><span className={`badge ${p.is_active ? "badge-delivered" : "badge-cancelled"}`}>{p.is_active ? "Active" : "Inactive"}</span></td>
-                  <td><div style={{ display: "flex", gap: 4 }}><button onClick={() => openEdit(p)} style={{ background: "none", border: "none", cursor: "pointer" }}>✏️</button><button onClick={() => deletePromo(p.id)} style={{ background: "none", border: "none", cursor: "pointer" }}>🗑️</button></div></td>
+                  <td><div style={{ display: "flex", gap: 4 }}><button onClick={() => openEdit(p)} title="Edit" aria-label="Edit" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent, #103562)", padding: 4 }}><EditIcon size={18} /></button><button onClick={() => deletePromo(p.id)} title="Delete" aria-label="Delete" style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", padding: 4 }}><DeleteIcon size={18} /></button></div></td>
                 </tr>
               ))}
             </tbody>

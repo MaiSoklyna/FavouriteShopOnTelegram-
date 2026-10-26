@@ -4,34 +4,27 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import type { AdminUser } from "@/types";
-import {
-  HiOutlineHome, HiOutlineShoppingBag, HiOutlineClipboardList,
-  HiOutlineTag, HiOutlineUsers, HiOutlineChartBar,
-  HiOutlineCog, HiOutlineTicket, HiOutlineStar,
-  HiOutlineBell, HiOutlineGift, HiOutlineOfficeBuilding,
-  HiOutlineLogout, HiOutlineMenu, HiOutlineX,
-  HiOutlinePhotograph, HiOutlineChatAlt2, HiOutlineUserAdd,
-  HiOutlineCash, HiOutlineCurrencyDollar,
-} from "react-icons/hi";
+import { HiOutlineMenu, HiOutlineX, HiOutlinePhotograph, HiOutlineChatAlt2 } from "react-icons/hi";
+import { ApproveIcon, BellIcon, CategoryIcon, CustomersIcon, DashboardIcon, LogoutIcon, OrdersIcon, PayoutIcon, ProductsIcon, PromoIcon, ReportsIcon, RewardsIcon, SettingsIcon, StoreIcon, SupportIcon } from "@/components/brand/Icons";
 
 const MENU = [
-  { href: "/dashboard", label: "Dashboard", icon: HiOutlineHome },
-  { href: "/products", label: "Products", icon: HiOutlineShoppingBag },
-  { href: "/orders", label: "Orders", icon: HiOutlineClipboardList },
-  { href: "/categories", label: "Categories", icon: HiOutlineTag },
+  { href: "/dashboard", label: "Dashboard", icon: DashboardIcon },
+  { href: "/products", label: "Products", icon: ProductsIcon },
+  { href: "/orders", label: "Orders", icon: OrdersIcon },
+  { href: "/categories", label: "Categories", icon: CategoryIcon },
   { href: "/banners", label: "Banners", icon: HiOutlinePhotograph, superOnly: true },
-  { href: "/promotions", label: "Promotions", icon: HiOutlineGift },
-  { href: "/analytics", label: "Analytics", icon: HiOutlineChartBar },
-  { href: "/earnings", label: "Earnings", icon: HiOutlineCurrencyDollar, merchantOnly: true },
-  { href: "/settlements", label: "Settlements", icon: HiOutlineCash, superOnly: true },
+  { href: "/promotions", label: "Promotions", icon: PromoIcon },
+  { href: "/analytics", label: "Analytics", icon: ReportsIcon },
+  { href: "/earnings", label: "Earnings", icon: PayoutIcon, merchantOnly: true },
+  { href: "/settlements", label: "Settlements", icon: PayoutIcon, superOnly: true },
   { href: "/reviews", label: "Reviews", icon: HiOutlineChatAlt2 },
-  { href: "/support", label: "Support", icon: HiOutlineTicket },
-  { href: "/loyalty", label: "Loyalty", icon: HiOutlineStar },
-  { href: "/notifications", label: "Notifications", icon: HiOutlineBell, adminOnly: false },
-  { href: "/merchants", label: "Merchants", icon: HiOutlineOfficeBuilding, superOnly: true },
-  { href: "/seller-applications", label: "Seller Applications", icon: HiOutlineUserAdd, superOnly: true },
-  { href: "/users", label: "Users", icon: HiOutlineUsers, superOnly: true },
-  { href: "/settings", label: "Settings", icon: HiOutlineCog },
+  { href: "/support", label: "Support", icon: SupportIcon },
+  { href: "/loyalty", label: "Loyalty", icon: RewardsIcon },
+  { href: "/notifications", label: "Notifications", icon: BellIcon, adminOnly: false },
+  { href: "/merchants", label: "Merchants", icon: StoreIcon, superOnly: true },
+  { href: "/seller-applications", label: "Seller Applications", icon: ApproveIcon, superOnly: true },
+  { href: "/users", label: "Users", icon: CustomersIcon, superOnly: true },
+  { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -209,7 +202,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
                 }}
               >
-                <HiOutlineLogout size={14} /> Logout
+                <LogoutIcon size={16} /> Logout
               </button>
             )}
             {collapsed && (
@@ -224,7 +217,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}
               >
-                <HiOutlineLogout size={14} />
+                <LogoutIcon size={16} />
               </button>
             )}
           </div>

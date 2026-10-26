@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { ProductCard, CategoryIcon } from "@/components/shop";
 import { useCart } from "@/providers/CartProvider";
 import type { Merchant, Product, Category } from "@/types";
+import { EmptyStateIcon, StoreIcon } from "@/components/brand/Icons";
 
 export default function MerchantDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -83,7 +84,7 @@ export default function MerchantDetailPage() {
   if (error || !merchant) {
     return (
       <div style={{ minHeight: "100vh", background: "var(--shop-bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center" }}>
-        <div style={{ fontSize: 56, marginBottom: 12 }}>🏪</div>
+        <StoreIcon size={56} style={{ display: "block", margin: "0 auto 12px", color: "var(--shop-muted)" }} />
         <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--shop-black)", marginBottom: 6 }}>{error || "Shop unavailable"}</h2>
         <p style={{ fontSize: 13, color: "var(--shop-muted)", marginBottom: 20 }}>The shop you’re looking for doesn’t exist or is no longer active.</p>
         <button
@@ -258,7 +259,7 @@ export default function MerchantDetailPage() {
       <section style={{ padding: "8px 16px" }}>
         {visibleProducts.length === 0 ? (
           <div style={{ textAlign: "center", padding: "48px 0" }}>
-            <div style={{ fontSize: 48, marginBottom: 10 }}>🛍️</div>
+            <EmptyStateIcon size={88} style={{ display: "block", margin: "0 auto 10px", color: "var(--shop-primary)" }} />
             <p style={{ fontSize: 14, fontWeight: 600, color: "var(--shop-black)" }}>No products yet</p>
             <p style={{ fontSize: 12, color: "var(--shop-muted)", marginTop: 4 }}>Check back soon for new arrivals</p>
           </div>

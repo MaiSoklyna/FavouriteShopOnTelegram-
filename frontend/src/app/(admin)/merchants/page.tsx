@@ -8,6 +8,7 @@ import { HeroImagesEditor } from "@/components/admin/HeroImagesEditor";
 
 const MapPicker = dynamic(() => import("@/components/map/MapPicker"), { ssr: false });
 import type { Merchant } from "@/types";
+import { AddIcon, EditIcon } from "@/components/brand/Icons";
 
 const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
@@ -449,7 +450,7 @@ export default function MerchantsPage() {
           <p style={{ fontSize: 13, color: "var(--text-muted)" }}>{merchants.length} merchants</p>
         </div>
         {isSuperAdmin && (
-          <button className="btn-primary" onClick={openCreate}>+ Add Merchant</button>
+          <button className="btn-primary" onClick={openCreate}><AddIcon size={16} />Add Merchant</button>
         )}
       </div>
 
@@ -485,7 +486,7 @@ export default function MerchantsPage() {
                     <button onClick={() => setDetail(m)} style={actionBtn("var(--info)")}>View</button>
                     {isSuperAdmin && (
                       <>
-                        <button onClick={() => openEdit(m)} style={actionBtn("var(--accent, #6366f1)")}>Edit</button>
+                        <button onClick={() => openEdit(m)} style={actionBtn("var(--accent, #6366f1)")}><span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><EditIcon size={14} />Edit</span></button>
                         <button onClick={() => openCreds(m)} style={actionBtn("var(--accent, #6366f1)")}>Credentials</button>
                         <button onClick={() => toggleStatus(m)} style={actionBtn(m.status === "active" ? "var(--danger)" : "var(--success)")}>{m.status === "active" ? "Suspend" : "Activate"}</button>
                       </>

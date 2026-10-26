@@ -8,6 +8,7 @@ import { LoginGate } from "@/components/shop/LoginGate";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { Order } from "@/types";
 import { KhqrPayPanel } from "@/components/shop/KhqrPayPanel";
+import { OrdersIcon, SuccessGlow } from "@/components/brand/Icons";
 
 const TIMELINE = [
   { key: "pending", label: "Ordered", msg: "Your order has been placed" },
@@ -134,7 +135,7 @@ function OrderDetailContent() {
         <span style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)" }}>Order Details</span>
       </div>
       <div style={{ textAlign: "center", padding: "80px 24px" }}>
-        <div style={{ fontSize: 48, marginBottom: 12 }}>📦</div>
+        <OrdersIcon size={48} style={{ display: "block", margin: "0 auto 12px", color: "var(--shop-muted, #8A8F9C)" }} />
         <p style={{ fontSize: 15, fontWeight: 600, color: "var(--shop-black, #0B0B0F)", marginBottom: 6 }}>
           Order not found
         </p>
@@ -177,11 +178,7 @@ function OrderDetailContent() {
             borderRadius: "var(--shop-r-card, 16px)", padding: 16, marginBottom: 16,
             display: "flex", alignItems: "center", gap: 12,
           }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: "#C8E6C9", display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 18, flexShrink: 0,
-            }}>&#10003;</div>
+            <SuccessGlow size={44} style={{ color: "#2E7D32", flexShrink: 0 }} />
             <div>
               <p style={{ fontWeight: 600, fontSize: 14, color: "#2E7D32" }}>Order placed!</p>
               <p style={{ fontSize: 12, color: "#388E3C" }}>We&apos;ll notify you when confirmed</p>

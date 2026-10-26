@@ -6,6 +6,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
 import { api } from "@/lib/api";
 import type { SupportTicket, TicketMessage } from "@/types";
+import { SupportIcon } from "@/components/brand/Icons";
 
 const FAQ = [
   { q: "How do I track my order?", a: "Go to 'My Orders', then select your order to view its current status." },
@@ -187,7 +188,7 @@ function TicketList() {
           padding: 28, textAlign: "center", marginBottom: 28,
           boxShadow: "var(--shop-shadow)",
         }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
+          <SupportIcon size={36} style={{ display: "block", margin: "0 auto 8px", color: "var(--shop-primary)" }} />
           <p style={{ fontSize: 13, color: "var(--shop-muted)" }}>No tickets yet</p>
         </div>
       )}

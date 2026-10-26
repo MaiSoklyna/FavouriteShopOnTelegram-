@@ -5,6 +5,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
 import { api } from "@/lib/api";
 import type { LoyaltyAccount, LoyaltySettings } from "@/types";
+import { RewardsIcon } from "@/components/brand/Icons";
 
 const TIERS: Record<string, { color: string; gradient: string; label: string; icon: string }> = {
   bronze: { color: "#CD7F32", gradient: "linear-gradient(135deg, #C67B30 0%, #8B5E2B 100%)", label: "Bronze", icon: "🥉" },
@@ -39,7 +40,7 @@ export default function RewardsPage() {
 
   if (!user) return <LoginGate><div /></LoginGate>;
   if (loading) return <Page><Skeleton /></Page>;
-  if (!account?.enabled) return <Page><Empty icon="🎁" msg="Rewards program coming soon!" /></Page>;
+  if (!account?.enabled) return <Page><Empty icon={<RewardsIcon size={48} style={{ display: "block", margin: "0 auto", color: "var(--brand-gold-dark, #71541A)" }} />} msg="Rewards program coming soon!" /></Page>;
 
   const tier = TIERS[account.tier] || TIERS.bronze;
 
@@ -131,7 +132,7 @@ export default function RewardsPage() {
           </div>
         ) : (
           <p style={{ fontSize: 12, opacity: 0.85, marginTop: 4, fontWeight: 500 }}>
-            🏆 You reached the top tier!
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><RewardsIcon size={16} />You reached the top tier!</span>
           </p>
         )}
       </div>
@@ -380,7 +381,7 @@ function Page({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Empty({ icon, msg }: { icon: string; msg: string }) {
+function Empty({ icon, msg }: { icon: React.ReactNode; msg: string }) {
   return (
     <div style={{ textAlign: "center", paddingTop: 80 }}>
       <div style={{ fontSize: 48, marginBottom: 12 }}>{icon}</div>
