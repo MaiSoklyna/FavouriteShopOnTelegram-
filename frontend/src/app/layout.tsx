@@ -1,10 +1,22 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/providers/AuthProvider";
 
 export const metadata: Metadata = {
   title: "Byme24",
   description: "Byme24 — Your Favourite Shop",
+  icons: {
+    icon: [{ url: "/brand/favicon.svg", type: "image/svg+xml" }],
+    apple: [
+      { url: "/brand/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/brand/app-icon.svg", type: "image/svg+xml" },
+    ],
+  },
+};
+
+// Matches the navy splash so the browser chrome does not flash on launch
+export const viewport: Viewport = {
+  themeColor: "#081D3C",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

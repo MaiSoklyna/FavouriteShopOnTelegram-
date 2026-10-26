@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import type { AdminUser } from "@/types";
+import { FullPageSpinner } from "@/components/ui/Spinner";
+import { OrdersIcon, PromoIcon, RewardsIcon, StoreIcon } from "@/components/brand/Icons";
 import {
-  HiOutlineHome, HiOutlineShoppingBag, HiOutlineClipboardList,
-  HiOutlineTag, HiOutlineUsers, HiOutlineChartBar,
-  HiOutlineCog, HiOutlineTicket, HiOutlineStar,
-  HiOutlineBell, HiOutlineGift, HiOutlineOfficeBuilding,
+  HiOutlineHome, HiOutlineShoppingBag, HiOutlineTag, HiOutlineUsers, HiOutlineChartBar,
+  HiOutlineCog, HiOutlineTicket, HiOutlineBell,
   HiOutlineLogout, HiOutlineMenu, HiOutlineX,
   HiOutlinePhotograph, HiOutlineChatAlt2, HiOutlineUserAdd,
   HiOutlineCash, HiOutlineCurrencyDollar,
@@ -17,18 +17,18 @@ import {
 const MENU = [
   { href: "/dashboard", label: "Dashboard", icon: HiOutlineHome },
   { href: "/products", label: "Products", icon: HiOutlineShoppingBag },
-  { href: "/orders", label: "Orders", icon: HiOutlineClipboardList },
+  { href: "/orders", label: "Orders", icon: OrdersIcon },
   { href: "/categories", label: "Categories", icon: HiOutlineTag },
   { href: "/banners", label: "Banners", icon: HiOutlinePhotograph, superOnly: true },
-  { href: "/promotions", label: "Promotions", icon: HiOutlineGift },
+  { href: "/promotions", label: "Promotions", icon: PromoIcon },
   { href: "/analytics", label: "Analytics", icon: HiOutlineChartBar },
   { href: "/earnings", label: "Earnings", icon: HiOutlineCurrencyDollar, merchantOnly: true },
   { href: "/settlements", label: "Settlements", icon: HiOutlineCash, superOnly: true },
   { href: "/reviews", label: "Reviews", icon: HiOutlineChatAlt2 },
   { href: "/support", label: "Support", icon: HiOutlineTicket },
-  { href: "/loyalty", label: "Loyalty", icon: HiOutlineStar },
+  { href: "/loyalty", label: "Loyalty", icon: RewardsIcon },
   { href: "/notifications", label: "Notifications", icon: HiOutlineBell, adminOnly: false },
-  { href: "/merchants", label: "Merchants", icon: HiOutlineOfficeBuilding, superOnly: true },
+  { href: "/merchants", label: "Merchants", icon: StoreIcon, superOnly: true },
   { href: "/seller-applications", label: "Seller Applications", icon: HiOutlineUserAdd, superOnly: true },
   { href: "/users", label: "Users", icon: HiOutlineUsers, superOnly: true },
   { href: "/settings", label: "Settings", icon: HiOutlineCog },
@@ -48,11 +48,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [loading, isAdmin, router]);
 
   if (loading || !user || !isAdmin) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#EAEFF3" }}>
-        <div className="spinner" />
-      </div>
-    );
+    return <FullPageSpinner />;
   }
 
   const adminUser = user as AdminUser;

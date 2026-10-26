@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import { isInTelegram } from "@/lib/telegram";
+import { LaunchScreen } from "@/components/ui/Spinner";
 
 export default function RootPage() {
   const router = useRouter();
@@ -21,10 +22,5 @@ export default function RootPage() {
     }
   }, [user, loading, isAdmin, router]);
 
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh" }}>
-      <div style={{ width: 32, height: 32, border: "3px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  );
+  return <LaunchScreen />;
 }

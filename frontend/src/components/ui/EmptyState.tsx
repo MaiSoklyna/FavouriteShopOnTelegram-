@@ -1,15 +1,21 @@
+import type { ReactNode } from "react";
+import { EmptyStateIcon } from "@/components/brand/Icons";
+
 interface EmptyStateProps {
-  icon?: string;
+  /** Defaults to the dashed Byme24 knot; pass an emoji or element to override */
+  icon?: ReactNode;
   title: string;
   description?: string;
   action?: string;
   onAction?: () => void;
 }
 
-export function EmptyState({ icon = "📭", title, description, action, onAction }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, action, onAction }: EmptyStateProps) {
   return (
     <div style={{ textAlign: "center", padding: "48px 16px" }}>
-      <div style={{ fontSize: 48, marginBottom: 12 }}>{icon}</div>
+      <div style={{ fontSize: 48, marginBottom: 12, display: "flex", justifyContent: "center" }}>
+        {icon ?? <EmptyStateIcon size={96} className="brand-empty" />}
+      </div>
       <h3 style={{ fontSize: 16, fontWeight: 600, color: "var(--text)", marginBottom: 4 }}>{title}</h3>
       {description && <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>{description}</p>}
       {action && onAction && (

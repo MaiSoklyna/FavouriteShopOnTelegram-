@@ -7,6 +7,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import NearbyShops from "@/components/map/NearbyShops";
 import { useAuth } from "@/providers/AuthProvider";
+import { EmptyStateIcon } from "@/components/brand/Icons";
 import type { Product, Category, CategoryBanner, Merchant, PromoCode, Notification } from "@/types";
 
 export default function ShopHomePage() {
@@ -796,16 +797,7 @@ export default function ShopHomePage() {
 
         {products.length === 0 && (
           <div style={{ textAlign: "center", padding: "60px 0" }}>
-            <div style={{
-              width: 64, height: 64, borderRadius: "50%", background: "var(--shop-divider)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              margin: "0 auto 16px",
-            }}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--shop-primary)" strokeWidth="1.5">
-                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
-                <line x1="3" y1="6" x2="21" y2="6" />
-              </svg>
-            </div>
+            <EmptyStateIcon size={110} className="brand-empty" style={{ display: "block", margin: "0 auto 16px" }} />
             <p style={{ fontSize: 16, fontWeight: 600, color: "var(--shop-text)", marginBottom: 4, fontFamily: "'Kantumruy Pro', sans-serif" }}>No products yet</p>
             <p style={{ fontSize: 13, color: "var(--shop-muted)" }}>Check back soon for new arrivals</p>
           </div>

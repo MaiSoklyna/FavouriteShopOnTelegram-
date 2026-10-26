@@ -5,6 +5,7 @@ import Link from "next/link";
 import { fetchNearbyShops, type NearbyShop } from "@/lib/addresses";
 import { formatEta, formatKm, getCurrentPosition, searchAddress, type GeocodeHit, type LatLng } from "@/lib/mapbox";
 import { haptic } from "@/lib/telegram";
+import { DeliveryIcon, EmptyStateIcon } from "@/components/brand/Icons";
 
 type State = "idle" | "loading" | "denied" | "error" | "ready";
 
@@ -77,7 +78,7 @@ export default function NearbyShops() {
       </div>
 
       {state === "idle" && (
-        <StateCard icon="📍" title="See shops around you" text="Share your location to find the nearest shops, their delivery fee and time.">
+        <StateCard icon={<DeliveryIcon size={30} />} title="See shops around you" text="Share your location to find the nearest shops, their delivery fee and time.">
           <button onClick={locate} style={primaryBtn}>Find shops near me</button>
         </StateCard>
       )}
@@ -102,7 +103,7 @@ export default function NearbyShops() {
       )}
 
       {state === "ready" && shops.length === 0 && (
-        <StateCard icon="📍" title="No shops nearby" text="Try expanding your search area.">
+        <StateCard empty title="No shops nearby" text="Try expanding your search area.">
           <button onClick={refresh} style={primaryBtn}>Refresh</button>
         </StateCard>
       )}
@@ -235,16 +236,20 @@ function ShopCardSkeleton() {
   );
 }
 
-function StateCard({ icon, title, text, children }: { icon: string; title: string; text: string; children?: React.ReactNode }) {
+function StateCard({ icon, empty, title, text, children }: { icon?: React.ReactNode; empty?: boolean; title: string; text: string; children?: React.ReactNode }) {
   return (
     <div style={{
       textAlign: "center", padding: "28px 20px", background: "var(--shop-surface)",
       borderRadius: "var(--shop-r-card)", boxShadow: "var(--shop-shadow)",
     }}>
-      <div style={{
-        width: 64, height: 64, borderRadius: "50%", margin: "0 auto 12px", fontSize: 30,
-        background: "var(--shop-primary-tint)", display: "flex", alignItems: "center", justifyContent: "center",
-      }}>{icon}</div>
+      {empty ? (
+        <EmptyStateIcon size={96} className="brand-empty" style={{ display: "block", margin: "0 auto 12px" }} />
+      ) : (
+        <div style={{
+          width: 64, height: 64, borderRadius: "50%", margin: "0 auto 12px", fontSize: 30, color: "var(--shop-primary)",
+          background: "var(--shop-primary-tint)", display: "flex", alignItems: "center", justifyContent: "center",
+        }}>{icon}</div>
+      )}
       <div style={{ fontWeight: 700, fontSize: 15, color: "var(--shop-black)" }}>{title}</div>
       <p style={{ fontSize: 13, color: "var(--shop-muted)", margin: "6px 0 16px", lineHeight: 1.5 }}>{text}</p>
       {children}

@@ -10,6 +10,7 @@ import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote, type Deliv
 import { deleteAddress, listAddresses, saveAddress, type SavedAddress } from "@/lib/addresses";
 import { distanceKm, formatEta, formatKm, getCurrentPosition, reverseGeocode, type LatLng } from "@/lib/mapbox";
 import { haptic, useMainButton } from "@/lib/telegram";
+import { DeliveryIcon, IconChip, StoreIcon } from "@/components/brand/Icons";
 
 // Same look as the map's own loading state, so there is no flash of an empty box
 const MapPicker = dynamic(() => import("@/components/map/MapPicker"), {
@@ -374,9 +375,9 @@ export default function CheckoutPage() {
             <SectionTitle>Delivery method</SectionTitle>
             <div role="radiogroup" aria-label="Delivery method" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
               {([
-                ["delivery", "🛵", "Delivery", "To your door"],
-                ["pickup", "🏪", "Pickup", "Collect at the shop · Free"],
-              ] as const).map(([key, icon, title, sub]) => {
+                ["delivery", DeliveryIcon, "Delivery", "To your door"],
+                ["pickup", StoreIcon, "Pickup", "Collect at the shop · Free"],
+              ] as const).map(([key, Icon, title, sub]) => {
                 const on = deliveryType === key;
                 return (
                   <button key={key} role="radio" aria-checked={on} onClick={() => { haptic("select"); setDeliveryType(key); }} className="shop-press" style={{
@@ -390,7 +391,9 @@ export default function CheckoutPage() {
                       position: "absolute", top: 12, right: 12, width: 18, height: 18, borderRadius: "50%",
                       border: on ? "5px solid var(--shop-primary)" : "2px solid var(--shop-divider)", background: "var(--shop-surface)",
                     }} />
-                    <div style={{ fontSize: 22 }}>{icon}</div>
+                    {on
+                      ? <IconChip><Icon size={28} /></IconChip>
+                      : <span className="brand-chip" style={{ width: 56, height: 56, borderRadius: 16, background: "var(--shop-bg)", color: "var(--shop-muted)" }}><Icon size={28} /></span>}
                     <div style={{ fontWeight: 700, fontSize: 14, color: "var(--shop-black)", marginTop: 4 }}>{title}</div>
                     <div style={{ fontSize: 11, color: "var(--shop-muted)", marginTop: 1 }}>{sub}</div>
                   </button>

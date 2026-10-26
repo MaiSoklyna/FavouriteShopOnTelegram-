@@ -6,6 +6,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { ProductCard, CategoryIcon } from "@/components/shop";
 import { useCart } from "@/providers/CartProvider";
+import { EmptyStateIcon } from "@/components/brand/Icons";
 import type { Merchant, Product, Category } from "@/types";
 
 export default function MerchantDetailPage() {
@@ -83,7 +84,7 @@ export default function MerchantDetailPage() {
   if (error || !merchant) {
     return (
       <div style={{ minHeight: "100vh", background: "var(--shop-bg)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center" }}>
-        <div style={{ fontSize: 56, marginBottom: 12 }}>🏪</div>
+        <EmptyStateIcon size={110} className="brand-empty" style={{ marginBottom: 12 }} />
         <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--shop-black)", marginBottom: 6 }}>{error || "Shop unavailable"}</h2>
         <p style={{ fontSize: 13, color: "var(--shop-muted)", marginBottom: 20 }}>The shop you’re looking for doesn’t exist or is no longer active.</p>
         <button

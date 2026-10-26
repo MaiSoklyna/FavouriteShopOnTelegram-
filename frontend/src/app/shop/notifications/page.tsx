@@ -5,6 +5,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
 import { api } from "@/lib/api";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { OrdersIcon, PromoIcon, RewardsIcon } from "@/components/brand/Icons";
 import type { Notification } from "@/types";
 
 export default function ShopNotificationsPage() {
@@ -34,7 +35,9 @@ function NotificationsContent() {
 
   const unread = notifications.filter(n => !n.is_read).length;
 
-  const typeIcon: Record<string, string> = { promo: "🏷️", order: "📦", system: "⚙️", loyalty: "⭐" };
+  const typeIcon: Record<string, React.ReactNode> = {
+    promo: <PromoIcon size={20} />, order: <OrdersIcon size={20} />, system: "⚙️", loyalty: <RewardsIcon size={20} />,
+  };
   const typeColor: Record<string, string> = {
     promo: "#F59E0B",
     order: "var(--shop-primary, #1E6BFF)",
@@ -111,7 +114,7 @@ function NotificationsContent() {
                       ? "var(--shop-surface, #FFFFFF)"
                       : "var(--shop-bg, #F7F8FB)",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 20,
+                    fontSize: 20, color: "var(--shop-primary)",
                     border: isUnread
                       ? `2px solid var(--shop-primary, #1E6BFF)`
                       : "1px solid var(--shop-divider, #ECEEF3)",

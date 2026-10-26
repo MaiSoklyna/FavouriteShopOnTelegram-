@@ -8,6 +8,12 @@
    ════════════════════════════════════════════════════════════ */
 
 :root {
+  /* ── Byme24 brand (brand/index.html) ── */
+  --brand-navy: #081D3C;
+  --brand-gold: #D6BA80;
+  --brand-gold-dark: #71541A;
+  --brand-gold-light: #F0DEB4;
+
   /* ── Primary palette ── */
   --h24-blue: #103562;
   --h24-navy: #081D3C;
@@ -361,3 +367,35 @@ input:focus, select:focus, textarea:focus {
 .shop-h-scroll > * { scroll-snap-align: start; }
 .shop-scroll-area { flex: 1; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
 .shop-scroll-area::-webkit-scrollbar { display: none; }
+
+/* ═══════ BYME24 BRAND MOTION + MARKS ═══════ */
+/* Knot pivots on its ring centre (50, 58 of the 100-unit grid), not the box centre */
+@keyframes brandPulse { 0%,100% { transform: scale(.92); opacity: .7; } 50% { transform: scale(1.04); opacity: 1; } }
+@keyframes brandRotate { 0% { transform: rotate(0); } 33% { transform: rotate(120deg); } 66% { transform: rotate(240deg); } 100% { transform: rotate(360deg); } }
+@keyframes brandGlow { 0%,100% { filter: drop-shadow(0 0 0 rgba(214,186,128,0)); } 50% { filter: drop-shadow(0 0 14px rgba(214,186,128,.85)); } }
+@keyframes brandSweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+
+.brand-pulse { animation: brandPulse 1.8s ease-in-out infinite; transform-origin: 50% 55%; }
+.brand-rotate { animation: brandRotate 2.4s cubic-bezier(.65,0,.35,1) infinite; transform-origin: 50% 58%; }
+.brand-glow { animation: brandGlow 2.2s ease-in-out infinite; }
+
+.brand-screen {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: var(--brand-navy); color: var(--brand-gold);
+}
+.brand-screen--splash { background: radial-gradient(100% 70% at 50% 40%, #13336a, var(--brand-navy)); }
+.brand-wordmark { font-family: 'Inter', system-ui, sans-serif; font-weight: 700; font-size: 30px; letter-spacing: .01em; color: #FFFFFF; line-height: 1; }
+.brand-wordmark span { color: var(--brand-gold); }
+.brand-tagline { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--brand-gold); opacity: .7; }
+.brand-sweep { width: min(50%, 220px); height: 2px; background: #1E3A63; border-radius: 2px; overflow: hidden; }
+.brand-sweep i { display: block; height: 100%; width: 40%; background: var(--brand-gold); animation: brandSweep 1.6s ease-in-out infinite; }
+
+.brand-chip { display: inline-grid; place-items: center; flex-shrink: 0; background: var(--brand-navy); color: var(--brand-gold); }
+.brand-empty { color: var(--shop-muted, var(--text-secondary)); }
+.brand-success { color: var(--brand-gold-dark); }
+[data-theme="dark"] .brand-success { color: var(--brand-gold); }
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-pulse, .brand-rotate, .brand-glow, .brand-sweep i { animation: none !important; }
+}

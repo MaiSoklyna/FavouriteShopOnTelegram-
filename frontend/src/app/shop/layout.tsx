@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { CartProvider, useCart } from "@/providers/CartProvider";
 import { initTelegram } from "@/lib/telegram";
+import { useAuth } from "@/providers/AuthProvider";
+import { LaunchScreen } from "@/components/ui/Spinner";
+import { IconChip, OrdersIcon, StoreIcon } from "@/components/brand/Icons";
 
 export default function ShopLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -16,7 +19,33 @@ export default function ShopLayout({ children }: { children: React.ReactNode }) 
         {children}
         <BottomNav />
       </div>
+      <ShopLaunch />
     </CartProvider>
+  );
+}
+
+/** Splash then navy loading screen over the shop until auth settles (and at least the 600ms splash). */
+function ShopLaunch() {
+  const { loading } = useAuth();
+  const [minElapsed, setMinElapsed] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMinElapsed(true), 600);
+    return () => clearTimeout(t);
+  }, []);
+  return loading || !minElapsed ? <LaunchScreen /> : null;
+}
+
+// Line-icon paths for tabs without a Byme24 glyph ("circle:cx,cy,r" draws a circle)
+function PathIcon({ icon, size = 22 }: { icon: string; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {icon.split("|").map((d, i) => {
+        if (!d.startsWith("circle:")) return <path key={i} d={d} />;
+        const [cx, cy, r] = d.slice(7).split(",");
+        return <circle key={i} cx={cx} cy={cy} r={r} />;
+      })}
+    </svg>
   );
 }
 
@@ -33,12 +62,12 @@ function BottomNav() {
     return pathname.startsWith(href);
   };
 
-  const tabs = [
-    { href: "/shop", label: "Home", icon: "M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z|M9 21V12h6v9" },
-    { href: "/shop/categories", label: "Category", icon: "M3 3h7v7H3z|M14 3h7v7h-7z|M3 14h7v7H3z|M14 14h7v7h-7z" },
-    { href: "/shop/search", label: "Search", icon: "circle:11,11,8|M21 21l-4.35-4.35" },
-    { href: "/shop/cart", label: "Cart", icon: "M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z|M3 6h18|M16 10a4 4 0 01-8 0", badge: true },
-    { href: "/shop/profile", label: "Profile", icon: "M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2|circle:12,7,4" },
+  const tabs: { href: string; label: string; Icon: (p: { size?: number }) => JSX.Element; badge?: boolean }[] = [
+    { href: "/shop", label: "Home", Icon: StoreIcon },
+    { href: "/shop/categories", label: "Category", Icon: (p) => <PathIcon {...p} icon="M3 3h7v7H3z|M14 3h7v7h-7z|M3 14h7v7H3z|M14 14h7v7h-7z" /> },
+    { href: "/shop/search", label: "Search", Icon: (p) => <PathIcon {...p} icon="circle:11,11,8|M21 21l-4.35-4.35" /> },
+    { href: "/shop/cart", label: "Cart", Icon: OrdersIcon, badge: true },
+    { href: "/shop/profile", label: "Profile", Icon: (p) => <PathIcon {...p} icon="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2|circle:12,7,4" /> },
   ];
 
   return (
@@ -51,44 +80,43 @@ function BottomNav() {
       display: "flex", alignItems: "center", justifyContent: "space-around",
       padding: "0 8px", zIndex: 100,
     }}>
-      {tabs.map((tab) => {
-        const active = isActive(tab.href);
+      {tabs.map(({ href, label, Icon, badge }) => {
+        const active = isActive(href);
 
         return (
-          <button key={tab.href} onClick={() => router.push(tab.href)}
+          <button key={href} onClick={() => router.push(href)} aria-current={active ? "page" : undefined}
             style={{
               display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
               cursor: "pointer", flex: 1, padding: "8px 0",
               background: "none", border: "none", position: "relative",
+              color: active ? "var(--shop-primary)" : "var(--shop-muted)",
             }}>
-            {tab.badge && count > 0 && (
-              <span style={{
-                position: "absolute", top: 2, right: 18,
-                width: 16, height: 16, background: "#71541A",
-                borderRadius: "50%",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 9, color: "white", fontWeight: 700, border: "2px solid var(--shop-surface)",
-              }}>
-                {count > 99 ? "99+" : count}
-              </span>
-            )}
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-              stroke={active ? "var(--shop-primary)" : "var(--shop-muted)"}
-              strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              {tab.icon?.split("|").map((d, i) =>
-                d.startsWith("circle:") ? (
-                  <circle key={i} cx={d.split(":")[1].split(",")[0]} cy={d.split(":")[1].split(",")[1]} r={d.split(":")[1].split(",")[2]} />
-                ) : (
-                  <path key={i} d={d} />
-                )
+            {/* Active tab: gold glyph on a 56px navy chip, lifted above the bar */}
+            <span style={{ height: 24, display: "flex", alignItems: "flex-end", justifyContent: "center", position: "relative" }}>
+              {active ? (
+                <IconChip style={{ marginTop: -36, border: "4px solid var(--shop-surface)", boxSizing: "content-box", boxShadow: "0 6px 16px rgba(8, 29, 60, 0.18)" }}>
+                  <Icon size={26} />
+                </IconChip>
+              ) : (
+                <Icon size={22} />
               )}
-            </svg>
+              {badge && count > 0 && (
+                <span style={{
+                  position: "absolute", top: active ? -36 : -6, right: active ? -14 : -10,
+                  minWidth: 16, height: 16, padding: "0 3px", background: "var(--brand-gold-dark)",
+                  borderRadius: 999,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 9, color: "white", fontWeight: 700, border: "2px solid var(--shop-surface)",
+                }}>
+                  {count > 99 ? "99+" : count}
+                </span>
+              )}
+            </span>
             <span style={{
               fontSize: 10, fontWeight: active ? 600 : 500,
-              color: active ? "var(--shop-primary)" : "var(--shop-muted)",
               fontFamily: "'Kantumruy Pro', sans-serif",
             }}>
-              {tab.label}
+              {label}
             </span>
           </button>
         );

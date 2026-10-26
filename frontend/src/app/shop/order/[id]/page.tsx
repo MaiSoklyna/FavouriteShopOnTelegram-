@@ -8,6 +8,7 @@ import { LoginGate } from "@/components/shop/LoginGate";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { Order } from "@/types";
 import { KhqrPayPanel } from "@/components/shop/KhqrPayPanel";
+import { EmptyStateIcon, SuccessIcon } from "@/components/brand/Icons";
 
 const TIMELINE = [
   { key: "pending", label: "Ordered", msg: "Your order has been placed" },
@@ -134,7 +135,7 @@ function OrderDetailContent() {
         <span style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)" }}>Order Details</span>
       </div>
       <div style={{ textAlign: "center", padding: "80px 24px" }}>
-        <div style={{ fontSize: 48, marginBottom: 12 }}>📦</div>
+        <EmptyStateIcon size={110} className="brand-empty" style={{ display: "block", margin: "0 auto 12px" }} />
         <p style={{ fontSize: 15, fontWeight: 600, color: "var(--shop-black, #0B0B0F)", marginBottom: 6 }}>
           Order not found
         </p>
@@ -172,20 +173,16 @@ function OrderDetailContent() {
 
       <div style={{ padding: "16px 16px 80px" }}>
         {showSuccess && (
-          <div style={{
-            background: "#E8F5E9", border: "1px solid #A5D6A7",
-            borderRadius: "var(--shop-r-card, 16px)", padding: 16, marginBottom: 16,
-            display: "flex", alignItems: "center", gap: 12,
+          <div role="status" style={{
+            background: "var(--shop-surface, #FFFFFF)", boxShadow: "var(--shop-shadow)",
+            borderRadius: "var(--shop-r-card, 16px)", padding: "28px 20px", marginBottom: 16,
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center",
           }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: 10,
-              background: "#C8E6C9", display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 18, flexShrink: 0,
-            }}>&#10003;</div>
-            <div>
-              <p style={{ fontWeight: 600, fontSize: 14, color: "#2E7D32" }}>Order placed!</p>
-              <p style={{ fontSize: 12, color: "#388E3C" }}>We&apos;ll notify you when confirmed</p>
-            </div>
+            <SuccessIcon size={96} glow className="brand-success" />
+            <p style={{ fontWeight: 700, fontSize: 18, color: "var(--shop-black, #0B0B0F)", marginTop: 4 }}>Order placed</p>
+            <p style={{ fontSize: 13, color: "var(--shop-muted)", maxWidth: 280 }}>
+              Order #{order.order_code} is with the shop. We&apos;ll notify you when it&apos;s confirmed.
+            </p>
           </div>
         )}
 

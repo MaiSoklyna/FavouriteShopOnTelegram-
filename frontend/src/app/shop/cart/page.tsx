@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
+import { EmptyStateIcon } from "@/components/brand/Icons";
 import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote } from "@/lib/quote";
 
 export default function CartPage() {
@@ -308,16 +309,7 @@ function EmptyPage({ onAction }: { onAction: () => void }) {
         <span style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)" }}>My Cart</span>
       </div>
       <div style={{ textAlign: "center", paddingTop: 100 }}>
-        <div style={{
-          width: 72, height: 72, borderRadius: "50%", margin: "0 auto 16px",
-          background: "var(--shop-primary-tint, #E8F0FF)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--shop-primary, #1E6BFF)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
-            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
-          </svg>
-        </div>
+        <EmptyStateIcon size={110} className="brand-empty" style={{ margin: "0 auto 16px", display: "block" }} />
         <p style={{ fontSize: 16, fontWeight: 600, color: "var(--shop-black, #0B0B0F)", margin: "0 0 4px" }}>Your cart is empty</p>
         <p style={{ fontSize: 13, color: "var(--shop-muted, #8A8F9C)", margin: "0 0 24px" }}>Add items to get started</p>
         <button onClick={onAction} style={{

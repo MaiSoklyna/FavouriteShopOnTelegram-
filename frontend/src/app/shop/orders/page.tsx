@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { LoginGate } from "@/components/shop/LoginGate";
+import { EmptyStateIcon } from "@/components/brand/Icons";
 import type { Order } from "@/types";
 
 const TABS = [
@@ -137,7 +138,7 @@ export default function OrdersPage() {
             ))}
           </div>
         ) : (
-          <Empty icon="🛍️" message="No orders yet" action="Start Shopping" onAction={() => router.push("/shop")} />
+          <Empty message="No orders yet" action="Start Shopping" onAction={() => router.push("/shop")} />
         )}
       </div>
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
@@ -145,10 +146,10 @@ export default function OrdersPage() {
   );
 }
 
-function Empty({ icon, message, action, onAction }: { icon: string; message: string; action?: string; onAction?: () => void }) {
+function Empty({ message, action, onAction }: { message: string; action?: string; onAction?: () => void }) {
   return (
     <div style={{ textAlign: "center", paddingTop: 60 }}>
-      <div style={{ fontSize: 48, marginBottom: 12 }}>{icon}</div>
+      <EmptyStateIcon size={110} className="brand-empty" style={{ display: "block", margin: "0 auto 12px" }} />
       <p style={{ color: "var(--shop-muted, #8A8F9C)", fontSize: 14 }}>{message}</p>
       {action && onAction && (
         <button onClick={onAction} style={{

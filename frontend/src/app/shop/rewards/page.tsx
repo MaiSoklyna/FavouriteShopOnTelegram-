@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
+import { EmptyStateIcon, IconChip, RewardsIcon } from "@/components/brand/Icons";
 import { api } from "@/lib/api";
 import type { LoyaltyAccount, LoyaltySettings } from "@/types";
 
@@ -39,7 +40,7 @@ export default function RewardsPage() {
 
   if (!user) return <LoginGate><div /></LoginGate>;
   if (loading) return <Page><Skeleton /></Page>;
-  if (!account?.enabled) return <Page><Empty icon="🎁" msg="Rewards program coming soon!" /></Page>;
+  if (!account?.enabled) return <Page><Empty msg="Rewards program coming soon!" /></Page>;
 
   const tier = TIERS[account.tier] || TIERS.bronze;
 
@@ -155,10 +156,9 @@ export default function RewardsPage() {
               : `${minRedeem.toLocaleString()} pts ($${minRedeemDollars.toFixed(2)}) minimum redemption.`}
           </p>
         </div>
-        <span style={{
-          fontSize: 22,
-          opacity: canRedeem ? 1 : 0.5,
-        }}>{canRedeem ? "🎉" : "🔒"}</span>
+        {canRedeem
+          ? <IconChip size={44}><RewardsIcon size={24} /></IconChip>
+          : <RewardsIcon size={24} style={{ color: "var(--shop-muted)", opacity: 0.6, flexShrink: 0 }} />}
       </div>
 
       {/* Pill Tabs */}
@@ -380,10 +380,10 @@ function Page({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Empty({ icon, msg }: { icon: string; msg: string }) {
+function Empty({ msg }: { msg: string }) {
   return (
     <div style={{ textAlign: "center", paddingTop: 80 }}>
-      <div style={{ fontSize: 48, marginBottom: 12 }}>{icon}</div>
+      <EmptyStateIcon size={110} className="brand-empty" style={{ display: "block", margin: "0 auto 12px" }} />
       <p style={{ color: "var(--shop-muted)", fontSize: 14 }}>{msg}</p>
     </div>
   );

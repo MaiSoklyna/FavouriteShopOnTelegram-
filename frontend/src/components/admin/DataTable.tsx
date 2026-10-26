@@ -26,7 +26,7 @@ export function DataTable<T extends Record<string, any>>({
   columns,
   data,
   loading,
-  emptyIcon = "📭",
+  emptyIcon,
   emptyTitle = "No data found",
   emptyAction,
   onEmptyAction,
