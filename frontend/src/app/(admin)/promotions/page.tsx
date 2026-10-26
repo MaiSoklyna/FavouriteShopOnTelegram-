@@ -53,6 +53,7 @@ export default function PromotionBannersPage() {
   const [productsLoading, setProductsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [missingTable, setMissingTable] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [modal, setModal] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
@@ -74,9 +75,12 @@ export default function PromotionBannersPage() {
     try {
       setRows(await api.get<PromotionRow[]>("/promotions/admin/list"));
       setMissingTable(false);
+      setLoadError(null);
     } catch (e: any) {
       // Migration 018 not applied yet: say so instead of an empty list
       if (String(e?.detail || "").toLowerCase().includes("promotions")) setMissingTable(true);
+      // Any other failure (e.g. signed in as a customer): show it rather than "No promotions yet"
+      else setLoadError(e?.detail || "Couldn't load promotions");
     } finally { setLoading(false); }
   }
 
@@ -200,7 +204,11 @@ export default function PromotionBannersPage() {
         <div className="admin-card" style={{ padding: 20, fontSize: 14, lineHeight: 1.6 }}>
           <b>Promotions aren&apos;t set up in the database yet.</b> Run <code>supabase/migrations/018_promotions.sql</code> in the Supabase SQL editor, then reload this page.
         </div>
-      ) : loading ? <BrandLoader /> : rows.length === 0 ? (
+      ) : loading ? <BrandLoader /> : loadError ? (
+        <div className="admin-card" style={{ padding: 20, fontSize: 14, lineHeight: 1.6, color: "var(--danger, #DC2626)" }}>
+          <b>Couldn&apos;t load promotions:</b> {loadError}. If you opened a customer login link in this browser, log out and sign in as admin again.
+        </div>
+      ) : rows.length === 0 ? (
         <div className="admin-card" style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>No promotions yet. Create the first one.</div>
       ) : (
         <div style={{ display: "grid", gap: 12 }}>
