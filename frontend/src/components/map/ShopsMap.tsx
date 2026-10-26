@@ -67,8 +67,8 @@ function styleShop(el: HTMLElement, on: boolean) {
 function youEl() {
   const el = document.createElement("div");
   el.setAttribute("aria-label", "You");
-  el.style.cssText = "width:44px;height:44px;border-radius:50%;background:rgba(255,122,26,.22);display:grid;place-items:center;";
-  el.innerHTML = '<span style="width:18px;height:18px;border-radius:50%;background:#FF7A1A;border:3px solid #fff;box-sizing:border-box;box-shadow:0 2px 6px rgba(255,122,26,.5)"></span>';
+  el.style.cssText = "width:44px;height:44px;border-radius:50%;background:rgba(184,134,43,.22);display:grid;place-items:center;";
+  el.innerHTML = '<span style="width:18px;height:18px;border-radius:50%;background:#B8862B;border:3px solid #fff;box-sizing:border-box;box-shadow:0 2px 6px rgba(184,134,43,.5)"></span>';
   return el;
 }
 

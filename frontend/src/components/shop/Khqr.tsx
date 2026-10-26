@@ -73,7 +73,7 @@ export function KhqrCard({ data, loading, error, timer, onRetry }: {
               aria-label={expired ? "QR expired" : `Expires in ${mmss}`}>
               <svg width="28" height="28" viewBox="0 0 36 36" aria-hidden>
                 <circle cx="18" cy="18" r="15" fill="none" stroke="#E3E8EF" strokeWidth="4" />
-                <circle cx="18" cy="18" r="15" fill="none" stroke={left < 60 ? "#E5484D" : "#FF7A1A"} strokeWidth="4" strokeLinecap="round"
+                <circle cx="18" cy="18" r="15" fill="none" stroke={left < 60 ? "#E5484D" : "#B8862B"} strokeWidth="4" strokeLinecap="round"
                   transform="rotate(-90 18 18)" strokeDasharray={C} strokeDashoffset={C * (1 - left / lifetime)}
                   className="transition-[stroke-dashoffset] duration-1000 ease-linear" />
               </svg>
@@ -110,7 +110,7 @@ export function KhqrCard({ data, loading, error, timer, onRetry }: {
   );
 }
 
-const CONFETTI = ["#FF7A1A", "#12B76A", "#D6BA80", "#1B4B8A", "#E5484D", "#FFB547"];
+const CONFETTI = ["#B8862B", "#12B76A", "#D6BA80", "#1B4B8A", "#E5484D", "#D4A53C"];
 
 /**
  * Full-screen "Paid" moment: jade check, confetti, amount and ETA. Moves on by

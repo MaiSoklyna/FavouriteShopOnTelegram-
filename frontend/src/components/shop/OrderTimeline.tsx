@@ -3,7 +3,7 @@ import { formatWhen, headline, progress, trackSteps, type TrackOrder } from "@/l
 
 const TONE = {
   navy: "bg-grad-hero",
-  mango: "bg-[linear-gradient(135deg,#B54708,#FF7A1A_60%,#FFB547)]",
+  mango: "bg-[linear-gradient(135deg,#8A5A19,#B8862B_55%,#D4A53C)]",
   jade: "bg-[linear-gradient(135deg,#05603A,#12B76A)]",
   ruby: "bg-[linear-gradient(135deg,#912018,#E5484D)]",
 } as const;

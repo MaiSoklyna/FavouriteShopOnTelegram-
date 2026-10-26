@@ -15,7 +15,7 @@ export const THEMES: Record<ShopTheme, { label: string; bg: string; ink: string;
   electronics: { label: "Electronics", bg: "#DCE6F5", ink: "#1B4B8A", icons: ["laptop", "headphones", "mobile", "watch", "bolt"] },
   fashion:     { label: "Fashion",     bg: "#DDF2E6", ink: "#067647", icons: ["shirt", "hanger", "bag", "tag", "sparkle"] },
   beauty:      { label: "Beauty",      bg: "#FAE1EA", ink: "#9D2257", icons: ["lipstick", "bottle", "sparkle", "flower", "star"] },
-  food:        { label: "Food & bakery", bg: "#FCE7D6", ink: "#B54708", icons: ["cake", "cup", "gift", "star", "sparkle"] },
+  food:        { label: "Food & bakery", bg: "#F7EBCB", ink: "#8A5A19", icons: ["cake", "cup", "gift", "star", "sparkle"] },
   flowers:     { label: "Flowers & gifts", bg: "#F1E4F8", ink: "#6B2F8A", icons: ["flower", "gift", "sparkle", "tag", "star"] },
   kids:        { label: "Kids & toys", bg: "#FFF3C7", ink: "#8A5A00", icons: ["teddy", "gift", "star", "sparkle", "bag"] },
   general:     { label: "Shop",        bg: "#E6ECF4", ink: "#103562", icons: ["bag", "box", "tag", "gift", "sparkle"] },

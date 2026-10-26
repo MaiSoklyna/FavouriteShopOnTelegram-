@@ -15,7 +15,7 @@ function BagIllustration() {
       <ellipse cx="100" cy="172" rx="62" ry="9" fill="#E3E8EF" />
       <rect x="44" y="64" width="112" height="104" rx="22" fill="#103562" />
       <path d="M72 64v-6a28 28 0 0 1 56 0v6" stroke="#D6BA80" strokeWidth="9" strokeLinecap="round" />
-      <circle cx="100" cy="116" r="22" fill="#FF7A1A" />
+      <circle cx="100" cy="116" r="22" fill="#B8862B" />
       <path d="M90 116l7 7 14-15" stroke="#fff" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );

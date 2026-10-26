@@ -405,14 +405,14 @@ input:focus, select:focus, textarea:focus {
   --fos-c-navy-700: 16 53 98;
   --fos-c-navy-500: 27 75 138;
   --fos-c-tint-jade: 231 248 239;
-  --fos-c-tint-mango: 255 241 230;
+  --fos-c-tint-mango: 250 241 218;
   --fos-c-tint-ruby: 253 236 236;
   --fos-c-tint-gold: 251 244 228;
   --fos-c-tint-neutral: 241 244 248;
   --fos-c-tint-navy: 238 243 252;
   --fos-c-tint-map: 233 238 245;
   --fos-c-tone-jade: 6 118 71;
-  --fos-c-tone-mango: 181 71 8;
+  --fos-c-tone-mango: 128 88 18;
   --fos-c-tone-navy: 16 53 98;
   color-scheme: light;
 }
@@ -425,14 +425,14 @@ input:focus, select:focus, textarea:focus {
   --fos-c-navy-700: 46 95 166;
   --fos-c-navy-500: 120 160 225;
   --fos-c-tint-jade: 18 64 52;
-  --fos-c-tint-mango: 74 45 20;
+  --fos-c-tint-mango: 66 50 20;
   --fos-c-tint-ruby: 77 30 34;
   --fos-c-tint-gold: 66 54 28;
   --fos-c-tint-neutral: 26 48 82;
   --fos-c-tint-navy: 28 52 92;
   --fos-c-tint-map: 23 42 70;
   --fos-c-tone-jade: 74 222 128;
-  --fos-c-tone-mango: 253 186 116;
+  --fos-c-tone-mango: 234 196 110;
   --fos-c-tone-navy: 150 186 240;
   color-scheme: dark;
 }
@@ -446,3 +446,6 @@ input:focus, select:focus, textarea:focus {
 
 /* Generated shop covers are pastel art; dim them on dark pages */
 [data-theme="dark"] .fos-gen-cover { filter: brightness(.62) saturate(.85); }
+
+/* Gold accent: solid fills get the bronze → gold → mustard gradient (colour stays as fallback) */
+.bg-mango-500 { background-image: var(--fos-grad-promo); }

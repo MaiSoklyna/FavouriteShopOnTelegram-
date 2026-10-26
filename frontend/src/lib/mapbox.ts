@@ -84,7 +84,7 @@ export function staticMapUrl(you: LatLng, shop?: LatLng | null, size = "686x300"
   const base = `https://api.mapbox.com/styles/v1/mapbox/${mapStyleId()}/static`;
   const tail = `${size}@2x?attribution=false&logo=false&access_token=${MAPBOX_TOKEN}`;
   if (!shop) return `${base}/${at(you)},15,0/${tail}`;
-  return `${base}/pin-l+ff7a1a(${at(you)}),pin-s-shop+103562(${at(shop)})/auto/${tail}&padding=56,64,48,64`;
+  return `${base}/pin-l+b8862b(${at(you)}),pin-s-shop+103562(${at(shop)})/auto/${tail}&padding=56,64,48,64`;
 }
 
 /** "10–20 min" from the server's eta window. */

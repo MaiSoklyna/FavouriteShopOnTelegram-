@@ -6,7 +6,7 @@
   --fos-navy-500: #1B4B8A;
   --fos-gold-400: #D6BA80;
   --fos-gold-700: #71541A;
-  --fos-mango-500: #FF7A1A;
+  --fos-mango-500: #B8862B;
 
   /* Semantic */
   --fos-jade-500: #12B76A;
@@ -22,7 +22,7 @@
   /* Gradients */
   --fos-grad-hero: linear-gradient(135deg, #081D3C 0%, #103562 55%, #1B4B8A 100%);
   --fos-grad-gold: linear-gradient(120deg, #F3E3B8, #D6BA80 50%, #B8964E);
-  --fos-grad-promo: linear-gradient(135deg, #FF7A1A, #FFB547);
+  --fos-grad-promo: linear-gradient(135deg, #8A5A19, #B8862B 55%, #D4A53C);
   --fos-grad-cta: linear-gradient(135deg, #103562, #1B4B8A);
 
   /* Radius */

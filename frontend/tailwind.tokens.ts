@@ -3,7 +3,7 @@ export const fosTheme = {
   colors: {
     navy: { 900: '#081D3C', 700: '#103562', 500: '#1B4B8A' },
     gold: { 400: '#D6BA80', 700: '#71541A' },
-    mango: { 500: '#FF7A1A' },
+    mango: { 500: '#B8862B' },
     jade: { 500: '#12B76A' },
     ruby: { 500: '#E5484D' },
     ink: { 900: '#0E1A2B', 500: '#5B6472' },
@@ -32,7 +32,7 @@ export const fosTheme = {
   backgroundImage: {
     'grad-hero': 'linear-gradient(135deg,#081D3C 0%,#103562 55%,#1B4B8A 100%)',
     'grad-gold': 'linear-gradient(120deg,#F3E3B8,#D6BA80 50%,#B8964E)',
-    'grad-promo': 'linear-gradient(135deg,#FF7A1A,#FFB547)',
+    'grad-promo': 'linear-gradient(135deg,#8A5A19,#B8862B 55%,#D4A53C)',
     'grad-cta': 'linear-gradient(135deg,#103562,#1B4B8A)',
   },
   spacing: { gutter: '16px', section: '24px' },

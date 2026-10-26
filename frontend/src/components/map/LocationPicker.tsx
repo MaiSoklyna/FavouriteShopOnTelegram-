@@ -227,7 +227,7 @@ export default function LocationPicker({ initial, shop, shopInfo, radiusKm, zone
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2" aria-hidden>
             <div className={`-translate-y-full transition-transform duration-200 ${moving ? "-mt-3" : ""}`}>
               <svg width="44" height="52" viewBox="0 0 40 48" className="drop-shadow-[0_6px_6px_rgba(8,29,60,.3)]">
-                <path d="M20 46C20 46 4 28 4 17a16 16 0 0132 0c0 11-16 29-16 29z" fill="#FF7A1A" />
+                <path d="M20 46C20 46 4 28 4 17a16 16 0 0132 0c0 11-16 29-16 29z" fill="#B8862B" />
                 <circle cx="20" cy="17" r="6.5" fill="#fff" />
               </svg>
             </div>

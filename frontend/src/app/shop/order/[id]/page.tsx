@@ -360,7 +360,7 @@ function PlaceCard({ pickup, you, shopPoint, shop, shopName, address, name, phon
           {src && <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />}
           {(pickup || !shopPoint) && (
             <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full drop-shadow" width="34" height="34" viewBox="0 0 24 24" aria-hidden>
-              <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7z" fill={pickup ? "#103562" : "#FF7A1A"} /><circle cx="12" cy="9" r="2.6" fill="#fff" />
+              <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7z" fill={pickup ? "#103562" : "#B8862B"} /><circle cx="12" cy="9" r="2.6" fill="#fff" />
             </svg>
           )}
           {!pickup && distanceKm != null && (
