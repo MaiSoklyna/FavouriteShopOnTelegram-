@@ -8,7 +8,7 @@ from fastapi import APIRouter
 
 from app.core.constants import Role
 from app.core.dependencies import require_any_admin, require_role
-from app.core.exceptions import BadRequestError, NotFoundError
+from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.models.order import PromoValidateRequest
@@ -134,10 +134,20 @@ async def create_promo(body: dict, user: TokenClaims = require_any_admin()):
     return rows[0] if rows else data
 
 
+async def _load_own_promo(db, promo_id: int, user: TokenClaims) -> dict:
+    promo = await db.from_("promo_codes").eq("id", promo_id).select_one("id,merchant_id")
+    if not promo:
+        raise NotFoundError("Promo code", promo_id)
+    if user.role == Role.MERCHANT_ADMIN and promo.get("merchant_id") != user.merchant_id:
+        raise ForbiddenError("This promo code belongs to another shop")
+    return promo
+
+
 @router.patch("/{promo_id}")
 async def update_promo(promo_id: int, body: dict, user: TokenClaims = require_any_admin()):
-    """Update a promo code (admin only)."""
+    """Update a promo code (admin only). Merchant admins can only touch their own shop's codes."""
     async with SupabaseClient.service_role() as db:
+        await _load_own_promo(db, promo_id, user)
         data = {k: body[k] for k in body if k in _PROMO_WRITABLE_FIELDS}
         if data:
             await db.from_("promo_codes").eq("id", promo_id).update(data)
@@ -146,7 +156,8 @@ async def update_promo(promo_id: int, body: dict, user: TokenClaims = require_an
 
 @router.delete("/{promo_id}")
 async def delete_promo(promo_id: int, user: TokenClaims = require_any_admin()):
-    """Delete a promo code (admin only)."""
+    """Delete a promo code (admin only). Merchant admins can only touch their own shop's codes."""
     async with SupabaseClient.service_role() as db:
+        await _load_own_promo(db, promo_id, user)
         await db.from_("promo_codes").eq("id", promo_id).delete()
     return {"success": True}
