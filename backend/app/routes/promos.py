@@ -62,12 +62,22 @@ async def validate_promo(body: PromoValidateRequest, user: TokenClaims = require
 
 @router.get("/active")
 async def list_active_promos(merchant_id: int | None = None):
-    """List active, non-expired promo codes (public — no auth required)."""
+    """List active, non-expired plain shop codes (public — no auth required).
+
+    Codes behind a promotion (migration 018) are left out: the promotion decides
+    when they show — a weekend sale's code must not appear on a Monday — and
+    platform-wide codes have no shop to send anyone to.
+    """
     async with SupabaseClient.service_role() as db:
-        q = db.from_("promo_codes").eq("is_active", True).order("created_at", desc=True)
+        q = db.from_("promo_codes").eq("is_active", True).not_("merchant_id", "is", "null").order("created_at", desc=True)
         if merchant_id:
             q = q.eq("merchant_id", merchant_id)
         promos = await q.select()
+        try:
+            owned = {r["promo_code_id"] for r in await db.from_("promotions").not_("promo_code_id", "is", "null").select("promo_code_id")}
+        except Exception:  # no promotions table yet: every code is a plain code
+            owned = set()
+        promos = [p for p in promos if p["id"] not in owned]
 
     # Filter out expired promos server-side
     now = datetime.now(timezone.utc)

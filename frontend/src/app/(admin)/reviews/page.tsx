@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import type { Review } from "@/types";
+import { BrandLoader } from "@/components/ui/Spinner";
 
 const TABS = ["pending", "approved", "all"] as const;
 type Tab = (typeof TABS)[number];
@@ -142,7 +143,7 @@ export default function ReviewsPage() {
       {/* Table */}
       <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>
+          <BrandLoader />
         ) : (
           <table className="admin-table">
             <thead>

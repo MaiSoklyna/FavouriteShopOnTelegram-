@@ -1,334 +1,375 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
-import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote } from "@/lib/quote";
+import { EmptyState, LocationSheet, Pill, Skeleton } from "@/components/shop";
+import { api } from "@/lib/api";
+import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote, type ShopQuote } from "@/lib/quote";
+import { FREE_DELIVERY_OVER_USD, formatKhr } from "@/lib/currency";
+import { useHomeLocation } from "@/lib/useHomeLocation";
+import { lightHaptic } from "@/lib/haptics";
+import type { CartItem } from "@/types";
+import { Icon } from "@/components/shop/Icon";
+
+interface ShopBrief { id: number; name: string; logo_url?: string | null; icon_emoji?: string | null }
+
+const ICON = { fill: "none", stroke: "currentColor", strokeWidth: 1.75, strokeLinecap: "round", strokeLinejoin: "round" } as const;
 
 export default function CartPage() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { items, total, loading, updateQuantity, removeItem } = useCart();
+  const { user, loading: authLoading } = useAuth();
+  const { items, loading, updateQuantity, removeItem } = useCart();
+  const { location, resolved, save: saveLocation } = useHomeLocation(!!user);
+  const [locOpen, setLocOpen] = useState(false);
 
+  const [promoOpen, setPromoOpen] = useState(false);
   const [promoCode, setPromoCode] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoError, setPromoError] = useState("");
-  const [promoSuccess, setPromoSuccess] = useState(false);
-  const [quote, setQuote] = useState<CartQuote | null>(null);
+  /** The applied code and the one shop it belongs to */
+  const [promo, setPromo] = useState<{ code: string; merchantId: number } | null>(null);
+  /** Each shop is priced on its own — its own fee, area and order */
+  const [quotes, setQuotes] = useState<Record<number, ShopPrice>>({});
+  const [shops, setShops] = useState<Record<number, ShopBrief>>({});
+  const priceReq = useRef(0);
 
-  // Price from the backend — same computation as placing the order
-  const refreshQuote = useCallback(async (code: string | null) => {
+  const merchantIds = useMemo(
+    () => Array.from(new Set(items.map((i) => i.merchant_id).filter((id): id is number => id != null))),
+    [items],
+  );
+
+  // Price from the backend — same computation as placing the order. With a
+  // known location the fee is the real distance fee; without one the backend
+  // returns its default, which we don't show (the pin is set at checkout).
+  const priceShop = useCallback(async (merchantId: number, code: string | null): Promise<ShopPrice & { promo: CartQuote["promo"] }> => {
+    const where = location ? { delivery_type: "delivery" as const, lat: location.lat, lng: location.lng } : undefined;
     try {
-      const q = await fetchQuote(code);
-      setQuote(q);
-      return q;
-    } catch {
-      setQuote(null);
-      return null;
+      const q = await fetchQuote(code, where, merchantId);
+      return { quote: q.orders[0] ?? null, error: "", promo: q.promo };
+    } catch (e) {
+      // Out of this shop's delivery area: still price the items, flag delivery.
+      // Only the server's own answer ("delivers within 5 km") is shown; a network or code failure is not
+      const error = where && e instanceof Error && e.name === "ApiError" ? e.message.replace(/^Delivery unavailable for this location\.\s*/, "") : "";
+      try {
+        const q = await fetchQuote(code, undefined, merchantId);
+        return { quote: q.orders[0] ?? null, error, promo: q.promo };
+      } catch {
+        return { quote: null, error, promo: null };
+      }
     }
-  }, []);
+  }, [location]);
 
-  // Restore an applied code and re-price whenever the cart changes
+  /** Re-price every shop; returns where the code applied, or why it didn't. */
+  const refreshQuotes = useCallback(async (code: string | null) => {
+    const req = ++priceReq.current;
+    const results = await Promise.all(merchantIds.map((id) => priceShop(id, code).then((r) => [id, r] as const)));
+    if (req !== priceReq.current) return null;
+    setQuotes(Object.fromEntries(results.map(([id, r]) => [id, { quote: r.quote, error: r.error }])));
+    const applied = results.find(([, r]) => r.promo?.applied);
+    if (applied) return { merchantId: applied[0] as number | null, error: "" };
+    // A shop's own reason ("Min. spend $20") beats the generic "not valid for the shops in your cart"
+    const errors = results.map(([, r]) => r.promo?.error).filter((m): m is string => !!m);
+    return { merchantId: null, error: errors.find((m) => !/^Promo code not valid for the shops/.test(m)) ?? errors[0] ?? "Invalid promo code" };
+  }, [merchantIds, priceShop]);
+
+  // Restore an applied code and re-price whenever the cart or location changes
   useEffect(() => {
-    if (!user || items.length === 0) return;
+    if (!user || merchantIds.length === 0 || !resolved) return;
     const saved = getSavedPromo();
-    refreshQuote(saved).then((q) => {
-      if (saved && q?.promo?.applied) {
-        setPromoCode(saved);
-        setPromoSuccess(true);
-      } else if (saved) {
+    refreshQuotes(saved?.code ?? null).then((r) => {
+      if (!r || !saved) return;
+      if (r.merchantId != null) {
+        setPromoCode(saved.code);
+        setPromo({ code: saved.code, merchantId: r.merchantId });
+        savePromo(saved.code, r.merchantId);
+      } else {
         savePromo(null);
-        setPromoSuccess(false);
-        if (q?.promo?.error) setPromoError(q.promo.error);
+        setPromo(null);
+        setPromoError(r.error);
       }
     });
-  }, [user, items, refreshQuote]);
+  }, [user, items, merchantIds, resolved, refreshQuotes]);
+
+  // Shop name + logo for each group header
+  useEffect(() => {
+    merchantIds.filter((id) => !shops[id]).forEach((id) => {
+      api.get<ShopBrief>(`/merchants/${id}`)
+        .then((m) => setShops((s) => ({ ...s, [id]: { id, name: m.name, logo_url: m.logo_url, icon_emoji: m.icon_emoji } })))
+        .catch(() => {});
+    });
+  }, [merchantIds, shops]);
 
   const handleApplyPromo = async () => {
     const code = promoCode.trim();
     if (!code) return;
     setPromoLoading(true);
     setPromoError("");
-    const q = await refreshQuote(code);
-    if (q?.promo?.applied) {
-      savePromo(code);
-      setPromoSuccess(true);
-    } else {
-      setPromoError(q?.promo?.error || "Invalid promo code");
-      await refreshQuote(null);
+    const r = await refreshQuotes(code);
+    if (r?.merchantId != null) {
+      savePromo(code, r.merchantId);
+      setPromo({ code, merchantId: r.merchantId });
+    } else if (r) {
+      setPromoError(r.error);
+      await refreshQuotes(null);
     }
     setPromoLoading(false);
   };
 
   const clearPromo = () => {
     savePromo(null);
-    setPromoSuccess(false);
+    setPromo(null);
     setPromoCode("");
     setPromoError("");
-    refreshQuote(null);
+    refreshQuotes(null);
   };
 
+  if (authLoading) return <LoadingPage />;
   if (!user) return <LoginGate><div /></LoginGate>;
   if (loading) return <LoadingPage />;
-  if (items.length === 0) return <EmptyPage onAction={() => router.push("/shop")} />;
+  if (items.length === 0) {
+    return (
+      <div className="min-h-screen bg-surface px-gutter pt-6">
+        <h1 className="text-display text-ink-900">Cart</h1>
+        <EmptyState className="mt-10" title="Your cart is empty" body="Pick something from a nearby shop and it will wait here." action={{ label: "Browse shops", href: "/shop" }} />
+      </div>
+    );
+  }
 
-  const t = quote?.totals;
-  const deliveryFee = Number(t?.delivery_fee ?? 0);
-  const discount = Number(t?.discount ?? 0);
+  const groups = groupByShop(items);
+  const itemCount = items.reduce((n, i) => n + i.quantity, 0);
+  const promoShop = promo ? shops[promo.merchantId]?.name : undefined;
+  const promoDiscount = promo ? Number(quotes[promo.merchantId]?.quote?.discount ?? 0) : 0;
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
-      {/* Top bar */}
-      <div style={{
-        height: 56, display: "flex", alignItems: "center", gap: 12,
-        padding: "0 16px", background: "var(--shop-surface, #FFFFFF)",
-        borderBottom: "1px solid var(--shop-divider, #ECEEF3)",
-        position: "sticky", top: 0, zIndex: 50,
-      }}>
-        <button onClick={() => router.back()} style={{
-          width: 36, height: 36, borderRadius: 10, border: "none",
-          background: "var(--shop-bg, #F7F8FB)", cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 18, color: "var(--shop-black, #0B0B0F)",
-        }}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-        </button>
-        <span style={{ flex: 1, fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)" }}>My Cart</span>
-        <span style={{
-          fontSize: 13, fontWeight: 600, color: "var(--shop-primary, #1E6BFF)",
-          background: "var(--shop-primary-tint, #E8F0FF)",
-          padding: "4px 10px", borderRadius: "var(--shop-r-pill, 999px)",
-        }}>
-          {items.length} {items.length === 1 ? "item" : "items"}
-        </span>
-      </div>
+    <div className="min-h-screen bg-surface">
+      <div className="px-gutter pb-[120px] pt-6">
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-display text-ink-900">Cart</h1>
+          <span className="text-caption text-ink-500">
+            {itemCount} {itemCount === 1 ? "item" : "items"}{groups.length > 1 ? ` · ${groups.length} shops` : ""}
+          </span>
+        </div>
+        {groups.length > 1 && (
+          <p className="mt-1 text-caption text-ink-500">Each shop is its own order with its own delivery. Check out one shop at a time.</p>
+        )}
 
-      <div style={{ padding: "16px 16px 160px" }}>
-        {/* Cart items */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {items.map(item => (
-            <div key={item.id} style={{
-              display: "flex", gap: 14, padding: 14,
-              background: "var(--shop-surface, #FFFFFF)",
-              borderRadius: "var(--shop-r-card, 16px)",
-              boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-            }}>
-              {/* Image */}
-              <div style={{
-                width: 72, height: 72, borderRadius: 12, flexShrink: 0,
-                overflow: "hidden", background: "var(--shop-bg, #F7F8FB)",
-              }}>
-                {item.primary_image ? (
-                  <img src={item.primary_image} alt={item.product_name}
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : (
-                  <div style={{
-                    width: "100%", height: "100%", display: "flex",
-                    alignItems: "center", justifyContent: "center",
-                    fontSize: 24, fontWeight: 700, color: "var(--shop-muted, #8A8F9C)",
-                  }}>
-                    {item.product_name?.[0]?.toUpperCase() || "?"}
-                  </div>
-                )}
-              </div>
+        <LocationBar location={location?.area ?? null} onChange={() => setLocOpen(true)} />
+        {locOpen && (
+          <LocationSheet current={location} onClose={() => setLocOpen(false)}
+            onConfirm={(loc) => { saveLocation(loc); setLocOpen(false); }} />
+        )}
 
-              {/* Info */}
-              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                <div>
-                  <h3 style={{
-                    fontSize: 14, fontWeight: 600, color: "var(--shop-black, #0B0B0F)",
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    margin: 0,
-                  }}>{item.product_name}</h3>
-                  {item.merchant_name && (
-                    <p style={{ fontSize: 12, color: "var(--shop-muted, #8A8F9C)", margin: "2px 0 0" }}>{item.merchant_name}</p>
-                  )}
-                  {Array.isArray(item.selected_variants) && item.selected_variants.length > 0 && (
-                    <p style={{ fontSize: 11, color: "var(--shop-muted, #8A8F9C)", margin: "4px 0 0", display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {(item.selected_variants as Array<{ group_name?: string; label?: string }>).map((sv, i) => (
-                        <span key={i} style={{ background: "var(--shop-bg, #F7F8FB)", padding: "2px 8px", borderRadius: 999, fontWeight: 500 }}>
-                          {sv.group_name ? `${sv.group_name}: ` : ""}{sv.label}
-                        </span>
-                      ))}
-                    </p>
-                  )}
-                </div>
-                <span style={{ fontSize: 15, fontWeight: 700, color: "var(--shop-primary, #1E6BFF)" }}>
-                  ${item.line_total.toFixed(2)}
-                </span>
-              </div>
-
-              {/* Actions column */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "space-between", flexShrink: 0 }}>
-                <button onClick={() => removeItem(item.id)} style={{
-                  background: "none", border: "none", cursor: "pointer",
-                  fontSize: 12, fontWeight: 600, color: "#EF4444",
-                  padding: "2px 0",
-                }}>
-                  Remove
-                </button>
-                {/* Qty stepper */}
-                <div style={{
-                  display: "flex", alignItems: "center",
-                  border: "1px solid var(--shop-divider, #ECEEF3)",
-                  borderRadius: "var(--shop-r-pill, 999px)", overflow: "hidden",
-                }}>
-                  <button onClick={() => updateQuantity(item.id, item.quantity - 1)} style={{
-                    width: 30, height: 30, background: "none", border: "none",
-                    cursor: "pointer", fontSize: 15, color: "var(--shop-muted, #8A8F9C)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>-</button>
-                  <span style={{
-                    width: 28, textAlign: "center", fontWeight: 700,
-                    fontSize: 13, color: "var(--shop-black, #0B0B0F)",
-                  }}>{item.quantity}</span>
-                  <button onClick={() => updateQuantity(item.id, item.quantity + 1)} style={{
-                    width: 30, height: 30, background: "none", border: "none",
-                    cursor: "pointer", fontSize: 15, color: "var(--shop-primary, #1E6BFF)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>+</button>
-                </div>
-              </div>
-            </div>
+        <div className="mt-3 flex flex-col gap-3">
+          {groups.map(({ merchantId, lines }) => (
+            <ShopGroup
+              key={merchantId ?? "none"}
+              shop={merchantId != null ? shops[merchantId] : undefined}
+              fallbackName={lines[0]?.merchant_name}
+              price={merchantId != null ? quotes[merchantId] : undefined}
+              located={!!location}
+              lines={lines}
+              onQty={(line, q) => { lightHaptic(); updateQuantity(line.id, q); }}
+              onRemove={(line) => { lightHaptic(); removeItem(line.id); }}
+              onCheckout={merchantId != null ? () => router.push(`/shop/checkout?shop=${merchantId}`) : undefined}
+            />
           ))}
         </div>
 
-        {/* Promo box */}
-        <div style={{
-          marginTop: 20, padding: 14,
-          background: "var(--shop-surface, #FFFFFF)",
-          borderRadius: "var(--shop-r-card, 16px)",
-          boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-        }}>
-          <p style={{ fontSize: 14, fontWeight: 600, color: "var(--shop-black, #0B0B0F)", margin: "0 0 10px" }}>Promo Code</p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input type="text" value={promoCode} onChange={(e) => setPromoCode(e.target.value)}
-              placeholder="Enter code" disabled={promoSuccess}
-              style={{
-                flex: 1, padding: "10px 14px",
-                borderRadius: "var(--shop-r-input, 12px)",
-                border: "1px solid var(--shop-divider, #ECEEF3)",
-                background: "var(--shop-bg, #F7F8FB)",
-                color: "var(--shop-black, #0B0B0F)", fontSize: 14,
-                outline: "none",
-              }} />
-            {promoSuccess ? (
-              <button onClick={clearPromo}
-                style={{
-                  padding: "10px 18px",
-                  borderRadius: "var(--shop-r-input, 12px)",
-                  border: "1.5px solid #EF4444",
-                  background: "transparent",
-                  color: "#EF4444", fontWeight: 600, fontSize: 13,
-                  cursor: "pointer", whiteSpace: "nowrap",
-                }}>
-                Clear
-              </button>
-            ) : (
-              <button onClick={handleApplyPromo}
-                disabled={promoLoading || !promoCode.trim()}
-                style={{
-                  padding: "10px 18px",
-                  borderRadius: "var(--shop-r-input, 12px)",
-                  border: "none",
-                  background: "var(--shop-primary, #1E6BFF)",
-                  color: "#FFFFFF", fontWeight: 600, fontSize: 13,
-                  cursor: "pointer",
-                  opacity: promoLoading || !promoCode.trim() ? 0.4 : 1,
-                  whiteSpace: "nowrap",
-                }}>
-                {promoLoading ? "..." : "Apply"}
-              </button>
-            )}
+        {/* Promo — a code belongs to one shop and only lowers that shop's order */}
+        {promo ? (
+          <div className="mt-3 flex h-14 items-center gap-3 rounded-[18px] bg-tint-jade px-4">
+            <Icon name="ticket" size={20} className="text-tone-jade" />
+            <span className="flex-1 truncate text-[14px] font-bold text-tone-jade">
+              {promo.code} · −{money(promoDiscount)}{promoShop && groups.length > 1 ? ` at ${promoShop}` : ""}
+            </span>
+            <button type="button" onClick={clearPromo} className="fos-press h-11 px-2 text-[13px] font-bold text-ruby-500">Remove</button>
           </div>
-          {promoError && <p style={{ color: "#EF4444", fontSize: 12, marginTop: 6, marginBottom: 0 }}>{promoError}</p>}
-          {promoSuccess && <p style={{ color: "#16a34a", fontSize: 12, marginTop: 6, marginBottom: 0 }}>Promo code applied!</p>}
-        </div>
-
-        {/* Summary card */}
-        <div style={{
-          marginTop: 16, padding: 16,
-          background: "var(--shop-surface, #FFFFFF)",
-          borderRadius: "var(--shop-r-card, 16px)",
-          boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-        }}>
-          <Row label="Subtotal" value={t ? money(t.subtotal) : `$${total.toFixed(2)}`} />
-          <Row label="Shipping" value={!t ? "…" : deliveryFee === 0 ? "Free" : money(deliveryFee)} valueColor={t && deliveryFee === 0 ? "#16a34a" : undefined} />
-          {discount > 0 && <Row label={`Discount (${quote?.promo?.code})`} value={`-${money(discount)}`} valueColor="#16a34a" />}
-          <div style={{ height: 1, background: "var(--shop-divider, #ECEEF3)", margin: "12px 0" }} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ fontWeight: 700, fontSize: 15, color: "var(--shop-black, #0B0B0F)" }}>Total</span>
-            <span style={{ fontWeight: 700, fontSize: 17, color: "var(--shop-primary, #1E6BFF)" }}>{t ? money(t.total) : "…"}</span>
+        ) : promoOpen ? (
+          <div className="mt-3 rounded-[18px] border border-dashed border-gold-400 bg-card p-2">
+            <div className="flex gap-2">
+              <input
+                autoFocus value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => { if (e.key === "Enter") handleApplyPromo(); }}
+                placeholder="Promo code" aria-label="Promo code"
+                className="h-11 min-w-0 flex-1 rounded-md bg-surface px-3 text-[15px] font-semibold uppercase tracking-wide text-ink-900 outline-none placeholder:normal-case placeholder:font-medium placeholder:tracking-normal placeholder:text-ink-500"
+              />
+              <button
+                type="button" onClick={handleApplyPromo} disabled={promoLoading || !promoCode.trim()}
+                className="fos-press h-11 rounded-md bg-navy-700 px-4 text-[14px] font-bold text-white disabled:opacity-40"
+              >{promoLoading ? "…" : "Apply"}</button>
+            </div>
+            {promoError && <p className="px-1 pt-1.5 text-caption text-ruby-500">{promoError}</p>}
           </div>
-        </div>
-      </div>
-
-      {/* Checkout button - fixed bottom */}
-      <div style={{
-        position: "fixed", bottom: 60, left: 0, right: 0, zIndex: 40,
-        padding: "12px 16px 16px",
-        background: "var(--shop-surface, #FFFFFF)",
-        borderTop: "1px solid var(--shop-divider, #ECEEF3)",
-      }}>
-        <button onClick={() => router.push("/shop/checkout")} style={{
-          width: "100%", padding: "16px",
-          borderRadius: "var(--shop-r-card, 16px)",
-          border: "none",
-          background: "var(--shop-primary, #1E6BFF)",
-          color: "#FFFFFF", fontWeight: 700, fontSize: 15,
-          cursor: "pointer",
-          boxShadow: "0 4px 16px rgba(30,107,255,0.3)",
-        }}>
-          Checkout{t ? <> &middot; {money(t.total)}</> : null}
-        </button>
+        ) : (
+          <button
+            type="button" onClick={() => setPromoOpen(true)}
+            className="fos-press mt-3 flex h-14 w-full items-center gap-3 rounded-[18px] border border-dashed border-gold-400 bg-card px-4 text-left"
+          >
+            <Icon name="ticket" size={20} className="text-gold-700" />
+            <span className="flex-1 text-[14px] font-bold text-ink-900">Promo code</span>
+            <span className="text-ink-500" aria-hidden>→</span>
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function Row({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+interface ShopPrice { quote: ShopQuote | null; error: string }
+
+function groupByShop(items: CartItem[]) {
+  const map = new Map<number | undefined, CartItem[]>();
+  for (const it of items) map.set(it.merchant_id, [...(map.get(it.merchant_id) ?? []), it]);
+  return Array.from(map, ([merchantId, lines]) => ({ merchantId, lines }));
+}
+
+/** Where the orders go — every shop prices its own delivery to this place. */
+function LocationBar({ location, onChange }: { location: string | null; onChange: () => void }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 10 }}>
-      <span style={{ color: "var(--shop-text, #4A4E5A)" }}>{label}</span>
-      <span style={{ fontWeight: 600, color: valueColor || "var(--shop-black, #0B0B0F)" }}>{value}</span>
-    </div>
+    <button type="button" onClick={onChange}
+      className="fos-press mt-4 flex w-full items-center gap-3 rounded-card bg-card p-3 text-left shadow-fos-sm">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-tint-mango text-mango-500">
+        <Icon name="pin" size={20} strokeWidth={2} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-caption text-ink-500">Deliver to</span>
+        <span className="block truncate text-[14px] font-extrabold text-ink-900">{location ?? "Set your delivery location"}</span>
+      </span>
+      <span className="shrink-0 rounded-full bg-surface px-3 py-1.5 text-[12px] font-extrabold text-navy-700">{location ? "Change" : "Set"}</span>
+    </button>
   );
 }
 
-function EmptyPage({ onAction }: { onAction: () => void }) {
+function ShopGroup({ shop, fallbackName, price, located, lines, onQty, onRemove, onCheckout }: {
+  shop?: ShopBrief;
+  fallbackName?: string;
+  price?: ShopPrice;
+  /** Delivery is only priced for real when we know where the customer is. */
+  located: boolean;
+  lines: CartItem[];
+  onQty: (line: CartItem, quantity: number) => void;
+  onRemove: (line: CartItem) => void;
+  onCheckout?: () => void;
+}) {
+  const name = shop?.name ?? fallbackName ?? "Shop";
+  const quote = price?.quote ?? null;
+  const outOfArea = !!price?.error;
+  const subtotal = quote ? Number(quote.subtotal) : lines.reduce((n, l) => n + Number(l.line_total ?? 0), 0);
+  const discount = Number(quote?.discount ?? 0);
+  const free = subtotal >= FREE_DELIVERY_OVER_USD;
+  const priced = located && !outOfArea && !!quote;
+  const fee = priced ? Number(quote!.delivery_fee) : null;
+  const km = quote?.distance_km != null ? Number(quote.distance_km) : null;
+  const total = priced ? Number(quote!.total) : subtotal - discount;
+  const closed = !!quote && !quote.is_open;
+  const minShort = quote?.min_order_amount ? Number(quote.min_order_amount) - subtotal : 0;
+
+  let feePill = null;
+  if (free) feePill = <Pill variant="jade">Free delivery</Pill>;
+  else if (priced && fee != null) feePill = <Pill variant="jade">{money(fee)}{km != null ? ` · ${km.toFixed(1)} km` : ""}</Pill>;
+  else if (outOfArea) feePill = <Pill variant="mango">Pickup only</Pill>;
+
+  const cta = closed ? "Closed now" : minShort > 0 ? `Add ${money(minShort)} more` : `Checkout ${name}`;
+
   return (
-    <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
-      <div style={{
-        height: 56, display: "flex", alignItems: "center", gap: 12,
-        padding: "0 16px", background: "var(--shop-surface, #FFFFFF)",
-        borderBottom: "1px solid var(--shop-divider, #ECEEF3)",
-      }}>
-        <span style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)" }}>My Cart</span>
+    <section className="rounded-hero bg-card p-3.5 shadow-fos-sm">
+      <header className="mb-1 flex items-center gap-2.5">
+        <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-surface text-[14px]">
+          {shop?.logo_url
+            ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" />
+            : shop?.icon_emoji || <span className="text-[12px] font-extrabold text-navy-700">{name[0]?.toUpperCase()}</span>}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[14px] font-extrabold text-ink-900">{name}</span>
+        {feePill}
+      </header>
+      {closed && <div className="mb-1 mt-2"><Pill variant="mango">Closed now · order opens later</Pill></div>}
+      {minShort > 0 && <div className="mb-1 mt-2"><Pill variant="mango">Min. order {money(quote!.min_order_amount)}</Pill></div>}
+      {outOfArea && (
+        <p className="mb-1 mt-2 rounded-md bg-tint-ruby px-2.5 py-2 text-[12px] font-semibold text-ruby-500">
+          Doesn&apos;t deliver to your location{price?.error ? ` · ${price.error}` : ""}. Pickup still works.
+        </p>
+      )}
+      <div className="divide-y divide-line">
+        {lines.map((line) => <CartLine key={line.id} line={line} onQty={onQty} onRemove={onRemove} />)}
       </div>
-      <div style={{ textAlign: "center", paddingTop: 100 }}>
-        <div style={{
-          width: 72, height: 72, borderRadius: "50%", margin: "0 auto 16px",
-          background: "var(--shop-primary-tint, #E8F0FF)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--shop-primary, #1E6BFF)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
-            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
-          </svg>
+
+      {/* This shop's own bill */}
+      <div className="mt-1 border-t border-line pt-2.5 text-[13px] tabular-nums">
+        <div className="flex justify-between py-0.5"><span className="text-ink-500">Subtotal</span><span className="font-bold text-ink-900">{money(subtotal)}</span></div>
+        {discount > 0 && (
+          <div className="flex justify-between py-0.5 font-bold text-tone-jade"><span className="min-w-0 truncate pr-2">{quote?.promo_title ?? quote?.promo_code ?? "Promo"}{quote?.promo_auto ? " · applied automatically" : ""}</span><span>−{money(discount)}</span></div>
+        )}
+        <div className="flex justify-between py-0.5">
+          <span className="text-ink-500">Delivery</span>
+          <span className={`font-bold ${free || fee === 0 ? "text-tone-jade" : "text-ink-900"}`}>
+            {free || fee === 0 ? "Free" : fee != null ? money(fee) : outOfArea ? "Pickup only" : "At checkout"}
+          </span>
         </div>
-        <p style={{ fontSize: 16, fontWeight: 600, color: "var(--shop-black, #0B0B0F)", margin: "0 0 4px" }}>Your cart is empty</p>
-        <p style={{ fontSize: 13, color: "var(--shop-muted, #8A8F9C)", margin: "0 0 24px" }}>Add items to get started</p>
-        <button onClick={onAction} style={{
-          padding: "12px 32px",
-          background: "var(--shop-primary, #1E6BFF)", color: "#FFFFFF",
-          border: "none", borderRadius: "var(--shop-r-pill, 999px)",
-          fontWeight: 600, fontSize: 14, cursor: "pointer",
-          boxShadow: "0 4px 16px rgba(30,107,255,0.3)",
-        }}>
-          Start Shopping
+        {!free && (
+          <div className="mt-1.5">
+            <div className="text-[11px] font-semibold text-ink-500">
+              Add {money(FREE_DELIVERY_OVER_USD - subtotal)} more for <span className="text-tone-jade">free delivery</span>
+            </div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface">
+              <i className="block h-full rounded-full bg-jade-500 transition-[width] duration-300" style={{ width: `${Math.max(4, (subtotal / FREE_DELIVERY_OVER_USD) * 100)}%` }} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <button
+        type="button" onClick={onCheckout} disabled={!onCheckout || closed || minShort > 0}
+        className="fos-press mt-3 flex h-[52px] w-full items-center gap-2 rounded-thumb bg-grad-cta px-4 text-white shadow-fos-cta disabled:opacity-50 disabled:shadow-none"
+      >
+        <span className="min-w-0 flex-1 truncate text-left text-[15px] font-bold">{cta}</span>
+        <span className="shrink-0 text-right tabular-nums leading-tight">
+          <span className="block text-[16px] font-extrabold">{price ? money(total) : "…"}</span>
+          {price && <span className="block text-[10px] font-semibold text-white/75">{priced ? formatKhr(total) : "+ delivery"}</span>}
+        </span>
+      </button>
+    </section>
+  );
+}
+
+function CartLine({ line, onQty, onRemove }: {
+  line: CartItem;
+  onQty: (line: CartItem, quantity: number) => void;
+  onRemove: (line: CartItem) => void;
+}) {
+  const variants = Array.isArray(line.selected_variants)
+    ? (line.selected_variants as Array<{ label?: string }>).map((v) => v.label).filter(Boolean).join(" · ")
+    : "";
+  return (
+    <div className="flex items-center gap-3 py-2">
+      <div className="h-20 w-20 shrink-0 overflow-hidden rounded-thumb bg-surface">
+        {line.primary_image
+          ? <img src={line.primary_image} alt={line.product_name ?? ""} className="h-full w-full object-cover" />
+          : <div className="grid h-full w-full place-items-center text-[24px] font-extrabold text-ink-500">{line.icon_emoji || line.product_name?.[0]?.toUpperCase() || "?"}</div>}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="truncate text-[14px] font-bold text-ink-900">{line.product_name}</div>
+        {variants && <span className="inline-flex h-5 max-w-full self-start truncate rounded-sm bg-surface px-1.5 text-[11px] font-semibold leading-5 text-ink-500">{variants}</span>}
+        <div className="text-[16px] font-extrabold tabular-nums text-ink-900">{money(line.line_total)}</div>
+      </div>
+      <div className="flex h-8 w-24 shrink-0 items-center justify-between rounded-md bg-surface">
+        <button
+          type="button"
+          onClick={() => (line.quantity <= 1 ? onRemove(line) : onQty(line, line.quantity - 1))}
+          aria-label={line.quantity <= 1 ? "Remove" : "Decrease"}
+          className={`fos-press grid h-8 w-8 place-items-center ${line.quantity <= 1 ? "text-ruby-500" : "text-ink-900"}`}
+        >
+          {line.quantity <= 1
+            ? <svg width="16" height="16" viewBox="0 0 24 24" {...ICON} aria-hidden><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
+            : <span className="text-[18px] font-bold leading-none">−</span>}
         </button>
+        <span className="text-[14px] font-extrabold tabular-nums text-ink-900">{line.quantity}</span>
+        <button
+          type="button" onClick={() => onQty(line, line.quantity + 1)} aria-label="Increase"
+          className="fos-press grid h-8 w-8 place-items-center text-[18px] font-bold leading-none text-navy-700"
+        >+</button>
       </div>
     </div>
   );
@@ -336,25 +377,10 @@ function EmptyPage({ onAction }: { onAction: () => void }) {
 
 function LoadingPage() {
   return (
-    <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
-      <div style={{
-        height: 56, display: "flex", alignItems: "center", gap: 12,
-        padding: "0 16px", background: "var(--shop-surface, #FFFFFF)",
-        borderBottom: "1px solid var(--shop-divider, #ECEEF3)",
-      }}>
-        <span style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)" }}>My Cart</span>
-      </div>
-      <div style={{ padding: 16 }}>
-        {[1, 2, 3].map(i => (
-          <div key={i} style={{
-            height: 100, background: "var(--shop-surface, #FFFFFF)",
-            borderRadius: "var(--shop-r-card, 16px)",
-            boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-            marginBottom: 12, animation: "cartPulse 1.5s infinite",
-          }} />
-        ))}
-      </div>
-      <style>{`@keyframes cartPulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
+    <div className="min-h-screen bg-surface px-gutter pt-6">
+      <h1 className="text-display text-ink-900">Cart</h1>
+      <Skeleton className="mt-4 h-[72px] rounded-card" />
+      {[1, 2].map((i) => <Skeleton key={i} className="mt-3 h-[140px] rounded-hero" />)}
     </div>
   );
 }

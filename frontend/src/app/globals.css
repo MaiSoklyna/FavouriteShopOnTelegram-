@@ -15,10 +15,10 @@
   --h24-gold-light: #D6BA80;
   --h24-white: #FFFFFF;
   --h24-black: #000000;
-  --h24-grey: #746D6D;
+  --h24-grey: #5B6472;
   --h24-cloud: #EAEFF3;
   --h24-cloud-20: rgba(234, 239, 243, 0.2);
-  --h24-placeholder: rgba(116, 109, 109, 0.5);
+  --h24-placeholder: rgba(91, 100, 114, 0.5);
 
   /* ── Admin theme ── */
   --bg: #EAEFF3;
@@ -29,8 +29,8 @@
   --border: #D6DDE6;
   --border-light: #EAEFF3;
   --text: #081D3C;
-  --text-secondary: #746D6D;
-  --text-muted: rgba(116, 109, 109, 0.5);
+  --text-secondary: #5B6472;
+  --text-muted: rgba(91, 100, 114, 0.5);
   --accent: #103562;
   --accent-light: rgba(234, 239, 243, 0.2);
   --accent-gradient: linear-gradient(135deg, #103562, #081D3C);
@@ -60,7 +60,7 @@
   --shop-accent-light: #D6BA80;
   --shop-black: #081D3C;
   --shop-text: #081D3C;
-  --shop-muted: #746D6D;
+  --shop-muted: #5B6472;
   --shop-divider: #EAEFF3;
   --shop-surface: #FFFFFF;
   --shop-bg: #EAEFF3;
@@ -361,3 +361,140 @@ input:focus, select:focus, textarea:focus {
 .shop-h-scroll > * { scroll-snap-align: start; }
 .shop-scroll-area { flex: 1; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
 .shop-scroll-area::-webkit-scrollbar { display: none; }
+
+
+/* ═══════ FOS DESIGN HANDOFF — shared motion helpers ═══════ */
+.fos-press { transition: transform var(--fos-dur-fast) var(--fos-ease-out); }
+.fos-press:active { transform: scale(.97); }
+
+.fos-shimmer {
+  background: linear-gradient(90deg, #E3E8EF 0%, #F6F8FB 50%, #E3E8EF 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+@keyframes fosBump { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
+@keyframes fosPop { 0% { transform: scale(1); } 45% { transform: scale(1.3); } 100% { transform: scale(1); } }
+.fos-bump { animation: fosBump var(--fos-dur-base) var(--fos-ease-out); }
+.fos-pop { animation: fosPop 320ms cubic-bezier(.3, 1.6, .5, 1); }
+
+.fos-no-scrollbar { scrollbar-width: none; }
+.fos-no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Paid screen: confetti burst + check stroke (handoff "PaidSuccess") */
+@keyframes fosConfetti {
+  0% { transform: translate(0, 0) rotate(0); opacity: 1; }
+  100% { transform: translate(var(--dx), calc(var(--dy) + 160px)) rotate(var(--rot)); opacity: 0; }
+}
+.fos-confetti { animation: fosConfetti 1.4s cubic-bezier(.2, .7, .3, 1) both; }
+@keyframes fosDraw { from { stroke-dashoffset: 24; } to { stroke-dashoffset: 0; } }
+.fos-draw { stroke-dasharray: 24; animation: fosDraw 360ms 160ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .fos-confetti, .fos-draw, .fos-pop { animation: none !important; }
+}
+
+/* ═══════ FOS THEME TOKENS (light / dark) ═══════
+   Space-separated RGB so Tailwind can add opacity: bg-surface/90 → rgb(var(--fos-c-surface) / .9).
+   Brand colours that read on both themes (mango, jade, ruby, KHQR red, the navy gradients) stay fixed. */
+:root {
+  --fos-c-surface: 246 248 251;
+  --fos-c-card: 255 255 255;
+  --fos-c-line: 227 232 239;
+  --fos-c-ink-900: 14 26 43;
+  --fos-c-ink-500: 91 100 114;
+  --fos-c-navy-700: 16 53 98;
+  --fos-c-navy-500: 27 75 138;
+  --fos-c-tint-jade: 231 248 239;
+  --fos-c-tint-mango: 250 241 218;
+  --fos-c-tint-ruby: 253 236 236;
+  --fos-c-tint-gold: 251 244 228;
+  --fos-c-tint-neutral: 241 244 248;
+  --fos-c-tint-navy: 238 243 252;
+  --fos-c-tint-map: 233 238 245;
+  --fos-c-tone-jade: 6 118 71;
+  --fos-c-tone-mango: 128 88 18;
+  --fos-c-tone-navy: 16 53 98;
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  --fos-c-surface: 10 22 40;
+  --fos-c-card: 19 39 68;
+  --fos-c-line: 31 58 95;
+  --fos-c-ink-900: 234 239 243;
+  --fos-c-ink-500: 148 163 184;
+  --fos-c-navy-700: 46 95 166;
+  --fos-c-navy-500: 120 160 225;
+  --fos-c-tint-jade: 18 64 52;
+  --fos-c-tint-mango: 66 50 20;
+  --fos-c-tint-ruby: 77 30 34;
+  --fos-c-tint-gold: 66 54 28;
+  --fos-c-tint-neutral: 26 48 82;
+  --fos-c-tint-navy: 28 52 92;
+  --fos-c-tint-map: 23 42 70;
+  --fos-c-tone-jade: 74 222 128;
+  --fos-c-tone-mango: 234 196 110;
+  --fos-c-tone-navy: 150 186 240;
+  color-scheme: dark;
+}
+/* navy-700 is both a fill (buttons, active tabs) and a text colour; a fill bright
+   enough for dark mode is too dim as text on a dark card, so text gets the light tone */
+[data-theme="dark"] .text-navy-700,
+[data-theme="dark"] .text-navy-500 { color: rgb(var(--fos-c-tone-navy)); }
+[data-theme="dark"] .shadow-fos-sm { box-shadow: 0 1px 2px rgba(0, 0, 0, .35); }
+[data-theme="dark"] .shadow-fos-md { box-shadow: 0 8px 24px rgba(0, 0, 0, .35); }
+[data-theme="dark"] .fos-shimmer { background: linear-gradient(90deg, #172A46 0%, #1F3A5F 50%, #172A46 100%); background-size: 200% 100%; }
+
+/* Generated shop covers are pastel art; dim them on dark pages */
+[data-theme="dark"] .fos-gen-cover { filter: brightness(.62) saturate(.85); }
+
+/* Gold accent: solid fills get the bronze → gold → mustard gradient (colour stays as fallback) */
+.bg-mango-500 { background-image: var(--fos-grad-promo); }
+
+/* ═══════ Home on navy (Byme24 re-skin) ═══════
+   The page ground is #081D3C. Text that sits directly on it turns light and links turn gold;
+   anything inside a card (.bg-card) keeps its own colours, so product, shop and promo cards are unchanged. */
+.fos-on-navy { background: #081D3C; }
+.fos-on-navy .text-ink-900 { color: #FFFFFF; }
+.fos-on-navy .text-ink-500 { color: rgba(255, 255, 255, .62); }
+.fos-on-navy .text-navy-700, .fos-on-navy .text-navy-500 { color: #D6BA80; }
+.fos-on-navy .bg-card .text-ink-900, .fos-on-navy .bg-card.text-ink-900 { color: rgb(var(--fos-c-ink-900)); }
+.fos-on-navy .bg-card .text-ink-500, .fos-on-navy .bg-card.text-ink-500 { color: rgb(var(--fos-c-ink-500)); }
+.fos-on-navy .bg-card .text-navy-700, .fos-on-navy .bg-card.text-navy-700 { color: rgb(var(--fos-c-navy-700)); }
+.fos-on-navy .bg-card .text-navy-500, .fos-on-navy .bg-card.text-navy-500 { color: rgb(var(--fos-c-navy-500)); }
+
+/* ═══════ BYME24 LOADING (brand page: "Splash and loading screens") ═══════ */
+:root { --brand-navy: #081D3C; --brand-gold: #D6BA80; --brand-gold-dark: #71541A; }
+
+/* The knot turns in three 120° steps every 2.4s around the ring's centre (50, 58) */
+.brand-spinner__knot { transform-box: view-box; transform-origin: 50% 58%; }
+.brand-spinner--rotate .brand-spinner__knot,
+.brand-spinner--glow .brand-spinner__knot { animation: brand-rotate 2.4s cubic-bezier(.65,0,.35,1) infinite; }
+.brand-spinner--pulse .brand-spinner__knot { animation: brand-pulse 1.8s ease-in-out infinite; }
+.brand-spinner--glow { animation: brand-glow 2.2s ease-in-out infinite; }
+@keyframes brand-rotate { 0% { transform: rotate(0deg); } 33.333% { transform: rotate(120deg); } 66.666% { transform: rotate(240deg); } 100% { transform: rotate(360deg); } }
+@keyframes brand-pulse { 0%, 100% { transform: scale(.92); opacity: .7; } 50% { transform: scale(1.04); opacity: 1; } }
+@keyframes brand-glow { 0%, 100% { filter: drop-shadow(0 0 0 rgba(214,186,128,0)); } 50% { filter: drop-shadow(0 0 14px rgba(214,186,128,.85)); } }
+
+/* Thin progress sweep under the knot; the light version sits on white panels */
+.brand-sweep { width: 132px; height: 2px; border-radius: 2px; background: #1E3A63; overflow: hidden; }
+.brand-sweep--light { width: 96px; background: rgba(113,84,26,.16); }
+.brand-sweep span { display: block; width: 40%; height: 100%; background: var(--brand-gold); animation: brand-sweep 1.6s ease-in-out infinite; }
+@keyframes brand-sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+
+/* Launch: splash (symbol + wordmark) → loading screen → fade */
+.brand-splash { position: fixed; inset: 0; z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
+  background: radial-gradient(100% 70% at 50% 40%, #13336A, #081D3C); transition: opacity .4s ease; }
+.brand-splash--out { opacity: 0; pointer-events: none; }
+.brand-splash__word { font-weight: 800; font-size: 26px; color: #FFFFFF; letter-spacing: .01em; }
+.brand-splash__word span { color: var(--brand-gold); }
+.brand-splash__tag { position: absolute; bottom: calc(8% + env(safe-area-inset-bottom, 0px)); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--brand-gold); opacity: .7; }
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-spinner__knot, .brand-spinner--glow, .brand-sweep span { animation: none !important; }
+  .brand-splash { transition: none; }
+}
+/* Placeholders on the navy Home: dim navy shimmer instead of bright white blocks */
+.fos-on-navy .fos-shimmer { background: linear-gradient(90deg, #12294D 0%, #1C3A66 50%, #12294D 100%); background-size: 200% 100%; }
+/* Success moments (order placed, paid): gold halo 0 → 14px, 2.2s */
+.brand-glow { animation: brand-glow 2.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .brand-glow { animation: none !important; } }

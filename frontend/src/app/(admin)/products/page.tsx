@@ -6,6 +6,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { Product, Category, Merchant, AdminUser } from "@/types";
 import { VariantsEditor, type VariantGroup } from "@/components/admin/VariantsEditor";
+import { BrandLoader } from "@/components/ui/Spinner";
 
 export default function ProductsPage() {
   const { user, isSuperAdmin } = useAuth();
@@ -166,7 +167,7 @@ export default function ProductsPage() {
 
       {/* Table */}
       <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
-        {loading ? <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Loading...</div> : (
+        {loading ? <BrandLoader /> : (
           <table className="admin-table">
             <thead><tr><th>Image</th><th>Name</th>{isSuperAdmin && <th>Shop</th>}<th>Category</th><th>Price</th><th>Stock</th><th>Active</th><th>Actions</th></tr></thead>
             <tbody>

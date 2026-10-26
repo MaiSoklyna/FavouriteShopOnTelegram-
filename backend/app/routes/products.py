@@ -442,14 +442,20 @@ async def list_categories(
 
         categories = await q.select()
 
-        for c in categories:
+        # One query for all counts instead of one per category
+        counts: dict[int, int] = {}
+        cat_ids = [c["id"] for c in categories]
+        if cat_ids:
             prods = await (
                 db.from_("products")
-                .eq("category_id", c["id"])
+                .in_("category_id", cat_ids)
                 .eq("is_active", True)
-                .select("id")
+                .select("category_id")
             )
-            c["product_count"] = len(prods)
+            for p in prods:
+                counts[p["category_id"]] = counts.get(p["category_id"], 0) + 1
+        for c in categories:
+            c["product_count"] = counts.get(c["id"], 0)
 
         merchant_ids = list({c["merchant_id"] for c in categories if c.get("merchant_id")})
         if merchant_ids:

@@ -1,26 +1,39 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { LoginGate } from "@/components/shop/LoginGate";
 import type { Order } from "@/types";
+import { Icon } from "@/components/shop/Icon";
+import { EmptyState, OrderProgress, Pill, Skeleton } from "@/components/shop";
+import { ACTIVE_STATUSES, awaitingPayment, formatWhen, headline, statusLabel } from "@/lib/orderStatus";
+import { formatKhr } from "@/lib/currency";
+
+interface ShopBrief { id: number; name: string; logo_url?: string | null; icon_emoji?: string | null }
 
 const TABS = [
   { key: "all", label: "All" },
   { key: "active", label: "Active" },
   { key: "completed", label: "Completed" },
   { key: "cancelled", label: "Cancelled" },
-];
+] as const;
+type Tab = (typeof TABS)[number]["key"];
+
+const inTab = (o: Order, tab: Tab) =>
+  tab === "active" ? ACTIVE_STATUSES.includes(o.status)
+    : tab === "completed" ? o.status === "delivered"
+      : tab === "cancelled" ? o.status === "cancelled"
+        : true;
 
 export default function OrdersPage() {
-  const router = useRouter();
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [shops, setShops] = useState<Record<number, ShopBrief>>({});
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("all");
+  const [tab, setTab] = useState<Tab>("all");
 
   const fetchOrders = useCallback(async () => {
     if (!user) { setLoading(false); return; }
@@ -32,157 +45,107 @@ export default function OrdersPage() {
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
   useAutoRefresh(fetchOrders, { interval: 15000, enabled: !!user });
 
-  const filtered = orders.filter(o => {
-    if (tab === "active") return ["pending", "confirmed", "processing", "shipped"].includes(o.status);
-    if (tab === "completed") return o.status === "delivered";
-    if (tab === "cancelled") return o.status === "cancelled";
-    return true;
-  });
-
-  const tabCount = (key: string) => orders.filter(o => {
-    if (key === "active") return ["pending", "confirmed", "processing", "shipped"].includes(o.status);
-    if (key === "completed") return o.status === "delivered";
-    if (key === "cancelled") return o.status === "cancelled";
-    return true;
-  }).length;
+  // The order list carries only merchant_id — names and logos come from the public shop list
+  useEffect(() => {
+    api.get<ShopBrief[]>("/merchants")
+      .then((rows) => setShops(Object.fromEntries(rows.map((m) => [m.id, m]))))
+      .catch(() => {});
+  }, []);
 
   if (!user) return <LoginGate><div /></LoginGate>;
 
-  return (
-    <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
-      {/* Navy header */}
-      <div style={{
-        background: "#103562",
-        borderRadius: "0 0 20px 20px",
-        padding: "12px 20px",
-        position: "sticky", top: 0, zIndex: 10,
-      }}>
-        <h1 style={{
-          fontSize: 16, fontWeight: 500, color: "#FFFFFF", margin: 0,
-          fontFamily: "'Kantumruy Pro', sans-serif",
-        }}>My Orders</h1>
-      </div>
+  const filtered = orders.filter((o) => inTab(o, tab));
+  const activeCount = orders.filter((o) => inTab(o, "active")).length;
 
-      <div style={{ padding: "16px 16px 80px" }}>
-        {/* Tab Pills */}
-        <div style={{
-          display: "flex", gap: 8, overflowX: "auto", marginBottom: 20, paddingBottom: 2,
-        }}>
-          {TABS.map(t => {
-            const active = tab === t.key;
+  return (
+    <div className="min-h-screen bg-surface">
+      <div className="px-gutter pb-[110px] pt-6">
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-display text-ink-900">Orders</h1>
+          {activeCount > 0 && <span className="text-caption text-ink-500">{activeCount} active</span>}
+        </div>
+
+        <div className="fos-no-scrollbar -mx-gutter mt-4 flex gap-2 overflow-x-auto px-gutter" role="tablist">
+          {TABS.map((t) => {
+            const on = tab === t.key;
+            const n = orders.filter((o) => inTab(o, t.key)).length;
             return (
-              <button key={t.key} onClick={() => setTab(t.key)}
-                style={{
-                  flexShrink: 0, padding: "6px 14px", borderRadius: 999,
-                  fontSize: 12, fontWeight: active ? 600 : 500, border: "none", cursor: "pointer",
-                  transition: "all 0.2s",
-                  fontFamily: "'Kantumruy Pro', sans-serif",
-                  background: active ? "var(--shop-primary)" : "var(--shop-surface)",
-                  color: active ? "#FFFFFF" : "var(--shop-text)",
-                  boxShadow: "var(--shop-shadow)",
-                }}>
-                {t.label} ({tabCount(t.key)})
+              <button key={t.key} type="button" role="tab" aria-selected={on} onClick={() => setTab(t.key)}
+                className={`fos-press inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-[13px] font-extrabold transition-colors ${
+                  on ? "bg-navy-700 text-white shadow-fos-cta" : "bg-card text-ink-500 shadow-fos-sm"}`}>
+                {t.label}
+                <span className={`min-w-[20px] rounded-full px-1.5 text-[11px] tabular-nums ${on ? "bg-white/20" : "bg-surface"}`}>{n}</span>
               </button>
             );
           })}
         </div>
 
         {loading ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {[1, 2, 3].map(i => (
-              <div key={i} style={{
-                height: 140, background: "var(--shop-divider, #ECEEF3)",
-                borderRadius: "var(--shop-r-card, 16px)", animation: "pulse 1.5s infinite",
-              }} />
-            ))}
+          <div className="mt-4 flex flex-col gap-3">
+            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-[132px] rounded-hero" />)}
           </div>
         ) : filtered.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {filtered.map(order => (
-              <button key={order.id} onClick={() => router.push(`/shop/order/${order.id}`)}
-                style={{
-                  width: "100%", textAlign: "left",
-                  background: "var(--shop-surface, #FFFFFF)", border: "none",
-                  borderRadius: "var(--shop-r-card, 16px)", padding: 16, cursor: "pointer",
-                  boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-                  transition: "transform 0.15s",
-                }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <span style={{
-                    fontSize: 12, fontFamily: "monospace", color: "var(--shop-muted, #8A8F9C)",
-                    fontWeight: 500,
-                  }}>#{order.order_code}</span>
-                  <StatusBadge status={order.status} />
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: "var(--shop-black, #0B0B0F)" }}>
-                    {order.merchant_name || "Shop"}
-                  </span>
-                  <span style={{ fontSize: 12, color: "var(--shop-muted, #8A8F9C)" }}>
-                    {formatDate(order.created_at)}
-                  </span>
-                </div>
-                <div style={{
-                  display: "flex", justifyContent: "space-between", alignItems: "center",
-                  borderTop: "1px solid var(--shop-divider, #ECEEF3)", paddingTop: 10, marginTop: 4,
-                }}>
-                  <span style={{ fontWeight: 700, fontSize: 16, color: "var(--shop-black, #0B0B0F)" }}>
-                    ${Number(order.total).toFixed(2)}
-                  </span>
-                  <span style={{
-                    fontSize: 13, color: "var(--shop-primary, #1E6BFF)", fontWeight: 600,
-                  }}>View Details &rarr;</span>
-                </div>
-              </button>
-            ))}
+          <div className="mt-4 flex flex-col gap-3">
+            {filtered.map((order) => <OrderCard key={order.id} order={order} shop={shops[order.merchant_id]} />)}
           </div>
+        ) : orders.length === 0 ? (
+          <EmptyState className="mt-6" title="No orders yet" action={{ label: "Start shopping", href: "/shop" }} />
         ) : (
-          <Empty icon="🛍️" message="No orders yet" action="Start Shopping" onAction={() => router.push("/shop")} />
+          <p className="mt-16 text-center text-[14px] font-bold text-ink-500">Nothing here yet</p>
         )}
       </div>
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
     </div>
   );
 }
 
-function Empty({ icon, message, action, onAction }: { icon: string; message: string; action?: string; onAction?: () => void }) {
+function OrderCard({ order, shop }: { order: Order; shop?: ShopBrief }) {
+  const name = shop?.name || order.merchant_name || "Shop";
+  const track = { ...order, merchant_name: name };
+  const active = ACTIVE_STATUSES.includes(order.status);
+  const unpaid = awaitingPayment(order);
+  const cancelled = order.status === "cancelled";
+  const h = headline(track);
+
   return (
-    <div style={{ textAlign: "center", paddingTop: 60 }}>
-      <div style={{ fontSize: 48, marginBottom: 12 }}>{icon}</div>
-      <p style={{ color: "var(--shop-muted, #8A8F9C)", fontSize: 14 }}>{message}</p>
-      {action && onAction && (
-        <button onClick={onAction} style={{
-          marginTop: 16, padding: "12px 28px",
-          background: "var(--shop-primary, #1E6BFF)", color: "#FFFFFF",
-          border: "none", borderRadius: "var(--shop-r-pill, 999px)",
-          fontWeight: 600, fontSize: 14, cursor: "pointer",
-        }}>{action}</button>
+    <Link href={`/shop/order/${order.id}`} className="fos-press block rounded-hero bg-card p-3.5 shadow-fos-sm">
+      <div className="flex items-center gap-2.5">
+        <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-[12px] bg-surface text-[16px]">
+          {shop?.logo_url
+            ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" />
+            : shop?.icon_emoji || <span className="text-[14px] font-extrabold text-navy-700">{name[0]?.toUpperCase()}</span>}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[15px] font-extrabold text-ink-900">{name}</div>
+          <div className="truncate text-caption text-ink-500">{order.order_code} · {formatWhen(order.created_at)}</div>
+        </div>
+        <Pill variant={cancelled ? "neutral" : order.status === "delivered" ? "jade" : "mango"} className={cancelled ? "!bg-tint-ruby !text-ruby-500" : ""}>
+          {statusLabel(order)}
+        </Pill>
+      </div>
+
+      {active && (
+        <div className="mt-3 rounded-thumb bg-surface p-2.5">
+          <div className="mb-2 flex items-center gap-2 text-[13px] font-extrabold text-ink-900">
+            <Icon name={h.icon} size={16} className={unpaid ? "text-tone-mango" : "text-navy-700"} strokeWidth={2} />
+            <span className="truncate">{h.title}</span>
+          </div>
+          <OrderProgress order={track} />
+        </div>
       )}
-    </div>
-  );
-}
 
-function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, { bg: string; color: string }> = {
-    pending: { bg: "#FFF3E0", color: "#E65100" },
-    confirmed: { bg: "#E3F2FD", color: "#1565C0" },
-    processing: { bg: "#F3E5F5", color: "#7B1FA2" },
-    shipped: { bg: "#E3F2FD", color: "#1565C0" },
-    delivered: { bg: "#E8F5E9", color: "#2E7D32" },
-    cancelled: { bg: "#FFEBEE", color: "#C62828" },
-  };
-  const c = colors[status] || colors.pending;
-  return (
-    <span style={{
-      background: c.bg, color: c.color,
-      fontSize: 11, fontWeight: 600, padding: "3px 10px",
-      borderRadius: "var(--shop-r-pill, 999px)",
-      textTransform: "capitalize",
-    }}>{status}</span>
+      <div className="mt-3 flex items-center justify-between">
+        <span>
+          <span className="text-[17px] font-extrabold tabular-nums text-ink-900">${Number(order.total).toFixed(2)}</span>
+          <span className="ml-1.5 text-caption tabular-nums text-ink-500">{formatKhr(Number(order.total))}</span>
+        </span>
+        {unpaid ? (
+          <span className="inline-flex h-8 items-center rounded-full bg-grad-promo px-3.5 text-[12px] font-extrabold text-white">Pay now</span>
+        ) : (
+          <span className="inline-flex items-center gap-0.5 text-[13px] font-extrabold text-navy-700">
+            {active ? "Track" : "Details"}<Icon name="chevron" size={16} />
+          </span>
+        )}
+      </div>
+    </Link>
   );
-}
-
-function formatDate(d?: string) {
-  if (!d) return "";
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }

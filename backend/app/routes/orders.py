@@ -25,6 +25,7 @@ from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, 
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.services import settlement
+from app.services import promo_schedule
 from app.services.delivery import is_open, quote_delivery, valid_point
 
 logger = logging.getLogger(__name__)
@@ -260,16 +261,20 @@ async def quote_order(request_body: dict, user: TokenClaims = require_role(Role.
     """Price the caller's cart exactly as placing the order would.
 
     Body: {"promo_code"?: str, "delivery_type"?: "delivery"|"pickup",
-    "lat"?: float, "lng"?: float} — lat/lng is the delivery pin; pickup is free,
+    "lat"?: float, "lng"?: float, "merchant_id"?: int} — lat/lng is the delivery pin; pickup is free,
     delivery without a pin gets the default fee. Returns one quote per shop (each shop is a
-    separate order with its own delivery fee). A promo code belongs to one
+    separate order with its own delivery fee); merchant_id prices that one shop's cart only,
+    so another shop being out of range doesn't block it. A promo code belongs to one
     shop and is applied to that shop's order only.
     """
     promo_code = (request_body.get("promo_code") or "").strip() or None
     delivery_type, dest = _parse_delivery(request_body)
+    only_merchant = request_body.get("merchant_id")
     async with SupabaseClient.service_role() as db:
         db_user = await _get_db_user(db, user)
         carts = await db.from_("cart").eq("user_id", db_user["id"]).select("id,merchant_id")
+        if only_merchant is not None:
+            carts = [c for c in carts if str(c.get("merchant_id")) == str(only_merchant)]
 
         quotes = []
         promo_merchant_id = None
@@ -292,6 +297,9 @@ async def quote_order(request_body: dict, user: TokenClaims = require_role(Role.
                 "distance_km": str(priced["distance_km"]) if priced["distance_km"] is not None else None,
                 "total": str(priced["total"]),
                 "promo_applied": bool(priced["promo"]),
+                "promo_code": priced["promo"]["code"] if priced["promo"] else None,
+                "promo_title": (priced.get("promotion") or {}).get("title"),
+                "promo_auto": bool(priced.get("promo_auto")),
                 "eta_minutes": priced["eta"][0] if priced["eta"] else None,
                 "eta_max_minutes": priced["eta"][1] if priced["eta"] else None,
                 "is_open": priced["shop_open"],
@@ -514,16 +522,25 @@ async def _price_cart(
         delivery_fee = Decimal("0.00")
 
     promo, promo_error, promo_owned = None, None, False
+    promotion = None
     discount = Decimal("0.00")
     if promo_code:
         promo, promo_error, promo_owned = await _validate_promo(db, promo_code, merchant_id, subtotal)
         if promo:
-            value = _money(promo["value"])
-            if promo["type"] == "percent":
-                discount = (subtotal * value / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            promotion = await _promotion_for_code(db, promo["id"])
+            if promotion and not promo_schedule.window(promotion)[0]:
+                # A scheduled code only works while its promotion is on
+                promo, promo_error = None, f"{promotion['title']} isn't on right now ({promo_schedule.describe(promotion).lower()})"
+        if promo:
+            # A product or category promotion discounts only the items it covers
+            base = await _eligible_base(db, promotion, items, subtotal)
+            if base <= 0:
+                promo, promo_error = None, "This code only applies to selected products"
             else:
-                discount = value
-            discount = min(discount, subtotal)
+                discount = _discount(promo, base)
+    else:
+        # No code typed: the best live promotion this cart qualifies for applies by itself
+        promo, promotion, discount = await _best_auto_promotion(db, merchant_id, items, subtotal)
 
     return {
         "cart": cart,
@@ -539,6 +556,9 @@ async def _price_cart(
         "promo": promo,
         "promo_error": promo_error,
         "promo_owned": promo_owned,
+        # The promotion behind the discount (typed or automatic), for "Weekend Sale applied"
+        "promotion": {"id": promotion["id"], "title": promotion["title"]} if promo and promotion else None,
+        "promo_auto": bool(promo) and not promo_code,
     }
 
 
@@ -585,6 +605,77 @@ def _enforce_shop_rules(priced: dict) -> None:
         raise BadRequestError(f"This shop's minimum order is ${priced['min_order']}")
 
 
+def eligible_subtotal(items: list[dict], eligible_ids: set[int]) -> Decimal:
+    """Sum of the cart lines whose product the promotion covers."""
+    return sum(
+        (_money(i.get("unit_price")) * int(i.get("quantity") or 0) for i in items if i.get("product_id") in eligible_ids),
+        Decimal("0.00"),
+    )
+
+
+def _discount(promo: dict, base: Decimal) -> Decimal:
+    value = _money(promo["value"])
+    if promo["type"] == "percent":
+        amount = (base * value / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    else:
+        amount = value
+    return min(amount, base)
+
+
+async def _promotion_for_code(db, promo_code_id: int) -> dict | None:
+    """The promotion a code belongs to, or None (a plain code, or migration 018 not applied)."""
+    try:
+        return await db.from_("promotions").eq("promo_code_id", promo_code_id).select_one()
+    except Exception:  # promotions table missing: every code is shop-wide, as before
+        return None
+
+
+async def _eligible_base(db, promotion: dict | None, items: list[dict], subtotal: Decimal) -> Decimal:
+    """What the discount is worked out on: the whole cart, or only the lines the promotion covers."""
+    if not promotion or promotion["scope"] == "shop" or (promotion["scope"] == "platform" and not promotion.get("category_id")):
+        return subtotal
+    in_cart = list({i["product_id"] for i in items if i.get("product_id")})
+    if not in_cart:
+        return Decimal("0.00")
+    if promotion["scope"] == "product":
+        rows = await db.from_("promotion_products").eq("promotion_id", promotion["id"]).in_("product_id", in_cart).select("product_id")
+        return eligible_subtotal(items, {r["product_id"] for r in rows})
+    rows = await db.from_("products").in_("id", in_cart).eq("category_id", promotion["category_id"]).select("id")
+    return eligible_subtotal(items, {r["id"] for r in rows})
+
+
+async def _best_auto_promotion(db, merchant_id: int, items: list[dict], subtotal: Decimal) -> tuple[dict | None, dict | None, Decimal]:
+    """(code row, promotion, discount) for the biggest live auto-apply promotion this cart
+    qualifies for — this shop's or a platform-wide one — or (None, None, 0)."""
+    try:
+        rows = await (
+            db.from_("promotions").eq("is_active", True)
+            .or_(f"merchant_id.eq.{merchant_id}", "merchant_id.is.null").select()
+        )
+    except Exception:  # migration 018 not applied
+        return None, None, Decimal("0.00")
+    live = [r for r in rows if r.get("auto_apply") and r.get("promo_code_id") and promo_schedule.window(r)[0]]
+    if not live:
+        return None, None, Decimal("0.00")
+    codes = {c["id"]: c for c in await db.from_("promo_codes").in_("id", [r["promo_code_id"] for r in live]).select()}
+    best: tuple[dict | None, dict | None, Decimal] = (None, None, Decimal("0.00"))
+    for promotion in live:
+        code = codes.get(promotion["promo_code_id"])
+        if not code or not code.get("is_active"):
+            continue
+        if code.get("max_uses") and (code.get("used_count") or 0) >= code["max_uses"]:
+            continue
+        if code.get("min_order") and subtotal < _money(code["min_order"]):
+            continue
+        base = await _eligible_base(db, promotion, items, subtotal)
+        if base <= 0:
+            continue
+        amount = _discount(code, base)
+        if amount > best[2]:
+            best = (code, promotion, amount)
+    return best
+
+
 def _money(value) -> Decimal:
     return Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
@@ -595,13 +686,15 @@ async def _validate_promo(db, code: str, merchant_id: int, subtotal: Decimal) ->
     Returns (promo, error, owned): `owned` is True when the code exists for
     this shop, so its error message is the one to show the customer.
     """
-    promo = await (
+    rows = await (
         db.from_("promo_codes")
-        .eq("merchant_id", merchant_id)
+        .or_(f"merchant_id.eq.{merchant_id}", "merchant_id.is.null")
         .eq("code", code)
         .eq("is_active", True)
-        .select_one()
+        .select()
     )
+    # The shop's own code wins over a platform code with the same name
+    promo = next((r for r in rows if r.get("merchant_id") == merchant_id), rows[0] if rows else None)
     if not promo:
         return None, None, False
 

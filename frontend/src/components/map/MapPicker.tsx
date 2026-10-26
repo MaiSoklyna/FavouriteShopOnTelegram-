@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import {
-  DEFAULT_CENTER, MAPBOX_TOKEN, MAP_STYLE, circlePolygon, distanceKm, formatKm,
+  DEFAULT_CENTER, MAPBOX_TOKEN, mapStyle, circlePolygon, distanceKm, formatKm,
   getCurrentPosition, reverseGeocode, type LatLng,
 } from "@/lib/mapbox";
 
@@ -78,7 +78,7 @@ export default function MapPicker({
     const start = value ?? shop ?? DEFAULT_CENTER;
     const m = new mapboxgl.Map({
       container: box.current,
-      style: MAP_STYLE,
+      style: mapStyle(),
       center: [start.lng, start.lat],
       zoom: value ? 15 : 13,
       attributionControl: false,
