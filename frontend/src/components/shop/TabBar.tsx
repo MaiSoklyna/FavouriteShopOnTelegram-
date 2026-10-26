@@ -28,6 +28,8 @@ export function TabBar() {
   const pathname = usePathname();
   const { count } = useCart();
   const [bump, setBump] = useState(0);
+  // On Rewards the balance card is the focus: the Cart button drops its glow and steps back a little
+  const calm = pathname.startsWith("/shop/rewards");
   const prev = useRef(count);
 
   useEffect(() => {
@@ -47,7 +49,7 @@ export function TabBar() {
           if (t.key === "cart") {
             return (
               <Link key={t.key} href={t.href} aria-label={`Cart${count ? `, ${count} items` : ""}`} aria-current={active ? "page" : undefined} className="fos-press relative -mt-[22px] flex w-16 flex-col items-center">
-                <span className={`relative grid h-14 w-14 place-items-center rounded-full bg-gold-400 text-navy-900 shadow-[0_10px_24px_rgba(214,186,128,.35)] ${active ? "ring-4 ring-gold-400/30" : ""}`}>
+                <span className={`relative grid h-14 w-14 place-items-center rounded-full text-navy-900 ${calm ? "scale-90 bg-gold-400/80" : "bg-gold-400 shadow-[0_10px_24px_rgba(214,186,128,.35)]"} ${active ? "ring-4 ring-gold-400/30" : ""}`}>
                   <t.Icon size={26} strokeWidth={1.9} />
                   {count > 0 && (
                     <span key={bump} className="fos-bump absolute -right-1.5 -top-1.5 grid h-5 min-w-[20px] place-items-center rounded-full border-2 border-navy-900 bg-gold-400 px-1 text-[10px] font-extrabold text-navy-900">
