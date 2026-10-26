@@ -373,8 +373,8 @@ input:focus, select:focus, textarea:focus {
 .brand-spinner__knot { transform-box: view-box; transform-origin: 50% 58%; }
 .brand-spinner--rotate .brand-spinner__knot,
 .brand-spinner--glow .brand-spinner__knot { animation: brand-rotate 2.4s cubic-bezier(.65,0,.35,1) infinite; }
-.brand-spinner--pulse .brand-spinner__knot { animation: brand-pulse 1.6s ease-in-out infinite; }
-.brand-spinner--glow { filter: drop-shadow(0 0 6px rgba(214,186,128,.55)); }
+.brand-spinner--pulse .brand-spinner__knot { animation: brand-pulse 1.8s ease-in-out infinite; }
+.brand-spinner--glow { animation: brand-glow 2.2s ease-in-out infinite; }
 @keyframes brand-rotate {
   0% { transform: rotate(0deg); }
   33.333% { transform: rotate(120deg); }
@@ -382,8 +382,8 @@ input:focus, select:focus, textarea:focus {
   100% { transform: rotate(360deg); }
 }
 @keyframes brand-pulse {
-  0%, 100% { transform: scale(.86); opacity: .55; }
-  50% { transform: scale(1); opacity: 1; }
+  0%, 100% { transform: scale(.92); opacity: .7; }
+  50% { transform: scale(1.04); opacity: 1; }
 }
 
 /* Full-page loader: gold progress sweep under the knot */
@@ -392,14 +392,26 @@ input:focus, select:focus, textarea:focus {
 @keyframes brand-sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 
 /* Order placed: soft gold halo around SuccessIcon */
-.brand-success-glow { border-radius: 50%; animation: brand-glow 2s ease-in-out infinite; }
+.brand-success-glow { border-radius: 50%; animation: brand-glow 2.2s ease-in-out infinite; }
 @keyframes brand-glow {
-  0%, 100% { filter: drop-shadow(0 0 4px rgba(214,186,128,.35)); }
-  50% { filter: drop-shadow(0 0 14px rgba(214,186,128,.75)); }
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(214,186,128,0)); }
+  50% { filter: drop-shadow(0 0 14px rgba(214,186,128,.8)); }
 }
 
+/* Active / selected commerce icon: gold on a navy 56px rounded chip */
+.brand-chip { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; background: var(--brand-navy); color: var(--brand-gold); flex-shrink: 0; }
+.brand-chip--nav { height: 32px; border-radius: 12px; }
+
+/* Splash → loading handover (components/brand/Splash.tsx) */
+.brand-splash { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(100% 70% at 50% 40%, #13336a, var(--brand-navy)); transition: opacity .35s ease; }
+.brand-splash--out { opacity: 0; pointer-events: none; }
+.brand-splash__word { position: absolute; bottom: 22%; font: 700 26px/1 Inter, sans-serif; color: #fff; letter-spacing: .01em; }
+.brand-splash__word span { color: var(--brand-gold); }
+.brand-splash__tag { position: absolute; bottom: 8%; font-size: 11px; letter-spacing: .2em; color: var(--brand-gold); opacity: .7; text-transform: uppercase; }
+
 @media (prefers-reduced-motion: reduce) {
-  .brand-spinner__knot, .brand-sweep span, .brand-success-glow { animation: none !important; }
+  .brand-spinner__knot, .brand-spinner--glow, .brand-sweep span, .brand-success-glow { animation: none !important; }
+  .brand-splash { transition: none; }
 }
 
 /* Buttons carry an icon + label side by side */

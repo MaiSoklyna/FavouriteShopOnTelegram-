@@ -391,7 +391,11 @@ export default function CheckoutPage() {
                       position: "absolute", top: 12, right: 12, width: 18, height: 18, borderRadius: "50%",
                       border: on ? "5px solid var(--shop-primary)" : "2px solid var(--shop-divider)", background: "var(--shop-surface)",
                     }} />
-                    <MethodIcon size={26} style={{ display: "block", color: on ? "var(--shop-primary)" : "var(--shop-black)" }} />
+                    {on ? (
+                      <span className="brand-chip"><MethodIcon size={28} /></span>
+                    ) : (
+                      <span style={{ width: 56, height: 56, display: "grid", placeItems: "center" }}><MethodIcon size={28} style={{ color: "var(--shop-black)" }} /></span>
+                    )}
                     <div style={{ fontWeight: 700, fontSize: 14, color: "var(--shop-black)", marginTop: 4 }}>{title}</div>
                     <div style={{ fontSize: 11, color: "var(--shop-muted)", marginTop: 1 }}>{sub}</div>
                   </button>

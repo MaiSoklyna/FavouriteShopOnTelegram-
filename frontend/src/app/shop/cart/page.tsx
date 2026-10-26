@@ -7,6 +7,7 @@ import { useCart } from "@/providers/CartProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
 import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote } from "@/lib/quote";
 import { EmptyStateIcon } from "@/components/brand/Icons";
+import { Spinner } from "@/components/ui/Spinner";
 
 export default function CartPage() {
   const router = useRouter();
@@ -337,6 +338,9 @@ function LoadingPage() {
         <span style={{ fontSize: 17, fontWeight: 700, color: "var(--shop-black, #0B0B0F)" }}>My Cart</span>
       </div>
       <div style={{ padding: 16 }}>
+        <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 16px" }}>
+          <Spinner size={28} variant="pulse" label="Loading cart" />
+        </div>
         {[1, 2, 3].map(i => (
           <div key={i} style={{
             height: 100, background: "var(--shop-surface, #FFFFFF)",

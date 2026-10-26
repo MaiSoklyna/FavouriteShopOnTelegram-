@@ -73,8 +73,13 @@ function BottomNav() {
                 {count > 99 ? "99+" : count}
               </span>
             )}
-            <tab.Icon size={24} strokeWidth={active ? 1.9 : 1.6}
-              style={{ color: active ? "var(--shop-primary)" : "var(--shop-muted)" }} />
+            {active ? (
+              <span className="brand-chip brand-chip--nav"><tab.Icon size={22} /></span>
+            ) : (
+              <span style={{ height: 32, display: "grid", placeItems: "center" }}>
+                <tab.Icon size={24} style={{ color: "var(--shop-muted)" }} />
+              </span>
+            )}
             <span style={{
               fontSize: 10, fontWeight: active ? 600 : 500,
               color: active ? "var(--shop-primary)" : "var(--shop-muted)",

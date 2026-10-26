@@ -174,14 +174,14 @@ function OrderDetailContent() {
       <div style={{ padding: "16px 16px 80px" }}>
         {showSuccess && (
           <div style={{
-            background: "#E8F5E9", border: "1px solid #A5D6A7",
+            background: "var(--brand-navy)", border: "1px solid rgba(214,186,128,.35)",
             borderRadius: "var(--shop-r-card, 16px)", padding: 16, marginBottom: 16,
             display: "flex", alignItems: "center", gap: 12,
           }}>
-            <SuccessGlow size={44} style={{ color: "#2E7D32", flexShrink: 0 }} />
+            <SuccessGlow size={56} style={{ flexShrink: 0 }} />
             <div>
-              <p style={{ fontWeight: 600, fontSize: 14, color: "#2E7D32" }}>Order placed!</p>
-              <p style={{ fontSize: 12, color: "#388E3C" }}>We&apos;ll notify you when confirmed</p>
+              <p style={{ fontWeight: 600, fontSize: 14, color: "var(--brand-gold)" }}>Order placed!</p>
+              <p style={{ fontSize: 12, color: "rgba(255,255,255,.75)" }}>We&apos;ll notify you when confirmed</p>
             </div>
           </div>
         )}

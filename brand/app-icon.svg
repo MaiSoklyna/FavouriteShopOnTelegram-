@@ -3,7 +3,7 @@
   <defs>
     <radialGradient id="bg" cx="50%" cy="35%" r="75%"><stop offset="0" stop-color="#123063"/><stop offset="1" stop-color="#081D3C"/></radialGradient>
     <linearGradient id="g" x1="20" y1="10" x2="80" y2="90" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#F0DEB4"/><stop offset=".5" stop-color="#D6BA80"/><stop offset="1" stop-color="#8A6A2A"/>
+      <stop offset="0" stop-color="#F0DEB4"/><stop offset=".5" stop-color="#D6BA80"/><stop offset="1" stop-color="#71541A"/>
     </linearGradient>
   </defs>
   <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/providers/AuthProvider";
+import { BrandSplash } from "@/components/brand/Splash";
 
 export const metadata: Metadata = {
   title: "Byme24",
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
+        <BrandSplash />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

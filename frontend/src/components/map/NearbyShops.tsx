@@ -5,6 +5,7 @@ import Link from "next/link";
 import { fetchNearbyShops, type NearbyShop } from "@/lib/addresses";
 import { formatEta, formatKm, getCurrentPosition, searchAddress, type GeocodeHit, type LatLng } from "@/lib/mapbox";
 import { haptic } from "@/lib/telegram";
+import { EmptyStateIcon } from "@/components/brand/Icons";
 
 type State = "idle" | "loading" | "denied" | "error" | "ready";
 
@@ -102,7 +103,7 @@ export default function NearbyShops() {
       )}
 
       {state === "ready" && shops.length === 0 && (
-        <StateCard icon="📍" title="No shops nearby" text="Try expanding your search area.">
+        <StateCard icon={<EmptyStateIcon size={44} style={{ color: "var(--shop-primary)" }} />} title="No shops nearby" text="Try expanding your search area.">
           <button onClick={refresh} style={primaryBtn}>Refresh</button>
         </StateCard>
       )}
@@ -235,7 +236,7 @@ function ShopCardSkeleton() {
   );
 }
 
-function StateCard({ icon, title, text, children }: { icon: string; title: string; text: string; children?: React.ReactNode }) {
+function StateCard({ icon, title, text, children }: { icon: React.ReactNode; title: string; text: string; children?: React.ReactNode }) {
   return (
     <div style={{
       textAlign: "center", padding: "28px 20px", background: "var(--shop-surface)",

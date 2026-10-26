@@ -6,6 +6,7 @@ import { LoginGate } from "@/components/shop/LoginGate";
 import { api } from "@/lib/api";
 import type { LoyaltyAccount, LoyaltySettings } from "@/types";
 import { RewardsIcon } from "@/components/brand/Icons";
+import { Spinner } from "@/components/ui/Spinner";
 
 const TIERS: Record<string, { color: string; gradient: string; label: string; icon: string }> = {
   bronze: { color: "#CD7F32", gradient: "linear-gradient(135deg, #C67B30 0%, #8B5E2B 100%)", label: "Bronze", icon: "🥉" },
@@ -156,10 +157,11 @@ export default function RewardsPage() {
               : `${minRedeem.toLocaleString()} pts ($${minRedeemDollars.toFixed(2)}) minimum redemption.`}
           </p>
         </div>
-        <span style={{
-          fontSize: 22,
-          opacity: canRedeem ? 1 : 0.5,
-        }}>{canRedeem ? "🎉" : "🔒"}</span>
+        {canRedeem ? (
+          <Spinner size={36} variant="glow" label="Reward unlocked" />
+        ) : (
+          <span style={{ fontSize: 22, opacity: 0.5 }}>🔒</span>
+        )}
       </div>
 
       {/* Pill Tabs */}
