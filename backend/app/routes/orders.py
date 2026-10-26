@@ -260,16 +260,20 @@ async def quote_order(request_body: dict, user: TokenClaims = require_role(Role.
     """Price the caller's cart exactly as placing the order would.
 
     Body: {"promo_code"?: str, "delivery_type"?: "delivery"|"pickup",
-    "lat"?: float, "lng"?: float} — lat/lng is the delivery pin; pickup is free,
+    "lat"?: float, "lng"?: float, "merchant_id"?: int} — lat/lng is the delivery pin; pickup is free,
     delivery without a pin gets the default fee. Returns one quote per shop (each shop is a
-    separate order with its own delivery fee). A promo code belongs to one
+    separate order with its own delivery fee); merchant_id prices that one shop's cart only,
+    so another shop being out of range doesn't block it. A promo code belongs to one
     shop and is applied to that shop's order only.
     """
     promo_code = (request_body.get("promo_code") or "").strip() or None
     delivery_type, dest = _parse_delivery(request_body)
+    only_merchant = request_body.get("merchant_id")
     async with SupabaseClient.service_role() as db:
         db_user = await _get_db_user(db, user)
         carts = await db.from_("cart").eq("user_id", db_user["id"]).select("id,merchant_id")
+        if only_merchant is not None:
+            carts = [c for c in carts if str(c.get("merchant_id")) == str(only_merchant)]
 
         quotes = []
         promo_merchant_id = None

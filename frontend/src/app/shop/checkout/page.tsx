@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
 import { EmptyState, KhqrCard, PaidSuccess, Pill, Skeleton } from "@/components/shop";
 import type { KhqrData } from "@/components/shop/Khqr";
-import { fetchQuote, getSavedPromo, money, savePromo, type CartQuote, type DeliveryChoice } from "@/lib/quote";
+import { fetchQuote, money, savePromo, savedPromoFor, type CartQuote, type DeliveryChoice } from "@/lib/quote";
 import { deleteAddress, listAddresses, saveAddress, type SavedAddress } from "@/lib/addresses";
 import { distanceKm, staticMapUrl, formatEta, formatKm, getCurrentPosition, type LatLng } from "@/lib/mapbox";
 import { describePoint, placeLabel } from "@/lib/places";
@@ -47,9 +47,25 @@ function labelIcon(label: string): IconName {
 }
 
 export default function CheckoutPage() {
+  return <Suspense><CheckoutContent /></Suspense>;
+}
+
+function CheckoutContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
-  const { items, total, fetchCart } = useCart();
+  const { items, loading: cartLoading, fetchCart } = useCart();
+
+  // One shop per checkout (?shop=id): only its items, its own delivery fee and its own order.
+  // Without the param a single-shop cart checks out that shop; several shops go back to the cart to pick one.
+  const cartShopIds = Array.from(new Set(items.map((i) => i.merchant_id).filter((id): id is number => id != null)));
+  const asked = Number(searchParams.get("shop")) || null;
+  const merchantId = asked ?? (cartShopIds.length === 1 ? cartShopIds[0] : null);
+  const shopItems = merchantId == null ? [] : items.filter((i) => i.merchant_id === merchantId);
+  const itemsTotal = shopItems.reduce((n, i) => n + Number(i.line_total ?? 0), 0);
+  useEffect(() => {
+    if (!asked && !cartLoading && cartShopIds.length > 1) router.replace("/shop/cart");
+  }, [asked, cartLoading, cartShopIds.length, router]);
   const home = useHomeLocation(!!user);
 
   const [paying, setPaying] = useState(false); // KHQR screen
@@ -92,29 +108,28 @@ export default function CheckoutPage() {
   const contactRef = useRef<HTMLDivElement>(null);
   const addressRef = useRef<HTMLDivElement>(null);
 
-  // A single-shop cart can show that shop on the map; with several shops there is no one place to draw
-  const merchantKey = Array.from(new Set(items.map((i) => i.merchant_id).filter(Boolean))).join(",");
+  // The shop being checked out: its name, pickup address and map pin
   useEffect(() => {
-    if (!merchantKey || merchantKey.includes(",")) { setShop(null); return; }
-    api.get<ShopInfo>(`/merchants/${merchantKey}`).then(setShop).catch(() => setShop(null));
-  }, [merchantKey]);
+    if (merchantId == null) { setShop(null); return; }
+    api.get<ShopInfo>(`/merchants/${merchantId}`).then(setShop).catch(() => setShop(null));
+  }, [merchantId]);
   const shopPoint: LatLng | null = shop?.latitude != null && shop?.longitude != null ? { lat: Number(shop.latitude), lng: Number(shop.longitude) } : null;
 
   const choice: DeliveryChoice = deliveryType === "pickup"
     ? { delivery_type: "pickup" }
     : { delivery_type: "delivery", lat: pin?.lat, lng: pin?.lng };
 
-  // Backend price for the cart — identical to what placing the order charges
+  // Backend price for this shop's cart — identical to what placing the order charges
   useEffect(() => {
-    if (!user || items.length === 0 || paying) return;
-    const code = getSavedPromo();
+    if (!user || merchantId == null || shopItems.length === 0 || paying) return;
+    const code = savedPromoFor(merchantId);
     // Only the latest request may update the page — an older one (e.g. priced
     // before the pin was set) can come back last on a slow connection.
     const req = ++quoteReq.current;
     // Drop the old price at once: until the new quote lands the total shows "…" and Place order waits
     setQuote(null);
     setQuoteError("");
-    fetchQuote(code, choice)
+    fetchQuote(code, choice, merchantId)
       .then((q) => {
         if (req !== quoteReq.current) return;
         setQuote(q);
@@ -128,7 +143,7 @@ export default function CheckoutPage() {
         setQuoteError(msg.replace(/^Delivery unavailable for this location\.\s*/, ""));
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, items, paying, deliveryType, pin?.lat, pin?.lng]);
+  }, [user, items, merchantId, paying, deliveryType, pin?.lat, pin?.lng]);
 
   useEffect(() => {
     if (!user) return;
@@ -170,9 +185,9 @@ export default function CheckoutPage() {
   /** Delivery check for the picker's preview card — the backend's own quote, so it matches checkout. */
   async function zoneAt(pos: LatLng): Promise<Zone | null> {
     try {
-      const q = await fetchQuote(getSavedPromo(), { delivery_type: "delivery", lat: pos.lat, lng: pos.lng });
+      const q = await fetchQuote(merchantId != null ? savedPromoFor(merchantId) : null, { delivery_type: "delivery", lat: pos.lat, lng: pos.lng }, merchantId ?? undefined);
       const fee = Number(q.totals.delivery_fee);
-      const one = q.orders.length === 1 ? q.orders[0] : null;
+      const one = q.orders[0] ?? null;
       const parts = [
         one?.distance_km != null ? formatKm(Number(one.distance_km)) : null,
         fee > 0 ? `${money(fee)} delivery` : "Free delivery",
@@ -241,7 +256,7 @@ export default function CheckoutPage() {
   function removePromo() {
     savePromo(null);
     const req = ++quoteReq.current;
-    fetchQuote(null, choice).then((q) => { if (req === quoteReq.current) setQuote(q); }).catch(() => {});
+    fetchQuote(null, choice, merchantId ?? undefined).then((q) => { if (req === quoteReq.current) setQuote(q); }).catch(() => {});
   }
 
   useEffect(() => {
@@ -302,7 +317,7 @@ export default function CheckoutPage() {
 
   /** Reasons the server would refuse this cart — shown up front so checkout is blocked, not surprised. */
   const blockers: string[] = (quote?.orders ?? []).flatMap((o) => {
-    const who = (quote!.orders.length > 1 ? `Shop #${o.merchant_id}` : shop?.name) || "This shop";
+    const who = shop?.name || "This shop";
     const out: string[] = [];
     if (!o.is_open) out.push(`${who} is closed right now`);
     if (o.min_order_amount && Number(o.subtotal) < Number(o.min_order_amount)) {
@@ -331,56 +346,41 @@ export default function CheckoutPage() {
     if (!validate()) return;
     setPlacing(true); setOrderError("");
     try {
-      // Group cart items by merchant
-      const byMerchant: Record<number, unknown[]> = {};
-      items.forEach((item) => {
-        const mid = item.merchant_id;
-        if (mid) (byMerchant[mid] ||= []).push(item);
-      });
-
-      const merchantIds = Object.keys(byMerchant);
-      if (merchantIds.length === 0) {
-        setOrderError("Cannot place order: no merchant found for cart items.");
+      if (merchantId == null) {
+        setOrderError("Cannot place order: no shop selected.");
         return;
       }
-
-      const results = await Promise.all(
-        merchantIds.map((mid) =>
-          api.post<{ data: { order_id: number } }>("/orders", {
-            merchant_id: Number(mid),
-            delivery_type: deliveryType,
-            delivery_address: deliveryType === "pickup" ? "Pickup at shop" : place ? placeLabel(place, details) : "Pinned location",
-            lat: deliveryType === "delivery" ? pin?.lat : undefined,
-            lng: deliveryType === "delivery" ? pin?.lng : undefined,
-            delivery_phone: "+855" + form.phone,
-            delivery_name: form.name,
-            customer_note: form.note,
-            payment_method: payment,
-            // The total the customer was shown; the server refuses if it has moved since
-            expected_total: quote?.orders.find((o) => o.merchant_id === Number(mid))?.total,
-            // A promo code belongs to one shop — send it only with that shop's order
-            promo_code: quote?.promo?.applied && quote.promo.merchant_id === Number(mid) ? quote.promo.code : undefined,
-          }),
-        ),
-      );
-      savePromo(null);
+      const res = await api.post<{ data: { order_id: number } }>("/orders", {
+        merchant_id: merchantId,
+        delivery_type: deliveryType,
+        delivery_address: deliveryType === "pickup" ? "Pickup at shop" : place ? placeLabel(place, details) : "Pinned location",
+        lat: deliveryType === "delivery" ? pin?.lat : undefined,
+        lng: deliveryType === "delivery" ? pin?.lng : undefined,
+        delivery_phone: "+855" + form.phone,
+        delivery_name: form.name,
+        customer_note: form.note,
+        payment_method: payment,
+        // The total the customer was shown; the server refuses if it has moved since
+        expected_total: quote?.orders[0]?.total,
+        promo_code: quote?.promo?.applied ? quote.promo.code : undefined,
+      });
+      // Only this shop's items leave the cart; a code saved for another shop stays for its checkout
+      if (quote?.promo?.applied) savePromo(null);
       await fetchCart();
-      const oid = results[0]?.data?.order_id;
+      const oid = res?.data?.order_id;
 
       haptic("success");
       if (payment === "khqr" && oid) {
-        // One QR per shop order, paid one after another
-        const ids = results.map((r) => r?.data?.order_id).filter(Boolean) as number[];
-        setQrOrderIds(ids);
+        setQrOrderIds([oid]);
         setQrIndex(0);
-        const one = quote?.orders.length === 1 ? quote.orders[0] : null;
+        const one = quote?.orders[0] ?? null;
         setPaidSummary({
           amount: quote ? Number(quote.totals.total) : null,
           eta: deliveryType === "delivery" && one?.eta_minutes != null && one.eta_max_minutes != null ? formatEta(one.eta_minutes, one.eta_max_minutes) : null,
         });
         setPaying(true);
         window.scrollTo({ top: 0 });
-        loadQr(ids[0]);
+        loadQr(oid);
       } else {
         router.replace(oid ? `/shop/order/${oid}?placed=true` : "/shop/orders");
       }
@@ -389,12 +389,12 @@ export default function CheckoutPage() {
       setOrderError((err instanceof Error && err.message) || "Order failed");
       // A moved price (409) or a closed shop: refresh what the customer sees
       const req = ++quoteReq.current;
-      fetchQuote(getSavedPromo(), choice).then((q) => { if (req === quoteReq.current) setQuote(q); }).catch(() => {});
+      fetchQuote(savedPromoFor(merchantId!), choice, merchantId ?? undefined).then((q) => { if (req === quoteReq.current) setQuote(q); }).catch(() => {});
     } finally { setPlacing(false); }
   }
 
   const qt = quote?.totals;
-  const grand = qt ? Number(qt.total) : total;
+  const grand = qt ? Number(qt.total) : itemsTotal;
   const ctaLabel = placing ? "Placing order…" : payment === "khqr" ? `Pay ${money(grand)}` : `Place order · ${money(grand)}`;
   const ctaDisabled = placing || !quote || blockers.length > 0;
   const inTelegram = useMainButton({
@@ -402,7 +402,7 @@ export default function CheckoutPage() {
     onClick: handlePlaceOrder,
     disabled: ctaDisabled,
     loading: placing,
-    visible: !paying && !mapOpen && !!user && items.length > 0,
+    visible: !paying && !mapOpen && !!user && shopItems.length > 0,
   });
 
   if (paid) {
@@ -438,7 +438,7 @@ export default function CheckoutPage() {
     );
   }
 
-  if (!user || items.length === 0) {
+  if (!user || shopItems.length === 0) {
     return (
       <div className="min-h-screen bg-surface px-gutter pt-6">
         <TopBar onBack={() => router.back()} />
@@ -449,10 +449,9 @@ export default function CheckoutPage() {
 
   const deliveryFee = Number(qt?.delivery_fee ?? 0);
   const discount = Number(qt?.discount ?? 0);
-  const single = quote?.orders.length === 1 ? quote.orders[0] : null;
+  const single = quote?.orders[0] ?? null;
   const km = single?.distance_km != null ? Number(single.distance_km) : pin && shopPoint ? distanceKm(pin, shopPoint) : null;
   const eta = single?.eta_minutes != null && single.eta_max_minutes != null ? formatEta(single.eta_minutes, single.eta_max_minutes) : null;
-  const multiShop = (quote?.orders.length ?? 0) > 1;
   const outOfArea = deliveryType === "delivery" && !!pin && !quote && !!quoteError;
   // Progress: details → payment → pay
   const contactDone = !!form.name.trim() && form.phone.length >= 8;
@@ -462,7 +461,7 @@ export default function CheckoutPage() {
   return (
     <div className="min-h-screen bg-surface">
       <div className="px-gutter pb-[132px] pt-4">
-        <TopBar onBack={() => router.back()} />
+        <TopBar onBack={() => router.back()} shopName={shop?.name} />
         <div className="mt-3 flex gap-1.5" aria-label={`Step ${progress} of 3`}>
           {[1, 2, 3].map((s) => (
             <i key={s} className={`block h-1 flex-1 rounded-sm transition-colors duration-300 ${s <= progress ? "bg-navy-700" : "bg-line"}`} />
@@ -513,7 +512,7 @@ export default function CheckoutPage() {
                       <span className="mt-1.5 inline-flex h-6 items-center gap-1 rounded-full bg-tint-ruby px-2.5 text-[11px] font-bold text-ruby-500"><Icon name="alert" size={12} strokeWidth={2.6} />Outside delivery area</span>
                     ) : quote ? (
                       <span className="mt-1.5 inline-flex h-6 items-center gap-1 rounded-full bg-tint-jade px-2.5 text-[11px] font-bold text-tone-jade"><Icon name="check" size={12} strokeWidth={2.6} />
-                        {multiShop ? "All shops deliver here" : `Delivers here${km != null ? ` · ${formatKm(km)}` : ""}`}
+                        {`Delivers here${km != null ? ` · ${formatKm(km)}` : ""}`}
                       </span>
                     ) : (
                       <span className="mt-1.5 inline-flex h-6 items-center rounded-full bg-tint-neutral px-2.5 text-[11px] font-bold text-ink-500">Checking delivery…</span>
@@ -595,7 +594,7 @@ export default function CheckoutPage() {
                 {shop?.logo_url ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" /> : shop?.icon_emoji || <Icon name="store" size={22} className="text-navy-700" />}
               </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[14px] font-extrabold text-ink-900">{shop?.name || (multiShop ? `${quote!.orders.length} shops` : "The shop")}</div>
+                <div className="truncate text-[14px] font-extrabold text-ink-900">{shop?.name || "The shop"}</div>
                 <div className="truncate text-caption text-ink-500">{shop?.address || "The shop confirms the pickup point"}</div>
               </div>
               <Pill variant="jade">Free</Pill>
@@ -639,9 +638,19 @@ export default function CheckoutPage() {
 
         {/* Summary */}
         <section className="mt-3 rounded-card bg-card p-3.5 text-[14px] shadow-fos-sm tabular-nums">
-          <Row label={`Items · ${items.reduce((n, i) => n + i.quantity, 0)}`} value={qt ? money(qt.subtotal) : money(total)} />
+          {/* Only this shop's items — other shops in the cart are separate orders */}
+          <div className="mb-1.5 divide-y divide-line border-b border-line pb-1.5">
+            {shopItems.map((i) => (
+              <div key={i.id} className="flex items-baseline gap-2 py-1.5">
+                <span className="shrink-0 font-bold text-ink-500">{i.quantity}×</span>
+                <span className="min-w-0 flex-1 truncate font-semibold text-ink-900">{i.product_name}</span>
+                <span className="shrink-0 font-bold text-ink-900">{money(i.line_total)}</span>
+              </div>
+            ))}
+          </div>
+          <Row label={`Items · ${shopItems.reduce((n, i) => n + i.quantity, 0)}`} value={qt ? money(qt.subtotal) : money(itemsTotal)} />
           <Row
-            label={deliveryType === "pickup" ? "Pickup" : `Delivery${km != null && !multiShop ? ` · ${formatKm(km)}` : ""}`}
+            label={deliveryType === "pickup" ? "Pickup" : `Delivery${km != null ? ` · ${formatKm(km)}` : ""}`}
             value={deliveryType === "delivery" && !pin ? "Choose location" : !qt ? "…" : deliveryFee === 0 ? "Free" : money(deliveryFee)}
             tone={qt && deliveryFee === 0 ? "jade" : undefined}
           />
@@ -654,7 +663,6 @@ export default function CheckoutPage() {
               <span>−{money(discount)}</span>
             </div>
           )}
-          {multiShop && <p className="pb-1 text-[11px] text-ink-500">{quote!.orders.length} shops · each is a separate order with its own delivery fee</p>}
           <div className="mt-1.5 flex items-baseline justify-between border-t border-line pt-2.5">
             <span className="text-[16px] font-extrabold text-ink-900">Total</span>
             <span className="text-right">
@@ -673,7 +681,7 @@ export default function CheckoutPage() {
         <div className="fixed inset-x-0 bottom-0 z-[90] border-t border-line bg-card/95 backdrop-blur" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
           <div className="mx-auto max-w-[640px] px-gutter py-[21px]">
             <button type="button" onClick={handlePlaceOrder} disabled={ctaDisabled}
-              className={`fos-press h-[52px] w-full rounded-thumb text-[16px] font-extrabold text-white disabled:opacity-50 ${payment === "khqr" ? "bg-grad-promo shadow-[0_10px_24px_rgba(255,122,26,.35)]" : "bg-grad-cta shadow-fos-cta"}`}>
+              className={`fos-press h-[52px] w-full rounded-thumb text-[16px] font-extrabold text-white disabled:opacity-50 ${payment === "khqr" ? "bg-grad-promo shadow-[0_10px_24px_rgba(184,134,43,.35)]" : "bg-grad-cta shadow-fos-cta"}`}>
               {ctaLabel}
             </button>
           </div>
@@ -683,13 +691,16 @@ export default function CheckoutPage() {
   );
 }
 
-function TopBar({ onBack }: { onBack: () => void }) {
+function TopBar({ onBack, shopName }: { onBack: () => void; shopName?: string }) {
   return (
     <div className="flex items-center gap-3">
       <button type="button" onClick={onBack} aria-label="Back" className="fos-press grid h-10 w-10 place-items-center rounded-full bg-card text-ink-900 shadow-fos-sm">
         <svg width="20" height="20" viewBox="0 0 24 24" {...ICON} strokeWidth={2} aria-hidden><path d="M15 18l-6-6 6-6" /></svg>
       </button>
-      <h1 className="text-[22px] font-extrabold text-ink-900">Checkout</h1>
+      <div className="min-w-0">
+        <h1 className="text-[22px] font-extrabold leading-7 text-ink-900">Checkout</h1>
+        {shopName && <p className="truncate text-caption text-ink-500">{shopName}</p>}
+      </div>
     </div>
   );
 }
@@ -713,7 +724,7 @@ function MapPreview({ pin, shop, km, eta, outOfArea, onOpen }: {
             <>
               <span className="absolute left-1/2 top-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full bg-mango-500/25 motion-reduce:animate-none" aria-hidden />
               <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-full drop-shadow" width="36" height="36" viewBox="0 0 24 24" aria-hidden>
-                <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7z" fill="#FF7A1A" /><circle cx="12" cy="9" r="2.6" fill="#fff" />
+                <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7z" fill="#B8862B" /><circle cx="12" cy="9" r="2.6" fill="#fff" />
               </svg>
             </>
           )}

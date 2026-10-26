@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
@@ -29,58 +29,70 @@ export default function CartPage() {
   const [promoCode, setPromoCode] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoError, setPromoError] = useState("");
-  const [promoSuccess, setPromoSuccess] = useState(false);
-  const [quote, setQuote] = useState<CartQuote | null>(null);
-  /** Set when a shop in the cart can't deliver to the customer's location. */
-  const [deliveryError, setDeliveryError] = useState("");
+  /** The applied code and the one shop it belongs to */
+  const [promo, setPromo] = useState<{ code: string; merchantId: number } | null>(null);
+  /** Each shop is priced on its own — its own fee, area and order */
+  const [quotes, setQuotes] = useState<Record<number, ShopPrice>>({});
   const [shops, setShops] = useState<Record<number, ShopBrief>>({});
+  const priceReq = useRef(0);
 
-  // Price from the backend — same computation as placing the order. With a
-  // known location the fee is the real distance fee; without one the backend
-  // returns its default, which we don't show (the pin is set at checkout).
-  const refreshQuote = useCallback(async (code: string | null) => {
-    const where = location ? { delivery_type: "delivery" as const, lat: location.lat, lng: location.lng } : undefined;
-    try {
-      const q = await fetchQuote(code, where);
-      setQuote(q);
-      setDeliveryError("");
-      return q;
-    } catch (e) {
-      if (where) {
-        // Out of a shop's delivery area: still price the items, flag delivery.
-        setDeliveryError(e instanceof Error ? e.message.replace(/^Delivery unavailable for this location\.\s*/, "") : "");
-        try {
-          const q = await fetchQuote(code);
-          setQuote(q);
-          return q;
-        } catch { /* fall through */ }
-      }
-      setQuote(null);
-      return null;
-    }
-  }, [location]);
-
-  // Restore an applied code and re-price whenever the cart or location changes
-  useEffect(() => {
-    if (!user || items.length === 0 || !resolved) return;
-    const saved = getSavedPromo();
-    refreshQuote(saved).then((q) => {
-      if (saved && q?.promo?.applied) {
-        setPromoCode(saved);
-        setPromoSuccess(true);
-      } else if (saved) {
-        savePromo(null);
-        setPromoSuccess(false);
-        if (q?.promo?.error) setPromoError(q.promo.error);
-      }
-    });
-  }, [user, items, resolved, refreshQuote]);
-
-  // Shop name + logo for each group header
   const merchantIds = useMemo(
     () => Array.from(new Set(items.map((i) => i.merchant_id).filter((id): id is number => id != null))),
     [items],
   );
+
+  // Price from the backend — same computation as placing the order. With a
+  // known location the fee is the real distance fee; without one the backend
+  // returns its default, which we don't show (the pin is set at checkout).
+  const priceShop = useCallback(async (merchantId: number, code: string | null): Promise<ShopPrice & { promo: CartQuote["promo"] }> => {
+    const where = location ? { delivery_type: "delivery" as const, lat: location.lat, lng: location.lng } : undefined;
+    try {
+      const q = await fetchQuote(code, where, merchantId);
+      return { quote: q.orders[0] ?? null, error: "", promo: q.promo };
+    } catch (e) {
+      // Out of this shop's delivery area: still price the items, flag delivery.
+      const error = where && e instanceof Error ? e.message.replace(/^Delivery unavailable for this location\.\s*/, "") : "";
+      try {
+        const q = await fetchQuote(code, undefined, merchantId);
+        return { quote: q.orders[0] ?? null, error, promo: q.promo };
+      } catch {
+        return { quote: null, error, promo: null };
+      }
+    }
+  }, [location]);
+
+  /** Re-price every shop; returns where the code applied, or why it didn't. */
+  const refreshQuotes = useCallback(async (code: string | null) => {
+    const req = ++priceReq.current;
+    const results = await Promise.all(merchantIds.map((id) => priceShop(id, code).then((r) => [id, r] as const)));
+    if (req !== priceReq.current) return null;
+    setQuotes(Object.fromEntries(results.map(([id, r]) => [id, { quote: r.quote, error: r.error }])));
+    const applied = results.find(([, r]) => r.promo?.applied);
+    if (applied) return { merchantId: applied[0] as number | null, error: "" };
+    // A shop's own reason ("Min. spend $20") beats the generic "not valid for the shops in your cart"
+    const errors = results.map(([, r]) => r.promo?.error).filter((m): m is string => !!m);
+    return { merchantId: null, error: errors.find((m) => !/^Promo code not valid for the shops/.test(m)) ?? errors[0] ?? "Invalid promo code" };
+  }, [merchantIds, priceShop]);
+
+  // Restore an applied code and re-price whenever the cart or location changes
+  useEffect(() => {
+    if (!user || merchantIds.length === 0 || !resolved) return;
+    const saved = getSavedPromo();
+    refreshQuotes(saved?.code ?? null).then((r) => {
+      if (!r || !saved) return;
+      if (r.merchantId != null) {
+        setPromoCode(saved.code);
+        setPromo({ code: saved.code, merchantId: r.merchantId });
+        savePromo(saved.code, r.merchantId);
+      } else {
+        savePromo(null);
+        setPromo(null);
+        setPromoError(r.error);
+      }
+    });
+  }, [user, items, merchantIds, resolved, refreshQuotes]);
+
+  // Shop name + logo for each group header
   useEffect(() => {
     merchantIds.filter((id) => !shops[id]).forEach((id) => {
       api.get<ShopBrief>(`/merchants/${id}`)
@@ -94,23 +106,23 @@ export default function CartPage() {
     if (!code) return;
     setPromoLoading(true);
     setPromoError("");
-    const q = await refreshQuote(code);
-    if (q?.promo?.applied) {
-      savePromo(code);
-      setPromoSuccess(true);
-    } else {
-      setPromoError(q?.promo?.error || "Invalid promo code");
-      await refreshQuote(null);
+    const r = await refreshQuotes(code);
+    if (r?.merchantId != null) {
+      savePromo(code, r.merchantId);
+      setPromo({ code, merchantId: r.merchantId });
+    } else if (r) {
+      setPromoError(r.error);
+      await refreshQuotes(null);
     }
     setPromoLoading(false);
   };
 
   const clearPromo = () => {
     savePromo(null);
-    setPromoSuccess(false);
+    setPromo(null);
     setPromoCode("");
     setPromoError("");
-    refreshQuote(null);
+    refreshQuotes(null);
   };
 
   if (authLoading) return <LoadingPage />;
@@ -126,54 +138,52 @@ export default function CartPage() {
   }
 
   const groups = groupByShop(items);
-  const quoteFor = (merchantId: number | undefined) => quote?.orders.find((o) => o.merchant_id === merchantId);
-  // Delivery is only priced for real when we know where the customer is.
-  const priced = !!location && !deliveryError;
-  const t = quote?.totals;
-  const discount = Number(t?.discount ?? 0);
-  const total = t ? (priced ? Number(t.total) : Number(t.subtotal) - discount) : null;
   const itemCount = items.reduce((n, i) => n + i.quantity, 0);
+  const promoShop = promo ? shops[promo.merchantId]?.name : undefined;
+  const promoDiscount = promo ? Number(quotes[promo.merchantId]?.quote?.discount ?? 0) : 0;
 
   return (
     <div className="min-h-screen bg-surface">
       <div className="px-gutter pb-[120px] pt-6">
         <div className="flex items-baseline gap-2">
           <h1 className="text-display text-ink-900">Cart</h1>
-          <span className="text-caption text-ink-500">{itemCount} {itemCount === 1 ? "item" : "items"}</span>
+          <span className="text-caption text-ink-500">
+            {itemCount} {itemCount === 1 ? "item" : "items"}{groups.length > 1 ? ` · ${groups.length} shops` : ""}
+          </span>
         </div>
+        {groups.length > 1 && (
+          <p className="mt-1 text-caption text-ink-500">Each shop is its own order with its own delivery. Check out one shop at a time.</p>
+        )}
 
-        <DeliveryBar
-          location={location?.area ?? null}
-          error={deliveryError}
-          orders={quote?.orders ?? []}
-          shopName={(id) => shops[id]?.name}
-          onChangeLocation={() => setLocOpen(true)}
-        />
+        <LocationBar location={location?.area ?? null} onChange={() => setLocOpen(true)} />
         {locOpen && (
           <LocationSheet current={location} onClose={() => setLocOpen(false)}
             onConfirm={(loc) => { saveLocation(loc); setLocOpen(false); }} />
         )}
 
-        <div className="mt-4 flex flex-col gap-3">
+        <div className="mt-3 flex flex-col gap-3">
           {groups.map(({ merchantId, lines }) => (
             <ShopGroup
               key={merchantId ?? "none"}
               shop={merchantId != null ? shops[merchantId] : undefined}
               fallbackName={lines[0]?.merchant_name}
-              quote={quoteFor(merchantId)}
-              priced={priced}
+              price={merchantId != null ? quotes[merchantId] : undefined}
+              located={!!location}
               lines={lines}
               onQty={(line, q) => { lightHaptic(); updateQuantity(line.id, q); }}
               onRemove={(line) => { lightHaptic(); removeItem(line.id); }}
+              onCheckout={merchantId != null ? () => router.push(`/shop/checkout?shop=${merchantId}`) : undefined}
             />
           ))}
         </div>
 
-        {/* Promo */}
-        {promoSuccess ? (
+        {/* Promo — a code belongs to one shop and only lowers that shop's order */}
+        {promo ? (
           <div className="mt-3 flex h-14 items-center gap-3 rounded-[18px] bg-tint-jade px-4">
             <Icon name="ticket" size={20} className="text-tone-jade" />
-            <span className="flex-1 truncate text-[14px] font-bold text-tone-jade">{quote?.promo?.code ?? promoCode} · −{money(discount)}</span>
+            <span className="flex-1 truncate text-[14px] font-bold text-tone-jade">
+              {promo.code} · −{money(promoDiscount)}{promoShop && groups.length > 1 ? ` at ${promoShop}` : ""}
+            </span>
             <button type="button" onClick={clearPromo} className="fos-press h-11 px-2 text-[13px] font-bold text-ruby-500">Remove</button>
           </div>
         ) : promoOpen ? (
@@ -203,30 +213,11 @@ export default function CartPage() {
           </button>
         )}
       </div>
-
-      {/* Summary bar — sits above the tab bar */}
-      <div
-        className="fixed inset-x-0 z-[90] rounded-t-hero bg-card shadow-fos-lg"
-        style={{ bottom: "calc(84px + env(safe-area-inset-bottom, 0px))" }}
-      >
-        <div className="mx-auto flex max-w-[640px] items-center gap-3 px-gutter py-3">
-          <div className="min-w-0 flex-1 tabular-nums">
-            <div className="truncate text-caption text-ink-500">
-              {total == null ? "Total" : priced ? `Total · ${formatKhr(total)}` : "Items · delivery at checkout"}
-            </div>
-            <div className="text-[24px] font-extrabold leading-7 text-ink-900">{total == null ? "…" : money(total)}</div>
-          </div>
-          <button
-            type="button" onClick={() => router.push("/shop/checkout")}
-            className="fos-press h-[52px] shrink-0 rounded-thumb bg-grad-cta px-6 text-[15px] font-bold text-white shadow-fos-cta"
-          >
-            Checkout →
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
+
+interface ShopPrice { quote: ShopQuote | null; error: string }
 
 function groupByShop(items: CartItem[]) {
   const map = new Map<number | undefined, CartItem[]>();
@@ -234,82 +225,53 @@ function groupByShop(items: CartItem[]) {
   return Array.from(map, ([merchantId, lines]) => ({ merchantId, lines }));
 }
 
-/** Where the order goes + how far each shop is from free delivery. */
-function DeliveryBar({ location, error, orders, shopName, onChangeLocation }: {
-  location: string | null;
-  error: string;
-  orders: ShopQuote[];
-  shopName: (id: number) => string | undefined;
-  onChangeLocation: () => void;
-}) {
-  const truck = (
-    <svg width="22" height="22" viewBox="0 0 24 24" {...ICON} aria-hidden>
-      <path d="M3 7h11v9H3zM14 10h4l3 3v3h-7" /><circle cx="7" cy="18" r="2" /><circle cx="17" cy="18" r="2" />
-    </svg>
-  );
-
-  if (error) {
-    return (
-      <div className="mt-4 flex items-center gap-3 rounded-card bg-tint-ruby p-3.5">
-        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-card text-ruby-500">{truck}</div>
-        <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-extrabold text-ink-900">Can&apos;t deliver to {location ?? "your location"}</div>
-          <div className="truncate text-caption text-ink-500">{error} · pickup available</div>
-        </div>
-        <button type="button" onClick={onChangeLocation} className="fos-press shrink-0 rounded-full bg-card px-3 py-1.5 text-[12px] font-extrabold text-navy-700">Change</button>
-      </div>
-    );
-  }
-
-  // Closest shop to the free-delivery threshold that hasn't reached it yet
-  const pending = orders
-    .map((o) => ({ id: o.merchant_id, left: FREE_DELIVERY_OVER_USD - Number(o.subtotal) }))
-    .filter((o) => o.left > 0)
-    .sort((a, b) => a.left - b.left)[0];
-  const unlocked = orders.length > 0 && !pending;
-  const progress = pending ? Math.max(0.04, 1 - pending.left / FREE_DELIVERY_OVER_USD) : 1;
-  const name = pending && orders.length > 1 ? shopName(pending.id) : undefined;
-
+/** Where the orders go — every shop prices its own delivery to this place. */
+function LocationBar({ location, onChange }: { location: string | null; onChange: () => void }) {
   return (
-    <div className="mt-4 flex items-center gap-3 rounded-card bg-tint-jade p-3.5">
-      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-card text-tone-jade">{truck}</div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] font-extrabold text-ink-900">
-          {unlocked
-            ? <span className="text-tone-jade">Free delivery unlocked</span>
-            : pending
-              ? <>+{money(pending.left)}{name ? ` at ${name}` : ""} → <span className="text-tone-jade">Free delivery</span></>
-              : "Delivery"}
-        </div>
-        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-card">
-          <i className="block h-full rounded-full bg-jade-500 transition-[width] duration-300" style={{ width: `${progress * 100}%` }} />
-        </div>
-        <button type="button" onClick={onChangeLocation} className="mt-1 flex max-w-full items-center gap-1 text-[11px] font-semibold text-ink-500">
-          <Icon name="pin" size={12} strokeWidth={2.2} /><span className="truncate">{location ? `To ${location}` : "Set your delivery location"}</span>
-          <span className="shrink-0 font-extrabold text-navy-700">· Change</span>
-        </button>
-      </div>
-    </div>
+    <button type="button" onClick={onChange}
+      className="fos-press mt-4 flex w-full items-center gap-3 rounded-card bg-card p-3 text-left shadow-fos-sm">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-tint-mango text-mango-500">
+        <Icon name="pin" size={20} strokeWidth={2} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-caption text-ink-500">Deliver to</span>
+        <span className="block truncate text-[14px] font-extrabold text-ink-900">{location ?? "Set your delivery location"}</span>
+      </span>
+      <span className="shrink-0 rounded-full bg-surface px-3 py-1.5 text-[12px] font-extrabold text-navy-700">{location ? "Change" : "Set"}</span>
+    </button>
   );
 }
 
-function ShopGroup({ shop, fallbackName, quote, priced, lines, onQty, onRemove }: {
+function ShopGroup({ shop, fallbackName, price, located, lines, onQty, onRemove, onCheckout }: {
   shop?: ShopBrief;
   fallbackName?: string;
-  quote?: ShopQuote;
-  priced: boolean;
+  price?: ShopPrice;
+  /** Delivery is only priced for real when we know where the customer is. */
+  located: boolean;
   lines: CartItem[];
   onQty: (line: CartItem, quantity: number) => void;
   onRemove: (line: CartItem) => void;
+  onCheckout?: () => void;
 }) {
   const name = shop?.name ?? fallbackName ?? "Shop";
-  const fee = quote ? Number(quote.delivery_fee) : null;
+  const quote = price?.quote ?? null;
+  const outOfArea = !!price?.error;
+  const subtotal = quote ? Number(quote.subtotal) : lines.reduce((n, l) => n + Number(l.line_total ?? 0), 0);
+  const discount = Number(quote?.discount ?? 0);
+  const free = subtotal >= FREE_DELIVERY_OVER_USD;
+  const priced = located && !outOfArea && !!quote;
+  const fee = priced ? Number(quote!.delivery_fee) : null;
   const km = quote?.distance_km != null ? Number(quote.distance_km) : null;
+  const total = priced ? Number(quote!.total) : subtotal - discount;
+  const closed = !!quote && !quote.is_open;
+  const minShort = quote?.min_order_amount ? Number(quote.min_order_amount) - subtotal : 0;
 
   let feePill = null;
-  if (quote && Number(quote.subtotal) >= FREE_DELIVERY_OVER_USD) feePill = <Pill variant="jade">Free delivery</Pill>;
+  if (free) feePill = <Pill variant="jade">Free delivery</Pill>;
   else if (priced && fee != null) feePill = <Pill variant="jade">{money(fee)}{km != null ? ` · ${km.toFixed(1)} km` : ""}</Pill>;
-  else if (quote) feePill = <Pill variant="neutral">Fee at checkout</Pill>;
+  else if (outOfArea) feePill = <Pill variant="mango">Pickup only</Pill>;
+
+  const cta = closed ? "Closed now" : minShort > 0 ? `Add ${money(minShort)} more` : `Checkout ${name}`;
 
   return (
     <section className="rounded-hero bg-card p-3.5 shadow-fos-sm">
@@ -322,15 +284,51 @@ function ShopGroup({ shop, fallbackName, quote, priced, lines, onQty, onRemove }
         <span className="min-w-0 flex-1 truncate text-[14px] font-extrabold text-ink-900">{name}</span>
         {feePill}
       </header>
-      {quote && !quote.is_open && (
-        <div className="mb-1 mt-2"><Pill variant="mango">Closed now · order opens later</Pill></div>
-      )}
-      {quote?.min_order_amount && Number(quote.subtotal) < Number(quote.min_order_amount) && (
-        <div className="mb-1 mt-2"><Pill variant="mango">Min. order {money(quote.min_order_amount)}</Pill></div>
+      {closed && <div className="mb-1 mt-2"><Pill variant="mango">Closed now · order opens later</Pill></div>}
+      {minShort > 0 && <div className="mb-1 mt-2"><Pill variant="mango">Min. order {money(quote!.min_order_amount)}</Pill></div>}
+      {outOfArea && (
+        <p className="mb-1 mt-2 rounded-md bg-tint-ruby px-2.5 py-2 text-[12px] font-semibold text-ruby-500">
+          Doesn&apos;t deliver to your location{price?.error ? ` · ${price.error}` : ""}. Pickup still works.
+        </p>
       )}
       <div className="divide-y divide-line">
         {lines.map((line) => <CartLine key={line.id} line={line} onQty={onQty} onRemove={onRemove} />)}
       </div>
+
+      {/* This shop's own bill */}
+      <div className="mt-1 border-t border-line pt-2.5 text-[13px] tabular-nums">
+        <div className="flex justify-between py-0.5"><span className="text-ink-500">Subtotal</span><span className="font-bold text-ink-900">{money(subtotal)}</span></div>
+        {discount > 0 && (
+          <div className="flex justify-between py-0.5 font-bold text-tone-jade"><span>Promo</span><span>−{money(discount)}</span></div>
+        )}
+        <div className="flex justify-between py-0.5">
+          <span className="text-ink-500">Delivery</span>
+          <span className={`font-bold ${free || fee === 0 ? "text-tone-jade" : "text-ink-900"}`}>
+            {free || fee === 0 ? "Free" : fee != null ? money(fee) : outOfArea ? "Pickup only" : "At checkout"}
+          </span>
+        </div>
+        {!free && (
+          <div className="mt-1.5">
+            <div className="text-[11px] font-semibold text-ink-500">
+              Add {money(FREE_DELIVERY_OVER_USD - subtotal)} more for <span className="text-tone-jade">free delivery</span>
+            </div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface">
+              <i className="block h-full rounded-full bg-jade-500 transition-[width] duration-300" style={{ width: `${Math.max(4, (subtotal / FREE_DELIVERY_OVER_USD) * 100)}%` }} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <button
+        type="button" onClick={onCheckout} disabled={!onCheckout || closed || minShort > 0}
+        className="fos-press mt-3 flex h-[52px] w-full items-center gap-2 rounded-thumb bg-grad-cta px-4 text-white shadow-fos-cta disabled:opacity-50 disabled:shadow-none"
+      >
+        <span className="min-w-0 flex-1 truncate text-left text-[15px] font-bold">{cta}</span>
+        <span className="shrink-0 text-right tabular-nums leading-tight">
+          <span className="block text-[16px] font-extrabold">{price ? money(total) : "…"}</span>
+          {price && <span className="block text-[10px] font-semibold text-white/75">{priced ? formatKhr(total) : "+ delivery"}</span>}
+        </span>
+      </button>
     </section>
   );
 }

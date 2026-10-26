@@ -36,21 +36,36 @@ export interface DeliveryChoice {
   lng?: number;
 }
 
-export async function fetchQuote(promoCode?: string | null, delivery?: DeliveryChoice): Promise<CartQuote> {
-  const res = await api.post<{ data: CartQuote }>("/orders/quote", { promo_code: promoCode || undefined, ...delivery });
+/** With merchantId only that shop's cart is priced — each shop checks out on its own. */
+export async function fetchQuote(promoCode?: string | null, delivery?: DeliveryChoice, merchantId?: number): Promise<CartQuote> {
+  const res = await api.post<{ data: CartQuote }>("/orders/quote", { promo_code: promoCode || undefined, ...delivery, merchant_id: merchantId });
   return res.data;
 }
 
-// The applied promo code survives cart → checkout navigation.
+// The applied promo code survives cart → checkout navigation, together with
+// the shop it belongs to, so another shop's checkout doesn't try to use it.
 const KEY = "fos_promo_code";
 
-export function getSavedPromo(): string | null {
-  try { return sessionStorage.getItem(KEY); } catch { return null; }
+export interface SavedPromo { code: string; merchantId: number | null }
+
+export function getSavedPromo(): SavedPromo | null {
+  try {
+    const raw = sessionStorage.getItem(KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as SavedPromo;
+    return v && typeof v.code === "string" ? v : null;
+  } catch { return null; }
 }
 
-export function savePromo(code: string | null) {
+/** The saved code if it can be used at this shop's checkout. */
+export function savedPromoFor(merchantId: number): string | null {
+  const p = getSavedPromo();
+  return p && (p.merchantId == null || p.merchantId === merchantId) ? p.code : null;
+}
+
+export function savePromo(code: string | null, merchantId: number | null = null) {
   try {
-    if (code) sessionStorage.setItem(KEY, code);
+    if (code) sessionStorage.setItem(KEY, JSON.stringify({ code, merchantId }));
     else sessionStorage.removeItem(KEY);
   } catch { /* storage unavailable — promo just won't carry over */ }
 }
