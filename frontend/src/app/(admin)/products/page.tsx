@@ -7,6 +7,7 @@ import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { Product, Category, Merchant, AdminUser } from "@/types";
 import { VariantsEditor, type VariantGroup } from "@/components/admin/VariantsEditor";
 import { BrandLoader } from "@/components/ui/Spinner";
+import { AddIcon, DeleteIcon, EditIcon, FilterIcon } from "@/components/brand/Icons";
 
 export default function ProductsPage() {
   const { user, isSuperAdmin } = useAuth();
@@ -140,7 +141,7 @@ export default function ProductsPage() {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div><h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text)" }}>Products</h1><p style={{ fontSize: 13, color: "var(--text-muted)" }}>{isSuperAdmin ? "Every shop's products - each row shows its owner" : `Managing products for ${ownShopName || "your shop"}`}</p></div>
-        <button className="btn-primary" onClick={openCreate}>+ Add Product</button>
+        <button className="btn-primary" onClick={openCreate}><AddIcon size={16} />Add Product</button>
       </div>
 
       {/* Stats */}
@@ -151,7 +152,8 @@ export default function ProductsPage() {
       </div>
 
       {/* Filters */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <FilterIcon size={18} title="Filters" style={{ color: "var(--text-muted, #64748B)" }} />
         <input className="admin-input" style={{ maxWidth: 260 }} placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} />
         {isSuperAdmin && (
           <select className="admin-input" style={{ maxWidth: 220 }} value={filterShop} onChange={e => { setFilterShop(+e.target.value); setFilterCat(0); }}>
@@ -189,7 +191,7 @@ export default function ProductsPage() {
                   <td><span style={{ fontWeight: 600, fontFamily: "monospace" }}>${p.base_price}</span>{p.compare_price && p.compare_price > p.base_price && <span style={{ fontSize: 11, textDecoration: "line-through", color: "var(--text-muted)", marginLeft: 4 }}>${p.compare_price}</span>}</td>
                   <td style={{ color: p.stock === 0 ? "var(--danger)" : p.stock < 5 ? "var(--warning)" : "var(--text)", fontWeight: p.stock < 5 ? 600 : 400 }}>{p.stock}</td>
                   <td><div onClick={() => toggleActive(p)} style={{ width: 40, height: 22, borderRadius: 11, background: p.is_active ? "var(--success)" : "#d1d5db", cursor: "pointer", position: "relative", transition: "background 0.2s" }}><div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: p.is_active ? 20 : 2, transition: "left 0.2s" }} /></div></td>
-                  <td><div style={{ display: "flex", gap: 4 }}><button onClick={() => openEdit(p)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14 }}>✏️</button><button onClick={() => deleteProduct(p.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14 }}>🗑️</button></div></td>
+                  <td><div style={{ display: "flex", gap: 4 }}><button onClick={() => openEdit(p)} title="Edit" aria-label="Edit" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent, #103562)", padding: 4 }}><EditIcon size={18} /></button><button onClick={() => deleteProduct(p.id)} title="Delete" aria-label="Delete" style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", padding: 4 }}><DeleteIcon size={18} /></button></div></td>
                 </tr>
               ))}
             </tbody>

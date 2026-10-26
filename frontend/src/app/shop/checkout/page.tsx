@@ -17,6 +17,7 @@ import { Icon, type IconName } from "@/components/shop/Icon";
 import { formatKhr } from "@/lib/currency";
 import { areaName, useHomeLocation } from "@/lib/useHomeLocation";
 import { haptic, useMainButton } from "@/lib/telegram";
+import { DeliveryIcon, LocationIcon, PayoutIcon, QrIcon, StoreIcon } from "@/components/brand/Icons";
 
 // Same look as the map's own loading state, so there is no flash of an empty box
 // Full-screen picker (search places or move the map); nothing to show until it opens

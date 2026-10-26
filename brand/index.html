@@ -1,0 +1,185 @@
+<title>Byme24 Icon System</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Manrope:wght@400;600;700&display=swap">
+<style>
+/* Layout: a jewellery-case catalogue — wide navy "vitrine" panels on an ivory ground, assets in labelled trays */
+:root{
+  --navy:#081D3C; --gold:#D6BA80; --gold-dk:#71541A; --gold-lt:#EFDDB3;
+  --bg:#F7F2E7; --surface:#FFFDF8; --fg:#081D3C; --muted:#6B6352; --line:#E3D8C0;
+  --display:"Cormorant Garamond",Georgia,serif; --body:"Manrope",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#050F21;--surface:#0B2347;--fg:#F3EAD6;--muted:#B3A887;--line:#1E3A63;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#050F21;--surface:#0B2347;--fg:#F3EAD6;--muted:#B3A887;--line:#1E3A63;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.6 var(--body)}
+.wrap{max-width:1100px;margin:0 auto;padding-block:48px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:64px}
+h1,h2{font-family:var(--display);font-weight:600;text-wrap:balance;margin:0;line-height:1.1}
+h1{font-size:clamp(2.4rem,6vw,4rem)} h2{font-size:2rem}
+.eyebrow{font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-dk);font-weight:700}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .eyebrow{color:var(--gold)}}
+:root[data-theme="dark"] .eyebrow{color:var(--gold)}
+p{margin:0;max-width:62ch;color:var(--muted)}
+section{display:grid;gap:20px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.tray{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:grid;gap:12px;align-content:start;min-width:0}
+.tray small{color:var(--muted);font-size:.8rem}
+.tray b{font-weight:700}
+.vitrine{background:radial-gradient(120% 90% at 50% 20%,#123063,var(--navy));border-radius:18px;color:var(--gold);display:grid;place-items:center}
+.hero{display:grid;grid-template-columns:1.2fr 1fr;gap:40px;align-items:center}
+.hero .vitrine{aspect-ratio:1;max-width:100%}
+@media (max-width:760px){.hero{grid-template-columns:1fr}}
+svg.sym{overflow:visible}
+.swatches{display:flex;flex-wrap:wrap;gap:12px}
+.sw{flex:1 1 140px;border-radius:12px;padding:56px 14px 12px;font-size:.78rem;font-variant-numeric:tabular-nums;border:1px solid var(--line)}
+.ico-row{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+.ico{width:28px;height:28px;color:var(--fg)}
+.chip{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;background:var(--navy);color:var(--gold)}
+.chip svg{width:28px;height:28px}
+/* phone frames */
+.phone{width:200px;max-width:100%;aspect-ratio:9/19;border-radius:28px;border:6px solid #0d1a2e;margin:0 auto;display:grid;place-items:center;position:relative;overflow:hidden}
+.splash{background:radial-gradient(100% 70% at 50% 40%,#13336a,var(--navy))}
+.splash .word{position:absolute;bottom:22%;font-family:var(--body);font-weight:700;font-size:1.3rem;color:#fff;letter-spacing:.01em}
+.splash .word span{color:var(--gold)}
+.splash .tag{position:absolute;bottom:8%;font-size:.6rem;letter-spacing:.2em;color:var(--gold);opacity:.7;text-transform:uppercase}
+.loader-screen{background:var(--navy)}
+.bar{position:absolute;bottom:26%;width:50%;height:2px;background:#1e3a63;border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;width:40%;background:var(--gold);animation:slide 1.6s ease-in-out infinite}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+/* animations */
+.a-pulse{animation:pulse 1.8s ease-in-out infinite;transform-origin:50% 55%}
+@keyframes pulse{0%,100%{transform:scale(.92);opacity:.7}50%{transform:scale(1.04);opacity:1}}
+.a-rotate{animation:rot 2.4s cubic-bezier(.65,0,.35,1) infinite;transform-origin:50% 58%}
+@keyframes rot{0%{transform:rotate(0)}33%{transform:rotate(120deg)}66%{transform:rotate(240deg)}100%{transform:rotate(360deg)}}
+.a-glow{animation:glow 2.2s ease-in-out infinite}
+@keyframes glow{0%,100%{filter:drop-shadow(0 0 0 rgba(214,186,128,0))}50%{filter:drop-shadow(0 0 14px rgba(214,186,128,.85))}}
+@media (prefers-reduced-motion:reduce){.a-pulse,.a-rotate,.a-glow,.bar i{animation:none}}
+.anim .vitrine{aspect-ratio:1}
+code{font-size:.8rem;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:1px 6px;overflow-wrap:anywhere}
+.state{display:grid;justify-items:center;text-align:center;gap:10px;padding:28px 20px}
+.state h3{margin:0;font-family:var(--display);font-size:1.4rem}
+.state svg{width:110px;height:110px}
+.empty-c{color:var(--muted)} .ok-c{color:var(--gold-dk)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .ok-c{color:var(--gold)}}
+:root[data-theme="dark"] .ok-c{color:var(--gold)}
+.btn{font:600 .85rem var(--body);background:var(--navy);color:var(--gold);border:0;border-radius:999px;padding:10px 20px}
+ul{margin:0;padding-left:18px;color:var(--muted)}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="gold" x1="20" y1="10" x2="80" y2="90" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F0DEB4"/><stop offset=".5" stop-color="#D6BA80"/><stop offset="1" stop-color="#71541A"/>
+    </linearGradient>
+    <g id="mark" stroke="url(#gold)" stroke-width="6" stroke-linejoin="round" fill="none">
+      <path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z"/>
+      <path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z" transform="rotate(120 50 58)"/>
+      <path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z" transform="rotate(240 50 58)"/>
+      <circle cx="50" cy="58" r="14"/>
+    </g>
+  </defs>
+  <symbol id="i-store" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M3.5 9 6 4h12l2.5 5"/><path d="M3.5 9a2.8 2.8 0 0 0 5.67 0 2.8 2.8 0 0 0 5.66 0 2.8 2.8 0 0 0 5.67 0"/><path d="M5 11.5V20h14v-8.5"/><path d="M12 13a5 5 0 0 1 0 7 5 5 0 0 1 0-7Z"/></symbol>
+  <symbol id="i-promo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M3 12.5 11.5 4H20v8.5L11.5 21Z"/><path d="M16 5.5a3.2 3.2 0 0 1 0 5 3.2 3.2 0 0 1 0-5Z"/><path d="m8.5 15.5 4-4"/></symbol>
+  <symbol id="i-orders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M5 8h14l-1 13H6Z"/><path d="M9 8a3 3 0 0 1 6 0"/><path d="M12 11.5a4.5 4.5 0 0 1 0 6.5 4.5 4.5 0 0 1 0-6.5Z"/></symbol>
+  <symbol id="i-rewards" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3a6 6 0 0 1 0 9 6 6 0 0 1 0-9Z"/><path d="M12 3a6 6 0 0 1 0 9 6 6 0 0 1 0-9Z" transform="rotate(120 12 12)"/><path d="M12 3a6 6 0 0 1 0 9 6 6 0 0 1 0-9Z" transform="rotate(240 12 12)"/><path d="M8 18.5 7 22l5-2 5 2-1-3.5"/></symbol>
+  <symbol id="i-delivery" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M12 21.5a11 11 0 0 1 0-19 11 11 0 0 1 0 19Z"/><circle cx="12" cy="10" r="2.4"/><path d="M3 21.5h18"/></symbol>
+  <symbol id="i-empty" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><circle cx="60" cy="60" r="54" stroke-dasharray="4 7" opacity=".5"/><g transform="translate(10 6)" stroke-dasharray="6 5"><path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z"/><path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z" transform="rotate(120 50 58)"/><path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z" transform="rotate(240 50 58)"/></g></symbol>
+  <symbol id="i-success" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><circle cx="60" cy="60" r="54"/><g transform="translate(10 6)" opacity=".35"><path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z"/><path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z" transform="rotate(120 50 58)"/><path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z" transform="rotate(240 50 58)"/></g><path d="m42 62 12 12 26-28" stroke-width="5"/></symbol>
+</svg>
+
+<div class="wrap">
+  <header class="hero">
+    <div style="display:grid;gap:18px">
+      <span class="eyebrow">Brand icon system · v1</span>
+      <h1>The Byme24 knot, on its own.</h1>
+      <p>Three pointed leaves joined by a ring: the gold symbol from the Byme24 logo, rebuilt as clean vector geometry. One 40-unit vesica, radius 26, repeated at 0°, 120° and 240°. Every asset below is built from that single shape, so the brand reads even when the wordmark is gone.</p>
+    </div>
+    <div class="vitrine"><svg class="sym a-glow" viewBox="0 0 100 100" width="62%"><use href="#mark"/></svg></div>
+  </header>
+
+  <section>
+    <span class="eyebrow">Colour</span><h2>Palette</h2>
+    <div class="swatches">
+      <div class="sw" style="background:#081D3C;color:#D6BA80">Navy<br><b>#081D3C</b><br>Grounds, app icon, splash</div>
+      <div class="sw" style="background:#D6BA80;color:#081D3C">Gold<br><b>#D6BA80</b><br>Symbol, accents, active icons</div>
+      <div class="sw" style="background:#71541A;color:#F7F2E7">Dark Gold<br><b>#71541A</b><br>Gold on light, gradient shadow</div>
+      <div class="sw" style="background:linear-gradient(135deg,#F0DEB4,#D6BA80 50%,#71541A);color:#081D3C">Gold foil<br><b>#F0DEB4 → #71541A</b><br>Symbol at hero sizes only</div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Identity marks</span><h2>App icon, favicon, symbol</h2>
+    <div class="grid">
+      <div class="tray">
+        <div class="vitrine" style="aspect-ratio:1;border-radius:22%;width:140px;margin:0 auto"><svg viewBox="0 0 100 100" width="72%"><use href="#mark"/></svg></div>
+        <b>App icon · 1024 px</b><small>Navy radial ground, foil symbol at 72% width. iOS corner radius 22.3%. <code>brand/app-icon.svg</code></small>
+      </div>
+      <div class="tray">
+        <div class="ico-row" style="justify-content:center;min-height:140px">
+          <svg viewBox="0 0 100 100" width="48"><rect width="100" height="100" rx="22" fill="#081D3C"/><g transform="translate(8 6) scale(.84)" stroke="#D6BA80" stroke-width="9" fill="none"><path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z"/><path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z" transform="rotate(120 50 58)"/><path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z" transform="rotate(240 50 58)"/></g></svg>
+          <svg viewBox="0 0 100 100" width="32"><rect width="100" height="100" rx="22" fill="#081D3C"/><g transform="translate(8 6) scale(.84)" stroke="#D6BA80" stroke-width="9" fill="none"><path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z"/><path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z" transform="rotate(120 50 58)"/><path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z" transform="rotate(240 50 58)"/></g></svg>
+          <svg viewBox="0 0 100 100" width="16"><rect width="100" height="100" rx="22" fill="#081D3C"/><g transform="translate(8 6) scale(.84)" stroke="#D6BA80" stroke-width="9" fill="none"><path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z"/><path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z" transform="rotate(120 50 58)"/><path d="M50 18A26 26 0 0 1 50 58A26 26 0 0 1 50 18Z" transform="rotate(240 50 58)"/></g></svg>
+        </div>
+        <b>Favicon · 48 / 32 / 16</b><small>Ring removed and stroke thickened to 9 so the knot survives 16 px. Flat gold, no gradient. <code>brand/favicon.svg</code></small>
+      </div>
+      <div class="tray">
+        <div style="display:grid;place-items:center;min-height:140px"><svg viewBox="0 0 100 100" width="120"><use href="#mark"/></svg></div>
+        <b>Master symbol</b><small>Clear space = ring radius (14 u) on all sides. Minimum size 20 px; below that use the favicon cut. <code>brand/symbol.svg</code></small>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Launch</span><h2>Splash and loading screens</h2>
+    <div class="grid">
+      <div class="tray">
+        <div class="phone splash"><svg class="sym" viewBox="0 0 100 100" width="46%" style="margin-bottom:30%"><use href="#mark"/></svg><div class="word">Byme<span>24</span></div><div class="tag">Shop the city</div></div>
+        <b>Splash</b><small>Static, shown for the first frame. Symbol sits on the optical centre, wordmark below. Matches the Telegram mini-app header colour so there is no flash.</small>
+      </div>
+      <div class="tray">
+        <div class="phone loader-screen"><svg class="sym a-rotate" viewBox="0 0 100 100" width="34%"><use href="#mark"/></svg><div class="bar"><i></i></div></div>
+        <b>Loading screen</b><small>After 600 ms the splash hands over to this: the symbol turns in 120° steps (it is three-fold symmetric, so each pause looks at rest) above a thin progress sweep.</small>
+      </div>
+    </div>
+  </section>
+
+  <section class="anim">
+    <span class="eyebrow">Motion</span><h2>Loading animations</h2>
+    <div class="grid">
+      <div class="tray"><div class="vitrine"><svg class="sym a-pulse" viewBox="0 0 100 100" width="50%"><use href="#mark"/></svg></div><b>Pulse</b><small>Scale 0.92 → 1.04, opacity 0.7 → 1, 1.8 s ease-in-out. Inline waits: cart, payment check.</small><code>animation: pulse 1.8s ease-in-out infinite</code></div>
+      <div class="tray"><div class="vitrine"><svg class="sym a-rotate" viewBox="0 0 100 100" width="50%"><use href="#mark"/></svg></div><b>Rotate</b><small>Three 120° turns per 2.4 s, cubic-bezier(.65,0,.35,1). Pivot is the ring centre (50, 58), not the box centre.</small><code>transform-origin: 50% 58%</code></div>
+      <div class="tray"><div class="vitrine"><svg class="sym a-glow" viewBox="0 0 100 100" width="50%"><use href="#mark"/></svg></div><b>Glow</b><small>Gold drop-shadow 0 → 14 px, 2.2 s. Reserved for celebratory moments: order placed, reward unlocked.</small><code>filter: drop-shadow(0 0 14px #D6BA80d9)</code></div>
+    </div>
+    <p>All three stop under <code>prefers-reduced-motion</code>, leaving the static symbol.</p>
+  </section>
+
+  <section>
+    <span class="eyebrow">Icon family</span><h2>Commerce icons</h2>
+    <p>24 px grid, 1.6 stroke, round joins. Each glyph hides one vesica leaf from the knot: the store door, the tag's hole, the parcel seal, the rewards rosette, the delivery pin.</p>
+    <div class="grid">
+      <div class="tray"><div class="ico-row"><svg class="ico"><use href="#i-store"/></svg><div class="chip"><svg><use href="#i-store"/></svg></div></div><b>Store</b><small>Scalloped awning, leaf-shaped door.</small></div>
+      <div class="tray"><div class="ico-row"><svg class="ico"><use href="#i-promo"/></svg><div class="chip"><svg><use href="#i-promo"/></svg></div></div><b>Promotion</b><small>Price tag with a leaf eyelet.</small></div>
+      <div class="tray"><div class="ico-row"><svg class="ico"><use href="#i-orders"/></svg><div class="chip"><svg><use href="#i-orders"/></svg></div></div><b>Orders</b><small>Shopping bag sealed with a leaf.</small></div>
+      <div class="tray"><div class="ico-row"><svg class="ico"><use href="#i-rewards"/></svg><div class="chip"><svg><use href="#i-rewards"/></svg></div></div><b>Rewards</b><small>The knot itself as a medal rosette.</small></div>
+      <div class="tray"><div class="ico-row"><svg class="ico"><use href="#i-delivery"/></svg><div class="chip"><svg><use href="#i-delivery"/></svg></div></div><b>Delivery</b><small>Map pin drawn as one tall leaf.</small></div>
+    </div>
+    <p>Inactive: current text colour. Active / selected: gold on a navy 56 px chip, as above.</p>
+  </section>
+
+  <section>
+    <span class="eyebrow">States</span><h2>Empty and success</h2>
+    <div class="grid">
+      <div class="tray state"><svg class="empty-c"><use href="#i-empty"/></svg><h3>Your cart is empty</h3><p>Pick something from a nearby shop and it will wait here.</p><button class="btn" type="button">Browse shops</button></div>
+      <div class="tray state"><svg class="ok-c a-glow"><use href="#i-success"/></svg><h3>Order placed</h3><p>Order #B24-1087 is with the shop. We'll message you in Telegram when it leaves.</p><button class="btn" type="button">Track order</button></div>
+    </div>
+    <p>Empty: the knot drawn dashed, as if not yet tied. Success: the knot fades behind a gold check inside a closed ring.</p>
+  </section>
+
+  <section>
+    <span class="eyebrow">Handoff</span><h2>Taking it into Figma</h2>
+    <ul>
+      <li>Drag the files in <code>brand/</code> onto a Figma canvas. Every shape is a plain path or circle with no masks, so it imports as editable vectors.</li>
+      <li><code>icons.svg</code> is a sprite. Each <code>&lt;symbol&gt;</code> becomes one component; set frame to 24 × 24 and stroke colour to a variable.</li>
+      <li>Create colour variables Navy, Gold, Dark Gold and a Gold foil gradient style from the palette above.</li>
+      <li>Rebuild the motions with Smart Animate using the values on each card.</li>
+    </ul>
+  </section>
+</div>

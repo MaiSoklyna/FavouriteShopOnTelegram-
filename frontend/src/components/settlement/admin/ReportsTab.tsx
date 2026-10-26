@@ -6,6 +6,7 @@ import {
   type ReportRow, type SettlementReport,
 } from "@/lib/settlements";
 import { BTN, FieldLabel, INPUT, Notice, Panel, Spinner, SummaryCard, Table, type Column } from "../ui";
+import { ExportIcon } from "@/components/brand/Icons";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -80,7 +81,7 @@ export function ReportsTab() {
           </div>
           <div className="ml-auto flex gap-2 pb-0.5">
             {loading && <span className="self-center text-text-muted"><Spinner /></span>}
-            <button className={BTN.outlineSm} onClick={exportCsv} disabled={!report || report.merchants.length === 0}>Export CSV</button>
+            <button className={BTN.outlineSm} onClick={exportCsv} disabled={!report || report.merchants.length === 0}><ExportIcon size={16} />Export CSV</button>
           </div>
         </div>
       </Panel>

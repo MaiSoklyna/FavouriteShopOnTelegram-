@@ -12,6 +12,7 @@ const kantumruy = Kantumruy_Pro({ subsets: ["khmer", "latin"], weight: ["400", "
 export const metadata: Metadata = {
   title: "Byme24",
   description: "Byme24 — Your Favourite Shop",
+  icons: { icon: "/brand/favicon.svg", apple: "/brand/app-icon.svg" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
