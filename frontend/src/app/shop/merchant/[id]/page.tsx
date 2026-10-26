@@ -12,6 +12,8 @@ import { formatEta, formatKm } from "@/lib/mapbox";
 import { money } from "@/lib/quote";
 import type { Merchant, Product, Category } from "@/types";
 import { Icon } from "@/components/shop/Icon";
+import { PromoAppliedBanner } from "@/components/shop/PromoAppliedBanner";
+import { ShopOffers } from "@/components/shop/ShopOffers";
 
 /** This shop as seen from the customer's location (GET /merchants/nearby). */
 interface NearbyInfo {
@@ -125,6 +127,7 @@ export default function MerchantDetailPage() {
 
   return (
     <div className="min-h-screen bg-surface pb-8">
+      <PromoAppliedBanner merchantId={merchant.id} />
       {/* Cover */}
       <div className="relative h-[210px] overflow-hidden bg-tint-map">
         {heroImages.length > 0 ? (
@@ -200,6 +203,8 @@ export default function MerchantDetailPage() {
           </button>
         )}
       </section>
+
+      <ShopOffers merchantId={merchant.id} />
 
       {/* This shop's products */}
       <div ref={productsRef} className="sticky top-0 z-10 mt-5 bg-surface/95 pb-2 pt-3 backdrop-blur">

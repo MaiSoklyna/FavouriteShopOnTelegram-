@@ -8,6 +8,7 @@ import { HeroImagesEditor } from "@/components/admin/HeroImagesEditor";
 
 const MapPicker = dynamic(() => import("@/components/map/MapPicker"), { ssr: false });
 import type { Merchant } from "@/types";
+import { BrandLoader } from "@/components/ui/Spinner";
 
 const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
@@ -456,7 +457,7 @@ export default function MerchantsPage() {
       <input className="admin-input" style={{ maxWidth: 300, marginBottom: 16 }} placeholder="Search merchants..." value={search} onChange={e => setSearch(e.target.value)} />
 
       <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
-        {loading ? <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Loading...</div> : (
+        {loading ? <BrandLoader /> : (
           <table className="admin-table">
             <thead><tr><th>Logo</th><th>Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Products</th><th>Orders</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>

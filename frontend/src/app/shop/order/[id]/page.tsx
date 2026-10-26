@@ -13,6 +13,7 @@ import { EmptyState, OrderStatusHero, OrderTimeline, Pill, Skeleton } from "@/co
 import { awaitingPayment, isPickup, statusLabel } from "@/lib/orderStatus";
 import { formatKm, staticMapUrl, type LatLng } from "@/lib/mapbox";
 import { formatKhr } from "@/lib/currency";
+import { SuccessIcon } from "@/components/brand/Icons";
 
 interface ShopInfo {
   id: number;
@@ -167,7 +168,7 @@ function OrderDetailContent() {
       <div className="flex flex-col gap-3 px-gutter pt-2">
         {showSuccess && !unpaid && (
           <div className="shop-fade-up flex items-center gap-3 rounded-card bg-tint-jade p-3.5" role="status">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-jade-500 text-white"><Icon name="check" size={20} strokeWidth={3} /></span>
+            <span className="brand-glow grid shrink-0 place-items-center rounded-full text-gold-700"><SuccessIcon size={44} /></span>
             <div className="min-w-0">
               <div className="text-[14px] font-extrabold text-tone-jade">Order placed!</div>
               <div className="text-caption text-ink-500">We&apos;ll message you in Telegram as it moves</div>

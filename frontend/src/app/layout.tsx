@@ -3,6 +3,7 @@ import { Manrope, Kantumruy_Pro } from "next/font/google";
 import "./globals.css";
 import "./tokens.css";
 import { AuthProvider } from "@/providers/AuthProvider";
+import { BrandSplash } from "@/components/brand/Splash";
 
 // Design-handoff fonts, exposed as CSS variables for tailwind.tokens.ts (font-sans / font-khmer)
 const manrope = Manrope({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-manrope", display: "swap" });
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
+        <BrandSplash />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

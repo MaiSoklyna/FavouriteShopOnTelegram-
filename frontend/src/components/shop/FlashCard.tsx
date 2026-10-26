@@ -21,7 +21,7 @@ export function Countdown({ endsAt }: { endsAt?: Date | null }) {
     <div className="flex items-center gap-1" aria-label={endsAt ? "Time left" : "Deal timer not set"}>
       {parts.map((p, i) => (
         <span key={i} className="flex items-center gap-1">
-          <span className="grid h-[22px] min-w-[24px] place-items-center rounded-[6px] bg-navy-900 px-1 text-[11px] font-bold tabular-nums text-white">{p}</span>
+          <span className="grid h-[22px] min-w-[24px] place-items-center rounded-[6px] bg-gold-400 px-1 text-[11px] font-bold tabular-nums text-navy-900">{p}</span>
           {i < 2 && <span className="text-[11px] font-bold text-ink-900">:</span>}
         </span>
       ))}

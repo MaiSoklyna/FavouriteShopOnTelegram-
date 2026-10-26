@@ -6,20 +6,21 @@ import { useAuth } from "@/providers/AuthProvider";
 import type { AdminUser } from "@/types";
 import {
   HiOutlineHome, HiOutlineShoppingBag, HiOutlineClipboardList,
-  HiOutlineTag, HiOutlineUsers, HiOutlineChartBar,
+  HiOutlineTag, HiOutlineUsers, HiOutlineChartBar, HiOutlineViewGrid,
   HiOutlineCog, HiOutlineTicket, HiOutlineStar,
   HiOutlineBell, HiOutlineGift, HiOutlineOfficeBuilding,
   HiOutlineLogout, HiOutlineMenu, HiOutlineX,
-  HiOutlinePhotograph, HiOutlineChatAlt2, HiOutlineUserAdd,
+  HiOutlineChatAlt2, HiOutlineUserAdd,
   HiOutlineCash, HiOutlineCurrencyDollar,
 } from "react-icons/hi";
+import { FullPageSpinner } from "@/components/ui/Spinner";
 
 const MENU = [
   { href: "/dashboard", label: "Dashboard", icon: HiOutlineHome },
   { href: "/products", label: "Products", icon: HiOutlineShoppingBag },
   { href: "/orders", label: "Orders", icon: HiOutlineClipboardList },
   { href: "/categories", label: "Categories", icon: HiOutlineTag },
-  { href: "/banners", label: "Banners", icon: HiOutlinePhotograph, superOnly: true },
+  { href: "/featured-categories", label: "Home Categories", icon: HiOutlineViewGrid, superOnly: true },
   { href: "/promotions", label: "Promotions", icon: HiOutlineGift },
   { href: "/analytics", label: "Analytics", icon: HiOutlineChartBar },
   { href: "/earnings", label: "Earnings", icon: HiOutlineCurrencyDollar, merchantOnly: true },
@@ -49,9 +50,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (loading || !user || !isAdmin) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#EAEFF3" }}>
-        <div className="spinner" />
-      </div>
+      <FullPageSpinner />
     );
   }
 

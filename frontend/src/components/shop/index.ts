@@ -22,3 +22,4 @@ export { ShopCover } from "./ShopCover";
 export { TabBar } from "./TabBar";
 export { HomeTopBar, SearchBar } from "./HomeTopBar";
 export { LocationSheet } from "./LocationSheet";
+export { PromotionCard, PromotionCardSkeleton } from "./PromotionCard";

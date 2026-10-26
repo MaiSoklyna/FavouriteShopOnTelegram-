@@ -449,3 +449,52 @@ input:focus, select:focus, textarea:focus {
 
 /* Gold accent: solid fills get the bronze → gold → mustard gradient (colour stays as fallback) */
 .bg-mango-500 { background-image: var(--fos-grad-promo); }
+
+/* ═══════ Home on navy (Byme24 re-skin) ═══════
+   The page ground is #081D3C. Text that sits directly on it turns light and links turn gold;
+   anything inside a card (.bg-card) keeps its own colours, so product, shop and promo cards are unchanged. */
+.fos-on-navy { background: #081D3C; }
+.fos-on-navy .text-ink-900 { color: #FFFFFF; }
+.fos-on-navy .text-ink-500 { color: rgba(255, 255, 255, .62); }
+.fos-on-navy .text-navy-700, .fos-on-navy .text-navy-500 { color: #D6BA80; }
+.fos-on-navy .bg-card .text-ink-900, .fos-on-navy .bg-card.text-ink-900 { color: rgb(var(--fos-c-ink-900)); }
+.fos-on-navy .bg-card .text-ink-500, .fos-on-navy .bg-card.text-ink-500 { color: rgb(var(--fos-c-ink-500)); }
+.fos-on-navy .bg-card .text-navy-700, .fos-on-navy .bg-card.text-navy-700 { color: rgb(var(--fos-c-navy-700)); }
+.fos-on-navy .bg-card .text-navy-500, .fos-on-navy .bg-card.text-navy-500 { color: rgb(var(--fos-c-navy-500)); }
+
+/* ═══════ BYME24 LOADING (brand page: "Splash and loading screens") ═══════ */
+:root { --brand-navy: #081D3C; --brand-gold: #D6BA80; --brand-gold-dark: #71541A; }
+
+/* The knot turns in three 120° steps every 2.4s around the ring's centre (50, 58) */
+.brand-spinner__knot { transform-box: view-box; transform-origin: 50% 58%; }
+.brand-spinner--rotate .brand-spinner__knot,
+.brand-spinner--glow .brand-spinner__knot { animation: brand-rotate 2.4s cubic-bezier(.65,0,.35,1) infinite; }
+.brand-spinner--pulse .brand-spinner__knot { animation: brand-pulse 1.8s ease-in-out infinite; }
+.brand-spinner--glow { animation: brand-glow 2.2s ease-in-out infinite; }
+@keyframes brand-rotate { 0% { transform: rotate(0deg); } 33.333% { transform: rotate(120deg); } 66.666% { transform: rotate(240deg); } 100% { transform: rotate(360deg); } }
+@keyframes brand-pulse { 0%, 100% { transform: scale(.92); opacity: .7; } 50% { transform: scale(1.04); opacity: 1; } }
+@keyframes brand-glow { 0%, 100% { filter: drop-shadow(0 0 0 rgba(214,186,128,0)); } 50% { filter: drop-shadow(0 0 14px rgba(214,186,128,.85)); } }
+
+/* Thin progress sweep under the knot; the light version sits on white panels */
+.brand-sweep { width: 132px; height: 2px; border-radius: 2px; background: #1E3A63; overflow: hidden; }
+.brand-sweep--light { width: 96px; background: rgba(113,84,26,.16); }
+.brand-sweep span { display: block; width: 40%; height: 100%; background: var(--brand-gold); animation: brand-sweep 1.6s ease-in-out infinite; }
+@keyframes brand-sweep { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+
+/* Launch: splash (symbol + wordmark) → loading screen → fade */
+.brand-splash { position: fixed; inset: 0; z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
+  background: radial-gradient(100% 70% at 50% 40%, #13336A, #081D3C); transition: opacity .4s ease; }
+.brand-splash--out { opacity: 0; pointer-events: none; }
+.brand-splash__word { font-weight: 800; font-size: 26px; color: #FFFFFF; letter-spacing: .01em; }
+.brand-splash__word span { color: var(--brand-gold); }
+.brand-splash__tag { position: absolute; bottom: calc(8% + env(safe-area-inset-bottom, 0px)); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--brand-gold); opacity: .7; }
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-spinner__knot, .brand-spinner--glow, .brand-sweep span { animation: none !important; }
+  .brand-splash { transition: none; }
+}
+/* Placeholders on the navy Home: dim navy shimmer instead of bright white blocks */
+.fos-on-navy .fos-shimmer { background: linear-gradient(90deg, #12294D 0%, #1C3A66 50%, #12294D 100%); background-size: 200% 100%; }
+/* Success moments (order placed, paid): gold halo 0 → 14px, 2.2s */
+.brand-glow { animation: brand-glow 2.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .brand-glow { animation: none !important; } }

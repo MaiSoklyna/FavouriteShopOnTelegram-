@@ -442,7 +442,7 @@ function CheckoutContent() {
     return (
       <div className="min-h-screen bg-surface px-gutter pt-6">
         <TopBar onBack={() => router.back()} />
-        <EmptyState className="mt-10" title="Your cart is empty" action={{ label: "Start shopping", href: "/shop" }} />
+        <EmptyState className="mt-10" title="Your cart is empty" body="Pick something from a nearby shop and it will wait here." action={{ label: "Browse shops", href: "/shop" }} />
       </div>
     );
   }
@@ -656,9 +656,9 @@ function CheckoutContent() {
           />
           {discount > 0 && (
             <div className="flex items-center justify-between py-1 font-bold text-tone-jade">
-              <span className="flex items-center gap-2">
-                {quote?.promo?.code}
-                <button type="button" onClick={removePromo} className="text-[12px] font-bold text-ruby-500">Remove</button>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate">{single?.promo_title ?? quote?.promo?.code ?? single?.promo_code}{single?.promo_auto ? " · applied automatically" : ""}</span>
+                {!single?.promo_auto && <button type="button" onClick={removePromo} className="shrink-0 text-[12px] font-bold text-ruby-500">Remove</button>}
               </span>
               <span>−{money(discount)}</span>
             </div>

@@ -4,17 +4,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { fetchNearbyShops } from "@/lib/addresses";
-import { FREE_DELIVERY_OVER_USD } from "@/lib/currency";
 import { useHomeLocation } from "@/lib/useHomeLocation";
 import { SHOP_FILTERS, applyShopFilter, useShopExtras, type ShopFilter } from "@/lib/shopTheme";
+import { codeCard, promotionCard, type Promotion, type PromotionRow } from "@/lib/promotions";
 import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
 import {
-  CategoryPhotoIcon, Countdown, EmptyState, FlashCard, HeroCarousel, HomeTopBar, LocationSheet,
-  ProductCard, SearchBar, SectionHeader, ShopCard, ShopCardSkeleton, Skeleton,
-  type HeroSlide, type ShopCardData,
+  CategoryPhotoIcon, Countdown, EmptyState, FlashCard, HomeTopBar, LocationSheet,
+  ProductCard, PromotionCard, PromotionCardSkeleton, SearchBar, SectionHeader, ShopCard, ShopCardSkeleton, Skeleton,
+  type ShopCardData,
 } from "@/components/shop";
-import type { Product, Category, CategoryBanner, Merchant, PromoCode, Notification } from "@/types";
+import type { Product, Category, Merchant, PromoCode, Notification } from "@/types";
 import { Icon } from "@/components/shop/Icon";
 
 const PAGE_SIZE = 20;
@@ -26,10 +26,14 @@ export default function ShopHomePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [promos, setPromos] = useState<PromoCode[]>([]);
-  const [banners, setBanners] = useState<CategoryBanner[]>([]);
+  /** Live promotions (banner + offer); empty until migration 018 is applied */
+  const [promoRows, setPromoRows] = useState<PromotionRow[]>([]);
+  /** Home's category icons, chosen and scheduled in admin (4–8); null until loaded or if that fails */
+  const [homeCategories, setHomeCategories] = useState<Category[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [copiedPromo, setCopiedPromo] = useState("");
+  /** Shop deal banners: each promo shop's own hero photo */
+  const [promoImages, setPromoImages] = useState<Record<number, string>>({});
   const [unreadCount, setUnreadCount] = useState(0);
 
   // For-you infinite scroll
@@ -61,6 +65,16 @@ export default function ShopHomePage() {
     const id = setInterval(loadUnread, 30000);
     return () => { cancelled = true; clearInterval(id); };
   }, [user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Array.from(new Set(promos.map((p) => p.merchant_id))).forEach((id) => {
+      api.get<{ url: string }[]>(`/merchants/${id}/hero-images`)
+        .then((imgs) => { if (!cancelled && imgs[0]?.url) setPromoImages((cur) => ({ ...cur, [id]: imgs[0].url })); })
+        .catch(() => {});
+    });
+    return () => { cancelled = true; };
+  }, [promos]);
 
   // Shops sorted by distance from the customer's location
   useEffect(() => {
@@ -105,9 +119,11 @@ export default function ShopHomePage() {
         setPromos(promoData);
       } catch { /* promos endpoint may not exist yet */ }
       try {
-        const bannerData = await api.get<CategoryBanner[]>("/category-banners", { params: { placement: "home" } });
-        setBanners(bannerData);
-      } catch { /* banners table may not exist yet */ }
+        setPromoRows(await api.get<PromotionRow[]>("/promotions"));
+      } catch { /* promotions table not created yet (migration 018) */ }
+      try {
+        setHomeCategories(await api.get<Category[]>("/featured-categories/home"));
+      } catch { /* Home falls back to the categories with the most products */ }
     } catch (err) {
       console.error("Load error:", err);
       setLoadError(true);
@@ -142,16 +158,6 @@ export default function ShopHomePage() {
     return () => io.disconnect();
   }, [loadMore, loading, products.length]);
 
-  function copyPromo(code: string) {
-    navigator.clipboard.writeText(code).then(() => {
-      setCopiedPromo(code);
-      setTimeout(() => setCopiedPromo(""), 2000);
-    });
-  }
-
-  function scrollTo(id: string) {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
 
   // ── Error ──
   const explicitlyFeatured = merchants.filter(m => m.is_featured);
@@ -177,19 +183,18 @@ export default function ShopHomePage() {
   // ── Loading: skeletons matching each block's size ──
   if (loading) {
     return (
-      <div className="min-h-screen bg-surface">
+      <div className="fos-on-navy min-h-screen">
         <div className="flex h-14 items-center justify-between px-4"><Skeleton className="h-8 w-40 rounded-md" /><Skeleton className="h-10 w-10 rounded-[14px]" /></div>
         <div className="px-4">
           <Skeleton className="h-12 w-full rounded-thumb" />
-          <Skeleton className="mt-3.5 h-[176px] w-full rounded-hero" />
           <div className="mt-[18px] grid grid-cols-4 gap-x-2 gap-y-3.5">
             {Array.from({ length: 8 }, (_, i) => (
               <div key={i} className="flex flex-col items-center gap-1.5"><Skeleton className="h-16 w-16 rounded-cat" /><Skeleton className="h-2.5 w-10 rounded" /></div>
             ))}
           </div>
-          <Skeleton className="mt-[22px] h-[30px] w-40 rounded-md" />
-          <div className="mt-3 flex gap-2.5 overflow-hidden">
-            {Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-[196px] w-[128px] shrink-0 rounded-thumb" />)}
+          <Skeleton className="mt-6 h-[26px] w-36 rounded-md" />
+          <div className="mt-3 flex gap-3 overflow-hidden">
+            {Array.from({ length: 2 }, (_, i) => <PromotionCardSkeleton key={i} />)}
           </div>
           <div className="mt-6 flex gap-2.5 overflow-hidden"><ShopCardSkeleton /></div>
           <div className="mt-6 grid grid-cols-2 gap-3">
@@ -200,37 +205,41 @@ export default function ShopHomePage() {
     );
   }
 
-  const topCategories = [...categories]
+  // Featured categories from admin (live schedule, priority order); the most-stocked ones if that call failed
+  const topCategories = homeCategories ?? [...categories]
     .sort((a, b) => (b.product_count ?? 0) - (a.product_count ?? 0) || (a.sort_order ?? 0) - (b.sort_order ?? 0))
     .slice(0, 8);
 
   const flashDeals = products.filter(p => p.compare_price && p.compare_price > p.base_price);
 
-  // Hero: admin banners first; the old generated slides are the fallback when none are uploaded
-  const withImage = banners.filter(b => b.image_url);
-  const heroSlides: HeroSlide[] = withImage.length > 0
-    ? withImage.map(b => ({ key: b.id, label: b.subtitle, title: b.title, image: b.image_url, cta: "Shop now", href: `/shop/category/${b.category_id}` }))
-    : [
-        { key: "new", label: "New arrivals", title: `${products.length}+ products`, cta: "Shop now", onClick: () => scrollTo("for-you") },
-        { key: "shops", label: "Featured shops", title: `${featuredShops.length} ${featuredShops.length === 1 ? "shop" : "shops"}`, cta: "Browse", onClick: () => scrollTo("shops-section") },
-        promos.length > 0
-          ? { key: "promo", label: "Hot deals", title: `${promos.length} promo${promos.length === 1 ? "" : "s"}`, cta: "See promos", onClick: () => scrollTo("promo-strip") }
-          : { key: "deals", label: "Hot deals", title: "New every week", cta: "Browse", onClick: () => scrollTo("for-you") },
-      ];
 
   const enriched = baseCards.map(c => ({ ...c, theme: extras[c.id]?.theme, rating: extras[c.id]?.rating ?? null }));
   const shopCards = nearby ? applyShopFilter(enriched, shopFilter) : enriched;
-  const promo = promos[0];
+  // One Promotions section: every live promotion shown on Home (banner or generated card),
+  // then any plain shop code not yet turned into a promotion (before migration 021), ending soonest first.
+  const shopOf = (id: number) => merchants.find(m => m.id === id);
+  const onHome = promoRows.filter(r => (r.display_locations ?? []).some(l => l === "home_promotions" || l === "home_featured"));
+  // A code that belongs to a promotion is shown once, as that promotion
+  const promotedCodes = new Set(promoRows.flatMap(r => (r.offer ? [`${r.merchant_id}:${r.offer.code}`] : [])));
+  const promotions: Promotion[] = [
+    ...onHome.map(promotionCard),
+    ...[...promos]
+      .filter(p => !promotedCodes.has(`${p.merchant_id}:${p.code}`))
+      .sort((a, b) => (a.expires_at ? Date.parse(a.expires_at) : Infinity) - (b.expires_at ? Date.parse(b.expires_at) : Infinity))
+      .map(p => {
+        const m = shopOf(p.merchant_id);
+        return codeCard(p, m ? { name: m.name, image: promoImages[p.merchant_id], logo: m.logo_url, emoji: m.icon_emoji, color: m.accent_color } : undefined);
+      })
+      .filter((p): p is Promotion => p !== null),
+  ];
 
   return (
-    <div className="min-h-screen bg-surface font-sans">
+    <div className="fos-on-navy min-h-screen font-sans">
       <HomeTopBar area={location?.area ?? null} unread={unreadCount} onLocationClick={() => setSheetOpen(true)}
         name={user && "first_name" in user ? (user as { first_name?: string }).first_name : null} />
       <SearchBar />
 
       <div className="px-4">
-        {/* 3 · Hero */}
-        <div className="mt-3.5"><HeroCarousel slides={heroSlides} /></div>
 
         {/* 4 · Categories */}
         {topCategories.length > 0 && (
@@ -238,6 +247,19 @@ export default function ShopHomePage() {
             {topCategories.map(c => (
               <CategoryPhotoIcon key={c.id} href={`/shop/category/${c.id}`} label={c.name} imageUrl={c.image_url} emoji={c.icon_emoji} />
             ))}
+          </section>
+        )}
+
+        {/* Promotions: the one place for offers and banners, below Categories */}
+        {promotions.length > 0 && (
+          <section id="promotions" className="mt-6 scroll-mt-4">
+            <div className="flex items-baseline gap-2">
+              <h2 className="text-[20px] font-extrabold leading-[26px] tracking-[-0.01em] text-ink-900">Promotions</h2>
+              <span className="text-caption text-ink-500">{promotions.length}</span>
+            </div>
+            <div className="fos-no-scrollbar -mx-4 mt-3 flex snap-x items-start gap-3 overflow-x-auto scroll-px-4 px-4 pb-2">
+              {promotions.map(p => <PromotionCard key={p.id} promo={p} />)}
+            </div>
           </section>
         )}
 
@@ -264,7 +286,7 @@ export default function ShopHomePage() {
               <div className="fos-no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4" role="radiogroup" aria-label="Filter shops">
                 {SHOP_FILTERS.map(f => (
                   <button key={f} type="button" role="radio" aria-checked={shopFilter === f} onClick={() => setShopFilter(f)}
-                    className={`fos-press h-9 shrink-0 rounded-full px-3.5 text-[13px] font-extrabold ${shopFilter === f ? "bg-navy-700 text-white" : "border-[1.5px] border-line bg-card text-ink-900"}`}>
+                    className={`fos-press h-9 shrink-0 rounded-full px-3.5 text-[13px] font-extrabold ${shopFilter === f ? "bg-gold-400 text-navy-900" : "border-[1.5px] border-line bg-card text-ink-900"}`}>
                     {f}
                   </button>
                 ))}
@@ -290,38 +312,12 @@ export default function ShopHomePage() {
         {/* 5–6 · Flash deals */}
         {flashDeals.length > 0 && (
           <section className="mt-[22px]">
-            <SectionHeader title={<span className="flex items-center gap-1"><Icon name="bolt" size={18} filled className="text-mango-500" />Flash</span>} extra={<Countdown />} href="/shop/search" />
+            <SectionHeader title={<span className="flex items-center gap-1"><Icon name="bolt" size={18} filled className="text-gold-400" />Flash</span>} extra={<Countdown />} href="/shop/search" />
             <div className="fos-no-scrollbar -mx-4 mt-3 flex gap-2.5 overflow-x-auto px-4 pb-1">
               {flashDeals.slice(0, 8).map(p => <FlashCard key={p.id} product={p} />)}
             </div>
           </section>
         )}
-
-        {/* 8 · Promo strip */}
-        <section id="promo-strip" className="mt-6 scroll-mt-4">
-          {promo ? (
-            <button
-              type="button"
-              onClick={() => copyPromo(promo.code)}
-              className="fos-press flex h-24 w-full items-center gap-3.5 rounded-hero bg-grad-promo px-5 text-left text-white shadow-fos-md"
-            >
-              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-thumb bg-white/25"><Icon name="ticket" size={24} /></span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[20px] font-extrabold leading-6">
-                  {promo.type === "percent" ? `${promo.value}% off` : `$${promo.value} off`}
-                </span>
-                <span className="block truncate text-[13px] font-bold opacity-90">
-                  {copiedPromo === promo.code ? "Copied!" : promo.code}
-                </span>
-              </span>
-            </button>
-          ) : (
-            <div className="flex h-24 items-center gap-3.5 rounded-hero bg-grad-promo px-5 text-white shadow-fos-md">
-              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-thumb bg-white/25"><Icon name="truck" size={24} /></span>
-              <span className="text-[20px] font-extrabold leading-6">Free delivery over ${FREE_DELIVERY_OVER_USD}</span>
-            </div>
-          )}
-        </section>
 
         {/* 9 · For you */}
         <section id="for-you" className="mt-6 scroll-mt-4">

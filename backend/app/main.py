@@ -24,6 +24,7 @@ from app.routes import (
     auth,
     banners,
     cart,
+    featured_categories,
     loyalty,
     merchants,
     notifications,
@@ -31,6 +32,7 @@ from app.routes import (
     payments,
     products,
     promos,
+    promotions,
     reviews,
     sellers,
     settlements,
@@ -99,6 +101,8 @@ app.include_router(merchants.router, prefix="/api")
 # Products & categories (browse + admin CRUD + image upload)
 app.include_router(products.router, prefix="/api")
 app.include_router(banners.router, prefix="/api")
+app.include_router(promotions.router, prefix="/api")
+app.include_router(featured_categories.router, prefix="/api")
 
 # Cart
 app.include_router(cart.router, prefix="/api")

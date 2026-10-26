@@ -51,7 +51,8 @@ export default function CartPage() {
       return { quote: q.orders[0] ?? null, error: "", promo: q.promo };
     } catch (e) {
       // Out of this shop's delivery area: still price the items, flag delivery.
-      const error = where && e instanceof Error ? e.message.replace(/^Delivery unavailable for this location\.\s*/, "") : "";
+      // Only the server's own answer ("delivers within 5 km") is shown; a network or code failure is not
+      const error = where && e instanceof Error && e.name === "ApiError" ? e.message.replace(/^Delivery unavailable for this location\.\s*/, "") : "";
       try {
         const q = await fetchQuote(code, undefined, merchantId);
         return { quote: q.orders[0] ?? null, error, promo: q.promo };
@@ -132,7 +133,7 @@ export default function CartPage() {
     return (
       <div className="min-h-screen bg-surface px-gutter pt-6">
         <h1 className="text-display text-ink-900">Cart</h1>
-        <EmptyState className="mt-10" title="Your cart is empty" action={{ label: "Start shopping", href: "/shop" }} />
+        <EmptyState className="mt-10" title="Your cart is empty" body="Pick something from a nearby shop and it will wait here." action={{ label: "Browse shops", href: "/shop" }} />
       </div>
     );
   }
@@ -299,7 +300,7 @@ function ShopGroup({ shop, fallbackName, price, located, lines, onQty, onRemove,
       <div className="mt-1 border-t border-line pt-2.5 text-[13px] tabular-nums">
         <div className="flex justify-between py-0.5"><span className="text-ink-500">Subtotal</span><span className="font-bold text-ink-900">{money(subtotal)}</span></div>
         {discount > 0 && (
-          <div className="flex justify-between py-0.5 font-bold text-tone-jade"><span>Promo</span><span>−{money(discount)}</span></div>
+          <div className="flex justify-between py-0.5 font-bold text-tone-jade"><span className="min-w-0 truncate pr-2">{quote?.promo_title ?? quote?.promo_code ?? "Promo"}{quote?.promo_auto ? " · applied automatically" : ""}</span><span>−{money(discount)}</span></div>
         )}
         <div className="flex justify-between py-0.5">
           <span className="text-ink-500">Delivery</span>

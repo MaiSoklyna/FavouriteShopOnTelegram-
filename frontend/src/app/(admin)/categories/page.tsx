@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { IconPicker } from "@/components/admin";
 import type { Category } from "@/types";
+import { BrandLoader } from "@/components/ui/Spinner";
 
 export default function CategoriesPage() {
   const { isSuperAdmin } = useAuth();
@@ -95,7 +96,7 @@ export default function CategoriesPage() {
       {/* Table */}
       <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#746D6D" }}>Loading...</div>
+          <BrandLoader />
         ) : (
           <table className="admin-table">
             <thead>

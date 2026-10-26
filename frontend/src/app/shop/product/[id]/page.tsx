@@ -335,16 +335,22 @@ function GlassButton({ label, onClick, children }: { label: string; onClick: () 
   );
 }
 
+/**
+ * Option picker on a navy panel (Byme24): options are blue chips with a subtle border,
+ * the chosen one turns gold with a check. Red appears only after the shopper tries to
+ * add to cart without choosing (`missing`), as a thin border and one line of text.
+ */
 function VariantPicker({ group, selected, missing, onPick }: { group: VariantGroup; selected?: number; missing?: boolean; onPick: (optionId: number) => void }) {
   const isColor = group.type === "color";
   const chosen = group.options.find((o) => o.id === selected);
   return (
-    <div id={`variant-${group.id}`} className={`mt-4 rounded-thumb transition-colors ${missing ? "-mx-2 bg-tint-ruby p-2 ring-1 ring-ruby-500" : ""}`}>
-      <div className="mb-2 flex items-baseline gap-2">
-        <span className="text-[13px] font-extrabold text-ink-900">{group.group_name}</span>
+    <div id={`variant-${group.id}`}
+      className={`mt-4 rounded-card border bg-[#081D3C] p-3.5 transition-colors ${missing ? "border-[#F08A8D]/70" : "border-white/10"}`}>
+      <div className="mb-2.5 flex items-baseline gap-2">
+        <span className="text-[13px] font-extrabold text-white">{group.group_name}</span>
         {missing
-          ? <span className="truncate text-caption font-bold text-ruby-500">Please choose a {group.group_name.toLowerCase()}</span>
-          : <span className="truncate text-caption text-ink-500">{chosen?.label ?? "Choose one"}</span>}
+          ? <span role="alert" className="truncate text-caption font-semibold text-[#F4A3A6]">Choose a {group.group_name.toLowerCase()} to continue</span>
+          : <span className={`truncate text-caption ${chosen ? "font-bold text-gold-400" : "text-white/60"}`}>{chosen?.label ?? "Choose one"}</span>}
       </div>
       <div className={`flex flex-wrap ${isColor ? "gap-2.5" : "gap-2"}`}>
         {group.options.map((opt) => {
@@ -354,17 +360,20 @@ function VariantPicker({ group, selected, missing, onPick }: { group: VariantGro
             return (
               <button key={opt.id} type="button" disabled={oos} onClick={() => onPick(opt.id)}
                 aria-label={`${opt.label}${oos ? " (out of stock)" : ""}`} aria-pressed={on}
-                className={`fos-press relative h-9 w-9 rounded-full border border-line ${on ? "ring-2 ring-navy-700 ring-offset-2" : ""} ${oos ? "opacity-35" : ""}`}
+                className={`fos-press relative h-9 w-9 rounded-full ring-offset-2 ring-offset-[#081D3C] ${on ? "ring-2 ring-gold-400" : "ring-1 ring-white/20"} ${oos ? "opacity-35" : ""}`}
                 style={{ background: opt.hex_color || "#ccc" }}>
-                {oos && <span className="absolute left-1/2 top-1/2 h-px w-8 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-ink-500" />}
+                {oos && <span className="absolute left-1/2 top-1/2 h-px w-8 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-white/70" />}
               </button>
             );
           }
           return (
             <button key={opt.id} type="button" disabled={oos} onClick={() => onPick(opt.id)} aria-pressed={on}
-              className={`fos-press h-[38px] min-w-[46px] rounded-md border-[1.5px] px-3 text-[13px] ${on ? "border-navy-700 bg-navy-700 font-extrabold text-white" : "border-line bg-card font-semibold text-ink-900"} ${oos ? "text-ink-500 line-through opacity-50" : ""}`}>
+              className={`fos-press inline-flex h-[38px] min-w-[46px] items-center justify-center gap-1 rounded-md border px-3 text-[13px] transition-colors ${on
+                ? "border-gold-400 bg-gold-400 font-extrabold text-[#081D3C]"
+                : "border-white/10 bg-[#103562] font-semibold text-white"} ${oos ? "line-through opacity-40" : ""}`}>
+              {on && <Icon name="check" size={13} strokeWidth={2.8} />}
               {opt.label}
-              {opt.price_adjust > 0 && <span className="ml-1 text-[10px] opacity-75">+${opt.price_adjust}</span>}
+              {opt.price_adjust > 0 && <span className={`text-[10px] ${on ? "text-[#71541A]" : "text-white/60"}`}>+${opt.price_adjust}</span>}
             </button>
           );
         })}

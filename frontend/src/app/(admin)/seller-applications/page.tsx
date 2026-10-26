@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import type { SellerApplication } from "@/types";
+import { BrandLoader } from "@/components/ui/Spinner";
 
 const TABS = ["pending", "approved", "rejected", "all"] as const;
 type Tab = (typeof TABS)[number];
@@ -96,7 +97,7 @@ export default function SellerApplicationsPage() {
       </div>
 
       {loading ? (
-        <div style={{ padding: 40, textAlign: "center", color: "var(--text-secondary)" }}>Loading…</div>
+        <BrandLoader />
       ) : apps.length === 0 ? (
         <div style={{ padding: 60, textAlign: "center", color: "var(--text-secondary)" }}>
           <div style={{ fontSize: 40, marginBottom: 8 }}>🗂️</div>

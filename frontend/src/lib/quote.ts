@@ -16,6 +16,12 @@ export interface ShopQuote {
   distance_km: string | null;
   total: string;
   promo_applied: boolean;
+  /** The code that applied (typed, or picked automatically) */
+  promo_code?: string | null;
+  /** The promotion behind it, e.g. "Weekend Sale" */
+  promo_title?: string | null;
+  /** True when no code was typed and the best live promotion applied by itself */
+  promo_auto?: boolean;
   /** Null for pickup or when no pin was sent. */
   eta_minutes: number | null;
   eta_max_minutes: number | null;

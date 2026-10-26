@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 import { isInTelegram } from "@/lib/telegram";
 import { Icon } from "./Icon";
+import { BrandLoader } from "@/components/ui/Spinner";
 
 const BOT_USERNAME = process.env.NEXT_PUBLIC_BOT_USERNAME || "FavouriteOfShop_bot";
 
@@ -20,8 +21,7 @@ export function LoginGate({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
-        <div style={{ width: 32, height: 32, border: "3px solid var(--shop-divider, #ECEEF3)", borderTopColor: "var(--shop-primary, #1E6BFF)", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        <BrandLoader />
       </div>
     );
   }

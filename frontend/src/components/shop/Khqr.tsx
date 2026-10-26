@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { Skeleton } from "./Skeleton";
 import { Icon } from "./Icon";
 import { formatKhr } from "@/lib/currency";
+import { SuccessIcon } from "@/components/brand/Icons";
 
 export interface KhqrData {
   qr_image?: string;
@@ -139,10 +140,8 @@ export function PaidSuccess({ amount, eta, note, cta = "View order", onDone, aut
             }} />
         ))}
       </div>
-      <span className="fos-pop grid h-24 w-24 place-items-center rounded-full bg-jade-500 shadow-[0_14px_32px_rgba(18,183,106,.4)]">
-        <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d="M5 12l5 5 9-10" className="fos-draw" />
-        </svg>
+      <span className="fos-pop brand-glow grid place-items-center rounded-full text-gold-700">
+        <SuccessIcon size={110} />
       </span>
       <h1 className="mt-5 text-display text-ink-900">Paid</h1>
       {amount != null && <p className="mt-1 text-[15px] font-bold tabular-nums text-ink-500">${amount.toFixed(2)} · {formatKhr(amount)}</p>}

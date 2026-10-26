@@ -21,26 +21,42 @@ export default function RewardsPage() {
   const [settings, setSettings] = useState<LoyaltySettings | null>(null);
   const [history, setHistory] = useState<PointsTransaction[]>([]);
   const [loading, setLoading] = useState(true);
+  /** The account couldn't be loaded (network, server restart) — not the same as rewards being off */
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [tab, setTab] = useState("overview");
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
-    Promise.all([
+    setLoading(true);
+    setFailed(false);
+    // Each part loads on its own: a failed history or settings call must not hide the balance
+    Promise.allSettled([
       api.get<LoyaltyAccount>("/loyalty/account"),
       api.get<PointsTransaction[]>("/loyalty/history", { params: { limit: 20 } }),
-      api.get<LoyaltySettings>("/loyalty/settings").catch(() => null),
+      api.get<LoyaltySettings>("/loyalty/settings"),
     ]).then(([acct, hist, cfg]) => {
-      setAccount(acct);
-      setHistory(hist || []);
-      setSettings(cfg || null);
-    })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [user]);
+      if (acct.status === "fulfilled") setAccount(acct.value);
+      else setFailed(true);
+      if (hist.status === "fulfilled") setHistory(hist.value || []);
+      if (cfg.status === "fulfilled") setSettings(cfg.value || null);
+    }).finally(() => setLoading(false));
+  }, [user, attempt]);
 
   if (!user) return <LoginGate><div /></LoginGate>;
   if (loading) return <Page><Skeleton /></Page>;
-  if (!account?.enabled) return <Page><Empty icon="gift" msg="Rewards program coming soon!" /></Page>;
+  if (failed || !account) {
+    return (
+      <Page>
+        <Empty icon="gift" msg="Couldn't load your rewards. Check your connection and try again." />
+        <div style={{ textAlign: "center" }}>
+          <button type="button" onClick={() => setAttempt((n) => n + 1)}
+            className="fos-press inline-flex h-11 items-center rounded-thumb bg-grad-cta px-6 text-[14px] font-bold text-white shadow-fos-cta">Try again</button>
+        </div>
+      </Page>
+    );
+  }
+  if (!account.enabled) return <Page><Empty icon="gift" msg="Rewards program coming soon!" /></Page>;
 
   const tier = TIERS[account.tier] || TIERS.bronze;
 
