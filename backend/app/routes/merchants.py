@@ -6,6 +6,7 @@ Admin: CRUD operations (super_admin for all, merchant_admin for own).
 
 from __future__ import annotations
 
+import math
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -17,8 +18,42 @@ from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, 
 from app.core.security import TokenClaims
 from app.db.client import StorageClient, SupabaseClient
 from app.models.merchant import MerchantCreate, MerchantUpdate
+from app.services.delivery import SHOP_TZ, is_open, quote_delivery, valid_point
 
 router = APIRouter(prefix="/merchants", tags=["Merchants"])
+
+# Per-shop delivery settings (migration 017); null means "use the platform default"
+DELIVERY_SETTING_FIELDS = ("opening_hours", "delivery_base_fee", "delivery_per_km_fee", "min_order_amount")
+
+# Fields the public "nearby" list may expose — merchants rows also hold owner contact details
+NEARBY_PUBLIC_FIELDS = (
+    "id", "name", "slug", "tagline", "icon_emoji", "accent_color", "logo_url",
+    "is_featured", "address", "latitude", "longitude", "delivery_radius_km",
+    "min_order_amount", "rating",
+)
+# Fields any visitor may see on a shop. The rest of the row (owner_name, email,
+# telegram_token, telegram_group_id, plan, logo_update_history) is admin-only.
+# phone stays public: the shop page shows it as the shop's contact number.
+PUBLIC_FIELDS = (
+    "id", "name", "slug", "tagline", "description", "icon_emoji", "accent_color", "logo_url",
+    "is_featured", "status", "phone", "fb_page", "instagram", "deep_link_code", "created_at",
+    "address", "latitude", "longitude", "delivery_radius_km", "rating",
+    *DELIVERY_SETTING_FIELDS,
+)
+# ~1° of latitude in km; used to turn the search radius into a bounding box
+KM_PER_DEGREE = 111.0
+
+
+def public_view(merchant: dict) -> dict:
+    return {k: merchant[k] for k in PUBLIC_FIELDS if k in merchant}
+
+
+def sees_private_fields(user: TokenClaims | None, merchant_id: int) -> bool:
+    """Super admin sees every shop's full row; a merchant admin only their own."""
+    if not user:
+        return False
+    return user.is_super_admin or (user.role == Role.MERCHANT_ADMIN and user.merchant_id == merchant_id)
+
 
 # Logo update policy for merchant_admin role: max N updates per rolling window
 LOGO_UPDATE_MAX_PER_WINDOW = 2
@@ -60,16 +95,78 @@ async def list_merchants(
             orders = await db.from_("orders").eq("merchant_id", m["id"]).select("id")
             m["order_count"] = len(orders)
 
-    return merchants
+    return [
+        m if sees_private_fields(user, m["id"])
+        else {**public_view(m), "product_count": m["product_count"], "order_count": m["order_count"]}
+        for m in merchants
+    ]
+
+
+@router.get("/nearby")
+async def nearby_merchants(
+    lat: float,
+    lng: float,
+    radius_km: float = 10,
+    limit: int = 20,
+    offset: int = 0,
+):
+    """Active shops with a map location near (lat, lng), best first.
+
+    Everything the card shows is computed here — never by the client:
+    `distance_m`/`distance_km`, `delivery_fee`, `eta_minutes`..`eta_max_minutes`,
+    `is_open` and `can_deliver`. Order: open shops nearest-first, then closed
+    shops (also nearest-first). A shop past its own delivery radius is still
+    listed (`can_deliver: false`) so the customer can pick up instead.
+    """
+    if not valid_point(lat, lng):
+        raise BadRequestError("Invalid location")
+    radius_km = max(0.5, min(radius_km, 25))
+    limit, offset = max(1, min(limit, 50)), max(0, offset)
+
+    # Cheap bounding-box prefilter in the database (uses idx_merchants_location),
+    # then exact great-circle distances on the few rows that remain.
+    dlat = radius_km / KM_PER_DEGREE
+    dlng = radius_km / (KM_PER_DEGREE * max(math.cos(math.radians(lat)), 0.01))
+    async with SupabaseClient.service_role() as db:
+        rows = await (
+            db.from_("merchants").eq("status", "active")
+            .gte("latitude", lat - dlat).lte("latitude", lat + dlat)
+            .gte("longitude", lng - dlng).lte("longitude", lng + dlng)
+            .select()
+        )
+
+    now = datetime.now(SHOP_TZ)
+    shops = []
+    for m in rows:
+        q = quote_delivery(m, (lat, lng))
+        if q is None or float(q.distance_km) > radius_km:
+            continue
+        shop = {k: m.get(k) for k in NEARBY_PUBLIC_FIELDS if k in m}
+        shop.update({
+            "distance_km": float(q.distance_km),
+            "distance_m": q.distance_m,
+            "can_deliver": q.can_deliver,
+            "delivery_fee": str(q.fee) if q.fee is not None else None,
+            "delivery_unavailable_reason": q.reason,
+            "eta_minutes": q.eta_minutes,
+            "eta_max_minutes": q.eta_max_minutes,
+            "is_open": is_open(m.get("opening_hours"), now),
+        })
+        shops.append(shop)
+
+    shops.sort(key=lambda s: (not s["is_open"], s["distance_m"]))
+    return shops[offset: offset + limit]
 
 
 @router.get("/{merchant_id}")
-async def get_merchant(merchant_id: int):
-    """Get merchant details (public for active merchants)."""
+async def get_merchant(merchant_id: int, user: TokenClaims | None = Depends(get_optional_user)):
+    """Get merchant details. Public visitors see active shops and public fields only."""
     async with SupabaseClient.service_role() as db:
         merchant = await db.from_("merchants").eq("id", merchant_id).select_one()
-        if not merchant:
+        if not merchant or (not (user and user.is_admin) and merchant.get("status") != "active"):
             raise NotFoundError("Merchant", merchant_id)
+        if not sees_private_fields(user, merchant_id):
+            merchant = public_view(merchant)
         products = await db.from_("products").eq("merchant_id", merchant_id).eq("is_active", True).select("id")
         merchant["product_count"] = len(products)
         orders = await db.from_("orders").eq("merchant_id", merchant_id).select("id")
@@ -86,6 +183,10 @@ async def create_merchant(body: MerchantCreate, user: TokenClaims = require_role
             raise ConflictError(f"Merchant slug '{body.slug}' already exists")
 
         data = body.model_dump()
+        # Columns from migrations 016/017 — don't send them unless set
+        for k in ("address", "latitude", "longitude", "delivery_radius_km", *DELIVERY_SETTING_FIELDS):
+            if data.get(k) is None:
+                data.pop(k, None)
         data["status"] = "active"
         rows = await db.from_("merchants").insert(data)
     return rows[0] if rows else data
@@ -107,6 +208,10 @@ async def update_merchant(
             raise ForbiddenError("You can only update your own merchant")
 
         data = body.model_dump(exclude_none=True)
+        # Delivery settings can be cleared back to "platform default" by sending null
+        for k in DELIVERY_SETTING_FIELDS:
+            if k in body.model_fields_set:
+                data[k] = getattr(body, k)
         # Merchant admins must use the rate-limited logo upload endpoint
         if user.role == Role.MERCHANT_ADMIN:
             data.pop("logo_url", None)

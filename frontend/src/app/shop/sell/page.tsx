@@ -6,6 +6,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
 import { api } from "@/lib/api";
 import type { SellerApplication } from "@/types";
+import { Icon } from "@/components/shop/Icon";
 
 const NAVY = "#103562";
 const GOLD = "#71541A";
@@ -354,7 +355,7 @@ function StepStore({ form, set, logoPreview, uploadingLogo, fileRef, onLogoPick 
       </div>
       {(logoPreview || uploadingLogo) && (
         <p style={{ textAlign: "center", fontSize: 11, color: form.logo_url ? "#1E7A43" : "var(--shop-muted)", marginTop: -8, marginBottom: 12 }}>
-          {uploadingLogo ? "Uploading logo…" : form.logo_url ? "✓ Logo uploaded" : "Tap to add your store logo"}
+          {uploadingLogo ? "Uploading logo…" : form.logo_url ? "Logo uploaded" : "Tap to add your store logo"}
         </p>
       )}
       <style>{`.sp-spin{animation:spin .6s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
@@ -419,6 +420,7 @@ function StepReview({ form, set }: { form: FormState; set: <K extends keyof Form
 
 function StatusScreen({ app, onBack }: { app: SellerApplication; onBack: () => void }) {
   const approved = app.status === "approved";
+  if (approved) return <SuccessDashboard app={app} onBack={onBack} />;
   const stages = [
     { label: "Registration & KYC", done: true },
     { label: "Byme24 Approval", done: approved, current: !approved },
@@ -433,7 +435,7 @@ function StatusScreen({ app, onBack }: { app: SellerApplication; onBack: () => v
           border: `1px solid ${approved ? "#A7E0BD" : GOLD_LIGHT}`,
           borderRadius: 16, padding: 20, marginBottom: 16, textAlign: "center",
         }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>{approved ? "🎉" : "⏳"}</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 8, color: approved ? "#1E7A43" : GOLD }}><Icon name={approved ? "party" : "clock"} size={36} /></div>
           <p style={{ fontSize: 16, fontWeight: 700, color: approved ? "#1E7A43" : GOLD, margin: 0 }}>
             {approved ? "You're approved!" : "Under review"}
           </p>
@@ -454,7 +456,7 @@ function StatusScreen({ app, onBack }: { app: SellerApplication; onBack: () => v
                   display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700,
                   background: s.done ? "#2E7D32" : (s as any).current ? GOLD : "var(--shop-divider)",
                   color: s.done || (s as any).current ? "#fff" : "var(--shop-muted)",
-                }}>{s.done ? "✓" : i + 1}</div>
+                }}>{s.done ? <Icon name="check" size={14} strokeWidth={3} /> : i + 1}</div>
                 {i < stages.length - 1 && <div style={{ width: 2, height: 28, background: s.done ? "#2E7D32" : "var(--shop-divider)" }} />}
               </div>
               <div style={{ paddingBottom: 14 }}>
@@ -466,6 +468,97 @@ function StatusScreen({ app, onBack }: { app: SellerApplication; onBack: () => v
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Approved: the store is live. A milestone with next steps, not a workflow still in progress. */
+function SuccessDashboard({ app, onBack }: { app: SellerApplication; onBack: () => void }) {
+  // Products and orders live in the seller dashboard; the login page sends a signed-in admin straight through
+  const actions = [
+    { icon: "box" as const, label: "Manage Products", hint: "Add and edit items", href: "/login?redirect=/products" },
+    { icon: "list" as const, label: "View Orders", hint: "New and active orders", href: "/login?redirect=/orders" },
+    ...(app.merchant_id ? [{ icon: "store" as const, label: "Open Shop", hint: "See it as customers do", href: `/shop/merchant/${app.merchant_id}` }] : []),
+  ];
+  const canDo = [
+    { icon: "plus" as const, text: "Add products with photos, prices and variants" },
+    { icon: "bell" as const, text: "Receive orders, with alerts in Telegram" },
+    { icon: "tag" as const, text: "Create promotions and discount codes" },
+    { icon: "chat" as const, text: "Manage customers, reviews and support" },
+  ];
+  const liveSince = app.reviewed_at ? new Date(app.reviewed_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null;
+
+  return (
+    <div className="min-h-screen bg-surface pb-28">
+      <Header title="Your Store" subtitle={app.store_name} onBack={onBack} />
+      <div className="px-4 pt-4">
+        {/* Success card */}
+        <section className="relative overflow-hidden rounded-hero bg-grad-hero p-5 text-white shadow-fos-lg">
+          <span aria-hidden className="absolute -right-12 -top-12 h-44 w-44 rounded-full border-[22px] border-gold-400/15" />
+          <span aria-hidden className="absolute -bottom-12 right-16 h-28 w-28 rounded-full bg-gold-400/10" />
+          <div className="relative">
+            <div className="flex items-center justify-between gap-3">
+              <span className="grid h-14 w-14 place-items-center rounded-full bg-grad-gold text-navy-900 shadow-fos-md"><Icon name="party" size={28} strokeWidth={2} /></span>
+              <span className="inline-flex h-8 items-center gap-2 rounded-full bg-jade-500/15 px-3 text-[12px] font-extrabold text-jade-500 ring-1 ring-jade-500/40">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-jade-500 opacity-60" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-jade-500" />
+                </span>
+                Store Live
+              </span>
+            </div>
+            <p className="mt-4 text-[12px] font-extrabold uppercase tracking-[0.1em] text-gold-400">Congratulations</p>
+            <h2 className="mt-1 text-[26px] font-extrabold leading-[32px] tracking-[-0.02em]">{app.store_name} is open for business</h2>
+            <p className="mt-2 text-[14px] leading-[21px] text-white/75">
+              Byme24 approved your store{liveSince ? ` on ${liveSince}` : ""}. Customers can find you and order today.
+            </p>
+          </div>
+        </section>
+
+        {/* Quick actions */}
+        <h3 className="mt-6 text-section text-ink-900">Quick actions</h3>
+        <div className="mt-2.5 grid grid-cols-3 gap-2.5">
+          {actions.map((a, i) => (
+            <a key={a.label} href={a.href}
+              className={`fos-press flex min-h-[118px] flex-col justify-between rounded-card p-3 shadow-fos-md ${i === 0 ? "bg-gold-400 text-navy-900" : "bg-card text-ink-900"}`}>
+              <span className={`grid h-10 w-10 place-items-center rounded-full ${i === 0 ? "bg-navy-900 text-gold-400" : "bg-tint-gold text-gold-700"}`}><Icon name={a.icon} size={19} strokeWidth={2} /></span>
+              <span>
+                <span className="block text-[13px] font-extrabold leading-[17px]">{a.label}</span>
+                <span className={`mt-0.5 block text-[11px] leading-[14px] ${i === 0 ? "text-navy-900/70" : "text-ink-500"}`}>{a.hint}</span>
+              </span>
+            </a>
+          ))}
+        </div>
+        <p className="mt-2 text-caption text-ink-500">
+          Sign in to the seller dashboard with <b className="text-ink-900">{app.email}</b> and the password you chose when applying.
+        </p>
+
+        {/* Starter guidance */}
+        <section className="mt-6 rounded-card bg-card p-4 shadow-fos-md">
+          <h3 className="text-section text-ink-900">You can now</h3>
+          <ul className="mt-3 flex flex-col gap-3">
+            {canDo.map((c) => (
+              <li key={c.text} className="flex items-center gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-tint-jade text-tone-jade"><Icon name={c.icon} size={17} strokeWidth={2.2} /></span>
+                <span className="text-[14px] font-semibold text-ink-900">{c.text}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* Completed journey, kept small */}
+        <section className="mt-4 flex items-center gap-3 rounded-card border border-line px-4 py-3">
+          <div className="flex items-center">
+            {["Registered", "Approved", "Live"].map((label, i) => (
+              <span key={label} className="flex items-center">
+                {i > 0 && <span className="h-0.5 w-4 bg-jade-500/50" />}
+                <span title={label} className="grid h-5 w-5 place-items-center rounded-full bg-jade-500 text-white"><Icon name="check" size={11} strokeWidth={3.2} /></span>
+              </span>
+            ))}
+          </div>
+          <p className="text-[12px] font-semibold text-ink-500">Registered · Approved · Live — all steps complete</p>
+        </section>
       </div>
     </div>
   );

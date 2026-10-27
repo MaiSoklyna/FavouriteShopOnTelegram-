@@ -8,7 +8,7 @@ from fastapi import APIRouter
 
 from app.core.constants import Role
 from app.core.dependencies import require_any_admin, require_role
-from app.core.exceptions import BadRequestError, NotFoundError
+from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.models.order import PromoValidateRequest
@@ -62,12 +62,22 @@ async def validate_promo(body: PromoValidateRequest, user: TokenClaims = require
 
 @router.get("/active")
 async def list_active_promos(merchant_id: int | None = None):
-    """List active, non-expired promo codes (public — no auth required)."""
+    """List active, non-expired plain shop codes (public — no auth required).
+
+    Codes behind a promotion (migration 018) are left out: the promotion decides
+    when they show — a weekend sale's code must not appear on a Monday — and
+    platform-wide codes have no shop to send anyone to.
+    """
     async with SupabaseClient.service_role() as db:
-        q = db.from_("promo_codes").eq("is_active", True).order("created_at", desc=True)
+        q = db.from_("promo_codes").eq("is_active", True).not_("merchant_id", "is", "null").order("created_at", desc=True)
         if merchant_id:
             q = q.eq("merchant_id", merchant_id)
         promos = await q.select()
+        try:
+            owned = {r["promo_code_id"] for r in await db.from_("promotions").not_("promo_code_id", "is", "null").select("promo_code_id")}
+        except Exception:  # no promotions table yet: every code is a plain code
+            owned = set()
+        promos = [p for p in promos if p["id"] not in owned]
 
     # Filter out expired promos server-side
     now = datetime.now(timezone.utc)
@@ -124,10 +134,20 @@ async def create_promo(body: dict, user: TokenClaims = require_any_admin()):
     return rows[0] if rows else data
 
 
+async def _load_own_promo(db, promo_id: int, user: TokenClaims) -> dict:
+    promo = await db.from_("promo_codes").eq("id", promo_id).select_one("id,merchant_id")
+    if not promo:
+        raise NotFoundError("Promo code", promo_id)
+    if user.role == Role.MERCHANT_ADMIN and promo.get("merchant_id") != user.merchant_id:
+        raise ForbiddenError("This promo code belongs to another shop")
+    return promo
+
+
 @router.patch("/{promo_id}")
 async def update_promo(promo_id: int, body: dict, user: TokenClaims = require_any_admin()):
-    """Update a promo code (admin only)."""
+    """Update a promo code (admin only). Merchant admins can only touch their own shop's codes."""
     async with SupabaseClient.service_role() as db:
+        await _load_own_promo(db, promo_id, user)
         data = {k: body[k] for k in body if k in _PROMO_WRITABLE_FIELDS}
         if data:
             await db.from_("promo_codes").eq("id", promo_id).update(data)
@@ -136,7 +156,8 @@ async def update_promo(promo_id: int, body: dict, user: TokenClaims = require_an
 
 @router.delete("/{promo_id}")
 async def delete_promo(promo_id: int, user: TokenClaims = require_any_admin()):
-    """Delete a promo code (admin only)."""
+    """Delete a promo code (admin only). Merchant admins can only touch their own shop's codes."""
     async with SupabaseClient.service_role() as db:
+        await _load_own_promo(db, promo_id, user)
         await db.from_("promo_codes").eq("id", promo_id).delete()
     return {"success": True}

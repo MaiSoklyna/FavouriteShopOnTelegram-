@@ -6,6 +6,7 @@ import {
 } from "@/lib/settlements";
 import { BTN, Dialog, FieldLabel, INPUT, KV, Notice, Spinner, StatusPill } from "../ui";
 import { EarningsTable } from "../tables";
+import { ExportIcon } from "@/components/brand/Icons";
 
 type Mode = "view" | "paid" | "failed" | "reverse";
 
@@ -130,7 +131,7 @@ export function PayoutDetailDialog({ payoutId, merchantName, onClose, onChanged,
         <button className={`${BTN.outline} mr-auto text-danger`} onClick={() => setMode("reverse")}>Reverse payout</button>
       )}
       {payout.items && payout.items.length > 0 && (
-        <button className={BTN.outline} onClick={exportStatement}>Export CSV</button>
+        <button className={BTN.outline} onClick={exportStatement}><ExportIcon size={16} />Export CSV</button>
       )}
       {open && <button className={BTN.outline} onClick={() => setMode("failed")}>Mark failed</button>}
       {open && <button className={BTN.success} onClick={() => setMode("paid")}>Mark paid</button>}

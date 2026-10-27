@@ -2,39 +2,37 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
-
-interface QrData {
-  payment_status: string;
-  amount?: string;
-  qr_image?: string;
-  deeplink?: string;
-  expires_in?: number;
-}
+import { formatKhr } from "@/lib/currency";
+import { Icon } from "./Icon";
+import { KhqrCard, PaidSuccess, type KhqrData } from "./Khqr";
 
 /**
  * Pay an unpaid ABA KHQR order from its order page (the "Pay now" link in
  * Telegram, or after choosing "Pay Later" at checkout). Polls the backend,
- * which confirms with PayWay, and calls onPaid once the order is paid.
+ * which confirms with PayWay, shows the Paid moment, then calls onPaid.
  */
 export function KhqrPayPanel({ orderId, total, onPaid }: { orderId: number; total: number; onPaid: () => void }) {
-  const [qr, setQr] = useState<QrData | null>(null);
+  const [qr, setQr] = useState<KhqrData | null>(null);
+  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [timer, setTimer] = useState(0);
+  const [paid, setPaid] = useState(false);
+  const [done, setDone] = useState(false);
 
   const loadQr = useCallback(async () => {
-    setLoading(true); setError("");
+    setOpen(true); setLoading(true); setError(""); setQr(null);
     try {
-      const res = await api.post<{ data: QrData }>(`/payments/payway/orders/${orderId}/qr`);
-      if (res.data.payment_status === "paid") { onPaid(); return; }
+      const res = await api.post<{ data: KhqrData }>(`/payments/payway/orders/${orderId}/qr`);
+      if (res.data.payment_status === "paid") { setPaid(true); return; }
       setQr(res.data);
       setTimer(res.data.expires_in || 900);
     } catch (err: any) {
-      setError(err?.detail || "Could not create the payment QR. Please try again.");
+      setError(err?.detail || err?.message || "Could not create the payment QR. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, [orderId, onPaid]);
+  }, [orderId]);
 
   // Countdown
   useEffect(() => {
@@ -53,61 +51,43 @@ export function KhqrPayPanel({ orderId, total, onPaid }: { orderId: number; tota
         if (!stopped && res.data?.payment_status === "paid") {
           stopped = true;
           clearInterval(id);
-          onPaid();
+          setPaid(true);
         }
       } catch { /* keep polling */ }
     }, 4000);
     return () => { stopped = true; clearInterval(id); };
-  }, [qr, timer > 0, orderId, onPaid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [qr, timer > 0, orderId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+  const finish = useCallback(() => { setDone(true); onPaid(); }, [onPaid]);
+
+  // Paid: celebrate, then step aside while the order page reloads
+  if (done) return null;
+  if (paid) return <PaidSuccess amount={total} cta="Back to order" onDone={finish} />;
+
+  if (!open) {
+    return (
+      <section className="flex items-center gap-3 rounded-hero bg-card p-3.5 shadow-fos-sm ring-2 ring-mango-500/40">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-[#E1232E] text-[10px] font-black tracking-wide text-white">KHQR</span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[14px] font-extrabold text-ink-900">Pay to send your order</div>
+          <div className="truncate text-caption text-ink-500">${total.toFixed(2)} · {formatKhr(total)} · any bank app</div>
+        </div>
+        <button type="button" onClick={loadQr}
+          className="fos-press h-10 shrink-0 rounded-full bg-grad-promo px-4 text-[13px] font-extrabold text-white">
+          Pay now
+        </button>
+      </section>
+    );
+  }
 
   return (
-    <div style={{
-      background: "var(--shop-surface, #FFFFFF)",
-      borderRadius: "var(--shop-r-card, 16px)", padding: 20, marginBottom: 12,
-      boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
-      border: "1.5px solid #FFB74D", textAlign: "center",
-    }}>
-      <p style={{ fontSize: 15, fontWeight: 700, color: "#E65100", margin: 0 }}>⏳ Awaiting payment</p>
-      <p style={{ fontSize: 13, color: "var(--shop-muted, #8A8F9C)", margin: "6px 0 14px" }}>
-        This order goes to the shop once your ABA KHQR payment is received.
-      </p>
-
-      {qr && timer > 0 ? (
-        <>
-          {qr.qr_image && (
-            <img src={qr.qr_image} alt="ABA KHQR"
-              style={{ width: 220, maxWidth: "100%", margin: "0 auto 12px", borderRadius: 12, display: "block" }} />
-          )}
-          <p style={{ fontSize: 24, fontWeight: 700, color: "var(--shop-primary, #1E6BFF)", margin: 0 }}>${qr.amount}</p>
-          <p style={{ fontSize: 12, color: "#E65100", fontWeight: 600, margin: "6px 0 12px" }}>
-            Expires in {fmt(timer)} · this page updates automatically
-          </p>
-          {qr.deeplink && (
-            <a href={qr.deeplink} style={{
-              display: "block", padding: 12, marginBottom: 4,
-              background: "var(--shop-primary, #1E6BFF)", color: "#FFFFFF",
-              borderRadius: "var(--shop-r-input, 12px)", fontWeight: 600, fontSize: 14, textDecoration: "none",
-            }}>
-              Pay with ABA Mobile
-            </a>
-          )}
-        </>
-      ) : (
-        <>
-          {error && <p style={{ fontSize: 12, color: "#C62828", margin: "0 0 10px" }}>{error}</p>}
-          {qr && timer <= 0 && <p style={{ fontSize: 12, color: "#C62828", margin: "0 0 10px" }}>QR expired</p>}
-          <button onClick={loadQr} disabled={loading} style={{
-            width: "100%", padding: 12, border: "none",
-            background: "var(--shop-primary, #1E6BFF)", color: "#FFFFFF",
-            borderRadius: "var(--shop-r-input, 12px)", fontWeight: 600, fontSize: 14,
-            cursor: loading ? "wait" : "pointer", opacity: loading ? 0.6 : 1,
-          }}>
-            {loading ? "Generating QR…" : qr ? "Generate new QR" : `Pay $${total.toFixed(2)} with ABA KHQR`}
-          </button>
-        </>
-      )}
-    </div>
+    <section className="rounded-hero bg-grad-hero p-4 pb-5 text-white shadow-fos-md">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-section">Scan to pay</h3>
+        <button type="button" onClick={() => setOpen(false)} aria-label="Hide QR"
+          className="fos-press grid h-8 w-8 place-items-center rounded-full bg-white/10"><Icon name="close" size={16} /></button>
+      </div>
+      <KhqrCard data={qr} loading={loading} error={error} timer={timer} onRetry={loadQr} />
+    </section>
   );
 }

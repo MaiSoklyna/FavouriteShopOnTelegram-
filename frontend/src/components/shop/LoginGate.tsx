@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useAuth } from "@/providers/AuthProvider";
 import { isInTelegram } from "@/lib/telegram";
+import { Icon } from "./Icon";
+import { BrandLoader } from "@/components/ui/Spinner";
 
 const BOT_USERNAME = process.env.NEXT_PUBLIC_BOT_USERNAME || "FavouriteOfShop_bot";
 
@@ -19,8 +21,7 @@ export function LoginGate({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
-        <div style={{ width: 32, height: 32, border: "3px solid var(--shop-divider, #ECEEF3)", borderTopColor: "var(--shop-primary, #1E6BFF)", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        <BrandLoader />
       </div>
     );
   }
@@ -49,7 +50,7 @@ function TelegramLoginPrompt() {
   return (
     <div style={{ minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ textAlign: "center", maxWidth: 320 }}>
-        <div style={{ fontSize: 64, marginBottom: 16 }}>🛍️</div>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 16, color: "var(--shop-primary, #1E6BFF)" }}><Icon name="bag" size={56} strokeWidth={1.5} /></div>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--shop-black, #0B0B0F)", marginBottom: 8 }}>
           Welcome to Byme24
         </h2>

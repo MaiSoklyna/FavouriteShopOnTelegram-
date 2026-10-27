@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { Order } from "@/types";
+import { BrandLoader } from "@/components/ui/Spinner";
 
 const TABS = ["all", "pending", "confirmed", "processing", "shipped", "delivered", "cancelled"];
 const NEXT: Record<string, string[]> = { pending: ["confirmed", "cancelled"], confirmed: ["processing", "cancelled"], processing: ["shipped", "cancelled"], shipped: ["delivered"] };
@@ -57,7 +58,7 @@ export default function OrdersPage() {
       <input className="admin-input" style={{ maxWidth: 300, marginBottom: 16 }} placeholder="Search by code or customer..." value={search} onChange={e => setSearch(e.target.value)} />
 
       <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
-        {loading ? <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Loading...</div> : (
+        {loading ? <BrandLoader /> : (
           <table className="admin-table">
             <thead><tr><th>Order</th><th>Customer</th><th>Total</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
             <tbody>

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { downloadCsv, formatDate, formatMoney, isNonZero, type MerchantBalance } from "@/lib/settlements";
 import { BTN, Panel, StatusPill, Table, INPUT, type Column } from "../ui";
+import { ExportIcon } from "@/components/brand/Icons";
 
 export function BalancesTab({ balances, loading, onPay, onManage, onBackfill, backfilling }: {
   balances: MerchantBalance[];
@@ -101,7 +102,7 @@ export function BalancesTab({ balances, loading, onPay, onManage, onBackfill, ba
           <label className="flex items-center gap-1.5 text-xs text-text-secondary">
             <input type="checkbox" checked={activeOnly} onChange={(e) => setActiveOnly(e.target.checked)} /> With sales only
           </label>
-          <button className={BTN.outlineSm} onClick={exportCsv} disabled={rows.length === 0}>Export CSV</button>
+          <button className={BTN.outlineSm} onClick={exportCsv} disabled={rows.length === 0}><ExportIcon size={16} />Export CSV</button>
           <button
             className={BTN.outlineSm}
             onClick={onBackfill}
