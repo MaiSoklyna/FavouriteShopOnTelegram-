@@ -52,10 +52,11 @@
   --shadow-xl: 0 20px 40px rgba(8, 29, 60, 0.12);
 
   /* ── Shop miniapp ── */
-  /* Brand gold (matches dark mode + Byme24 logo) — no blue accents in light mode */
-  --shop-primary: #71541A;
-  --shop-primary-dark: #5A4315;
-  --shop-primary-tint: rgba(113, 84, 26, 0.10);
+  /* Primary = Byme24 brand navy, from the brand tokens in tokens.css (single source of truth).
+     Gold stays the accent (--shop-accent): cart tab, badges, highlights. */
+  --shop-primary: var(--fos-brand);
+  --shop-primary-dark: var(--fos-brand-strong);
+  --shop-primary-tint: var(--fos-brand-tint);
   --shop-accent: #71541A;
   --shop-accent-light: #D6BA80;
   --shop-black: #081D3C;
@@ -105,9 +106,9 @@
   --shadow-md: 0 4px 12px rgba(0,0,0,0.35);
   --shadow-lg: 0 10px 24px rgba(0,0,0,0.4);
   --shadow-xl: 0 20px 40px rgba(0,0,0,0.5);
-  --shop-primary: #D6BA80;
-  --shop-primary-dark: #71541A;
-  --shop-primary-tint: rgba(214, 186, 128, 0.12);
+  --shop-primary: var(--fos-brand);
+  --shop-primary-dark: var(--fos-brand-strong);
+  --shop-primary-tint: var(--fos-brand-tint);
   --shop-accent: #D6BA80;
   --shop-accent-light: #71541A;
   --shop-black: #EAEFF3;

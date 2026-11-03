@@ -510,9 +510,9 @@ function CheckoutContent() {
                   )}
                   {pin && (
                     outOfArea ? (
-                      <span className="mt-1.5 inline-flex h-6 items-center gap-1 rounded-full bg-tint-ruby px-2.5 text-[11px] font-bold text-ruby-500"><Icon name="alert" size={12} strokeWidth={2.6} />Outside delivery area</span>
+                      <span className="mt-1.5 inline-flex h-6 items-center gap-1 rounded-full bg-tint-caution px-2.5 text-[11px] font-bold text-caution-500"><Icon name="alert" size={12} strokeWidth={2.6} />Outside delivery area</span>
                     ) : quote ? (
-                      <span className="mt-1.5 inline-flex h-6 items-center gap-1 rounded-full bg-tint-jade px-2.5 text-[11px] font-bold text-tone-jade"><Icon name="check" size={12} strokeWidth={2.6} />
+                      <span className="mt-1.5 inline-flex h-6 items-center gap-1 rounded-full bg-tint-positive px-2.5 text-[11px] font-bold text-tone-positive"><Icon name="check" size={12} strokeWidth={2.6} />
                         {`Delivers here${km != null ? ` · ${formatKm(km)}` : ""}`}
                       </span>
                     ) : (
@@ -529,9 +529,9 @@ function CheckoutContent() {
                     className="h-11 w-full rounded-md bg-surface px-3 text-[14px] font-semibold text-ink-900 outline-none placeholder:font-medium placeholder:text-ink-500 focus:ring-2 focus:ring-navy-500" />
                 </div>
               )}
-              {errors.address && <p className="px-3.5 pt-1 text-caption text-ruby-500">{errors.address}</p>}
+              {errors.address && <p className="px-3.5 pt-1 text-caption text-caution-500">{errors.address}</p>}
               {outOfArea && (
-                <p className="px-3.5 pt-1 text-caption font-semibold text-ruby-500">{quoteError} · move the pin or choose Pickup</p>
+                <p className="px-3.5 pt-1 text-caption font-semibold text-caution-500">{quoteError} · move the pin or choose Pickup</p>
               )}
 
               <div className="fos-no-scrollbar flex gap-2 overflow-x-auto px-3.5 pb-3.5 pt-3">
@@ -550,7 +550,7 @@ function CheckoutContent() {
                 })}
                 <button type="button" onClick={startNewAddress} className="fos-press inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-dashed border-navy-500 px-3 text-[12px] font-bold text-navy-700"><Icon name="plus" size={14} strokeWidth={2.4} />New address</button>
               </div>
-              {locError && <p className="px-3.5 pb-3 text-caption text-ruby-500">Couldn&apos;t get your location — allow access, or pick on the map</p>}
+              {locError && <p className="px-3.5 pb-3 text-caption text-caution-500">Couldn&apos;t get your location — allow access, or pick on the map</p>}
 
               {newOpen ? (
                 <div className="border-t border-line px-3.5 py-3">
@@ -572,7 +572,7 @@ function CheckoutContent() {
                       placeholder="Name it, e.g. Mom's house" aria-label="Address name"
                       className="mt-2 h-11 w-full rounded-md bg-surface px-3 text-[14px] font-semibold text-ink-900 outline-none placeholder:font-medium placeholder:text-ink-500" />
                   )}
-                  {saveErr && <p className="pt-1.5 text-caption text-ruby-500">{saveErr}</p>}
+                  {saveErr && <p className="pt-1.5 text-caption text-caution-500">{saveErr}</p>}
                   <div className="mt-3 flex gap-2">
                     <button type="button" onClick={() => { setNewOpen(false); setSaveErr(""); }}
                       className="fos-press h-11 flex-1 rounded-md bg-surface text-[14px] font-bold text-ink-500">Cancel</button>
@@ -598,7 +598,7 @@ function CheckoutContent() {
                 <div className="truncate text-[14px] font-extrabold text-ink-900">{shop?.name || "The shop"}</div>
                 <div className="truncate text-caption text-ink-500">{shop?.address || "The shop confirms the pickup point"}</div>
               </div>
-              <Pill variant="jade">Free</Pill>
+              <Pill variant="gold">Free</Pill>
             </section>
           )}
         </div>
@@ -609,16 +609,16 @@ function CheckoutContent() {
             <label className="min-w-0 flex-1">
               <span className="sr-only">Name</span>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Your name" autoComplete="name"
-                className={`h-11 w-full rounded-md bg-surface px-3 text-[14px] font-semibold text-ink-900 outline-none ${errors.name ? "ring-1 ring-ruby-500" : ""}`} />
+                className={`h-11 w-full rounded-md bg-surface px-3 text-[14px] font-semibold text-ink-900 outline-none ${errors.name ? "ring-1 ring-caution-500" : ""}`} />
             </label>
           </div>
-          <div className={`mt-2 flex h-11 items-center rounded-md bg-surface ${errors.phone ? "ring-1 ring-ruby-500" : ""}`}>
+          <div className={`mt-2 flex h-11 items-center rounded-md bg-surface ${errors.phone ? "ring-1 ring-caution-500" : ""}`}>
             <span className="pl-3 pr-2 text-[14px] font-bold text-ink-500">+855</span>
             <input type="tel" inputMode="numeric" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, "").replace(/^0/, "") })}
               placeholder="12 345 678" aria-label="Phone" autoComplete="tel-national"
               className="h-11 min-w-0 flex-1 bg-transparent pr-3 text-[14px] font-semibold tabular-nums text-ink-900 outline-none" />
           </div>
-          {(errors.name || errors.phone) && <p className="pt-1 text-caption text-ruby-500">{errors.name || errors.phone}</p>}
+          {(errors.name || errors.phone) && <p className="pt-1 text-caption text-caution-500">{errors.name || errors.phone}</p>}
           {noteOpen || form.note ? (
             <textarea value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} rows={2} placeholder="Note for the shop (gate code, floor…)" autoFocus={noteOpen && !form.note}
               className="mt-2 w-full resize-none rounded-md bg-surface p-3 text-[14px] text-ink-900 outline-none" />
@@ -633,7 +633,7 @@ function CheckoutContent() {
             logo={<span className="grid h-10 w-10 place-items-center rounded-md bg-[#E1232E] text-[9px] font-extrabold tracking-tight text-white">KHQR</span>}
             title="ABA KHQR" sub="Any bank app" />
           <PayOption on={payment === "cod"} onPick={() => { haptic("select"); setPayment("cod"); }}
-            logo={<span className="grid h-10 w-10 place-items-center rounded-md bg-jade-500 text-[18px] font-extrabold text-white">$</span>}
+            logo={<span className="grid h-10 w-10 place-items-center rounded-md bg-positive-500 text-[18px] font-extrabold text-white">$</span>}
             title="Cash on delivery" sub={deliveryType === "pickup" ? "Pay at the shop" : "Pay the rider"} />
         </div>
 
@@ -653,13 +653,13 @@ function CheckoutContent() {
           <Row
             label={deliveryType === "pickup" ? "Pickup" : `Delivery${km != null ? ` · ${formatKm(km)}` : ""}`}
             value={deliveryType === "delivery" && !pin ? "Choose location" : !qt ? "…" : deliveryFee === 0 ? "Free" : money(deliveryFee)}
-            tone={qt && deliveryFee === 0 ? "jade" : undefined}
+            tone={qt && deliveryFee === 0 ? "gold" : undefined}
           />
           {discount > 0 && (
-            <div className="flex items-center justify-between py-1 font-bold text-tone-jade">
+            <div className="flex items-center justify-between py-1 font-bold text-tone-positive">
               <span className="flex min-w-0 items-center gap-2">
                 <span className="truncate">{single?.promo_title ?? quote?.promo?.code ?? single?.promo_code}{single?.promo_auto ? " · applied automatically" : ""}</span>
-                {!single?.promo_auto && <button type="button" onClick={removePromo} className="shrink-0 text-[12px] font-bold text-ruby-500">Remove</button>}
+                {!single?.promo_auto && <button type="button" onClick={removePromo} className="shrink-0 text-[12px] font-bold text-caution-500">Remove</button>}
               </span>
               <span>−{money(discount)}</span>
             </div>
@@ -674,7 +674,7 @@ function CheckoutContent() {
         </section>
 
         {[...blockers, ...(orderError ? [orderError] : []), ...(quoteError && !outOfArea && quote ? [quoteError] : [])].map((m) => (
-          <div key={m} role="alert" className="mt-3 rounded-card bg-tint-ruby px-3.5 py-3 text-[13px] font-bold text-ruby-500">{m}</div>
+          <div key={m} role="alert" className="mt-3 rounded-card bg-tint-caution px-3.5 py-3 text-[13px] font-bold text-caution-500">{m}</div>
         ))}
       </div>
 
@@ -730,7 +730,7 @@ function MapPreview({ pin, shop, km, eta, outOfArea, onOpen }: {
             </>
           )}
           {(km != null || outOfArea) && (
-            <span className={`absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-extrabold shadow-fos-sm ${outOfArea ? "bg-ruby-500 text-white" : "bg-card text-ink-900"}`}>
+            <span className={`absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-extrabold shadow-fos-sm ${outOfArea ? "bg-caution-500 text-white" : "bg-card text-ink-900"}`}>
               {outOfArea ? <><Icon name="alert" size={13} strokeWidth={2.4} />Outside delivery area</> : <><Icon name="truck" size={13} strokeWidth={2.2} />{formatKm(km!)}{eta ? ` · ${eta}` : ""}</>}
             </span>
           )}
@@ -761,11 +761,11 @@ function PayOption({ on, onPick, logo, title, sub }: { on: boolean; onPick: () =
   );
 }
 
-function Row({ label, value, tone }: { label: string; value: string; tone?: "jade" }) {
+function Row({ label, value, tone }: { label: string; value: string; tone?: "gold" }) {
   return (
     <div className="flex justify-between py-1">
       <span className="text-ink-500">{label}</span>
-      <span className={`font-bold ${tone === "jade" ? "text-tone-jade" : "text-ink-900"}`}>{value}</span>
+      <span className={`font-bold ${tone === "gold" ? "text-tone-caution" : "text-ink-900"}`}>{value}</span>
     </div>
   );
 }
@@ -784,7 +784,7 @@ function KhqrScreen({ data, loading, error, timer, index, count, onRetry, onLate
       {count > 1 && (
         <div className="mx-auto mt-3 flex max-w-[200px] gap-1.5" aria-hidden>
           {Array.from({ length: count }, (_, i) => (
-            <span key={i} className={`h-1 flex-1 rounded-full ${i < index ? "bg-jade-500" : i === index ? "bg-card" : "bg-white/25"}`} />
+            <span key={i} className={`h-1 flex-1 rounded-full ${i < index ? "bg-positive-500" : i === index ? "bg-card" : "bg-white/25"}`} />
           ))}
         </div>
       )}

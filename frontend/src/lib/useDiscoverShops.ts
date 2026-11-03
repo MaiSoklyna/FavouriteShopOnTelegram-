@@ -41,7 +41,7 @@ export const COLLECTIONS = [
   { key: "free-delivery", title: "Free delivery shops", sub: "Delivers to you for $0", tone: "navy", match: (s: DiscoverShop) => s.can_deliver !== false && s.delivery_fee != null && Number(s.delivery_fee) === 0 },
   { key: "best-rated", title: "Best rated", sub: "4.5★ and up", tone: "gold", match: (s: DiscoverShop) => (s.rating ?? 0) >= 4.5 && (s.reviews ?? 0) >= 5 },
   { key: "open-late", title: "Open late", sub: "Past 9 pm tonight", tone: "night", match: (s: DiscoverShop) => opensLate(s) },
-  { key: "new", title: "New on Byme24", sub: `Joined in the last ${NEW_DAYS} days`, tone: "jade", match: isNewShop },
+  { key: "new", title: "New on Byme24", sub: `Joined in the last ${NEW_DAYS} days`, tone: "promo", match: isNewShop },
 ] as const;
 export type CollectionKey = (typeof COLLECTIONS)[number]["key"];
 

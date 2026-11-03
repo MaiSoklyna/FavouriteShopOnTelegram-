@@ -232,7 +232,7 @@ function SellContent() {
         {step === 4 && <StepReview form={form} set={set} />}
 
         {error && (
-          <p style={{ color: "#DC2626", fontSize: 13, marginTop: 12, fontWeight: 500 }}>{error}</p>
+          <p style={{ color: "var(--fos-warning)", fontSize: 13, marginTop: 12, fontWeight: 500 }}>{error}</p>
         )}
       </div>
 
@@ -454,10 +454,10 @@ function StatusScreen({ app, onBack }: { app: SellerApplication; onBack: () => v
                 <div style={{
                   width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
                   display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700,
-                  background: s.done ? "#2E7D32" : (s as any).current ? GOLD : "var(--shop-divider)",
+                  background: s.done ? "var(--fos-success)" : (s as any).current ? GOLD : "var(--shop-divider)",
                   color: s.done || (s as any).current ? "#fff" : "var(--shop-muted)",
                 }}>{s.done ? <Icon name="check" size={14} strokeWidth={3} /> : i + 1}</div>
-                {i < stages.length - 1 && <div style={{ width: 2, height: 28, background: s.done ? "#2E7D32" : "var(--shop-divider)" }} />}
+                {i < stages.length - 1 && <div style={{ width: 2, height: 28, background: s.done ? "var(--fos-success)" : "var(--shop-divider)" }} />}
               </div>
               <div style={{ paddingBottom: 14 }}>
                 <p style={{ fontSize: 14, fontWeight: 600, color: "var(--shop-black)", margin: 0 }}>{s.label}</p>
@@ -500,10 +500,10 @@ function SuccessDashboard({ app, onBack }: { app: SellerApplication; onBack: () 
           <div className="relative">
             <div className="flex items-center justify-between gap-3">
               <span className="grid h-14 w-14 place-items-center rounded-full bg-grad-gold text-navy-900 shadow-fos-md"><Icon name="party" size={28} strokeWidth={2} /></span>
-              <span className="inline-flex h-8 items-center gap-2 rounded-full bg-jade-500/15 px-3 text-[12px] font-extrabold text-jade-500 ring-1 ring-jade-500/40">
+              <span className="inline-flex h-8 items-center gap-2 rounded-full bg-positive-500/15 px-3 text-[12px] font-extrabold text-positive-500 ring-1 ring-positive-500/40">
                 <span className="relative flex h-2.5 w-2.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-jade-500 opacity-60" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-jade-500" />
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-positive-500 opacity-60" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-positive-500" />
                 </span>
                 Store Live
               </span>
@@ -540,7 +540,7 @@ function SuccessDashboard({ app, onBack }: { app: SellerApplication; onBack: () 
           <ul className="mt-3 flex flex-col gap-3">
             {canDo.map((c) => (
               <li key={c.text} className="flex items-center gap-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-tint-jade text-tone-jade"><Icon name={c.icon} size={17} strokeWidth={2.2} /></span>
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-tint-positive text-tone-positive"><Icon name={c.icon} size={17} strokeWidth={2.2} /></span>
                 <span className="text-[14px] font-semibold text-ink-900">{c.text}</span>
               </li>
             ))}
@@ -552,8 +552,8 @@ function SuccessDashboard({ app, onBack }: { app: SellerApplication; onBack: () 
           <div className="flex items-center">
             {["Registered", "Approved", "Live"].map((label, i) => (
               <span key={label} className="flex items-center">
-                {i > 0 && <span className="h-0.5 w-4 bg-jade-500/50" />}
-                <span title={label} className="grid h-5 w-5 place-items-center rounded-full bg-jade-500 text-white"><Icon name="check" size={11} strokeWidth={3.2} /></span>
+                {i > 0 && <span className="h-0.5 w-4 bg-positive-500/50" />}
+                <span title={label} className="grid h-5 w-5 place-items-center rounded-full bg-positive-500 text-white"><Icon name="check" size={11} strokeWidth={3.2} /></span>
               </span>
             ))}
           </div>

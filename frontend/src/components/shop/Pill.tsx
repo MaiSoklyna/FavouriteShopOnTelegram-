@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
 import { Icon } from "./Icon";
 
-type Variant = "neutral" | "jade" | "mango" | "gold" | "solid-mango";
+type Variant = "neutral" | "positive" | "mango" | "gold" | "solid-mango";
 
 const STYLES: Record<Variant, string> = {
   neutral: "bg-tint-neutral text-ink-500",
-  jade: "bg-tint-jade text-tone-jade",
+  positive: "bg-tint-positive text-tone-positive",
   mango: "bg-tint-mango text-tone-mango",
   gold: "bg-tint-gold text-gold-700",
   "solid-mango": "bg-mango-500 text-white",

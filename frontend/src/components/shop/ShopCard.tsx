@@ -48,13 +48,13 @@ export function ShopCard({ shop, variant = "rail", selected = false, located = f
       <div className={`relative w-full ${wide ? "h-[150px]" : "h-[136px]"}`}>
         <ShopCover url={shop.cover_url} theme={theme} />
         {shop.is_open != null && (
-          <span className={`absolute left-2.5 top-2.5 inline-flex h-6 items-center gap-1.5 rounded-full bg-card px-2.5 text-[11px] font-extrabold ${shop.is_open ? "text-tone-jade" : "text-ink-500"}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${shop.is_open ? "bg-jade-500" : "bg-ink-500"}`} />
+          <span className={`absolute left-2.5 top-2.5 inline-flex h-6 items-center gap-1.5 rounded-full bg-card px-2.5 text-[11px] font-extrabold ${shop.is_open ? "text-tone-positive" : "text-ink-500"}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${shop.is_open ? "bg-positive-500" : "bg-ink-500"}`} />
             {shop.is_open ? "Open" : "Closed"}
           </span>
         )}
         {free && known && (
-          <span className="absolute right-2.5 top-2.5 inline-flex h-6 items-center gap-1 rounded-full bg-jade-500 px-2.5 text-[11px] font-extrabold text-white">
+          <span className="absolute right-2.5 top-2.5 inline-flex h-6 items-center gap-1 rounded-full bg-positive-500 px-2.5 text-[11px] font-extrabold text-white">
             <Icon name="truck" size={13} strokeWidth={2.2} />Free delivery
           </span>
         )}
@@ -91,7 +91,7 @@ export function ShopCard({ shop, variant = "rail", selected = false, located = f
                 <Icon name="clock" size={12} strokeWidth={2.4} />{formatEta(shop.eta_minutes, shop.eta_max_minutes)}
               </span>
             )}
-            <span className={`inline-flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-extrabold ${shop.can_deliver === false ? "bg-tint-mango text-tone-mango" : "bg-tint-jade text-tone-jade"}`}>
+            <span className={`inline-flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-extrabold ${shop.can_deliver === false ? "bg-tint-mango text-tone-mango" : "bg-tint-positive text-tone-positive"}`}>
               <Icon name="truck" size={13} strokeWidth={2.2} />{feeLabel}
             </span>
           </div>

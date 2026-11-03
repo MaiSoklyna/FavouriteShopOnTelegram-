@@ -68,13 +68,13 @@ export interface Headline {
   title: string;
   sub: string;
   icon: IconName;
-  tone: "navy" | "mango" | "jade" | "ruby";
+  tone: "navy" | "mango" | "positive" | "muted";
 }
 
 export function headline(o: TrackOrder): Headline {
   const shop = o.merchant_name || "the shop";
   const pickup = isPickup(o);
-  if (o.status === "cancelled") return { title: "Order cancelled", sub: "Any stock was returned to the shop", icon: "close", tone: "ruby" };
+  if (o.status === "cancelled") return { title: "Order cancelled", sub: "Any stock was returned to the shop", icon: "close", tone: "muted" };
   if (awaitingPayment(o)) return { title: "Waiting for payment", sub: `${shop} gets your order once it's paid`, icon: "clock", tone: "mango" };
   switch (o.status) {
     case "pending": return { title: "Waiting for the shop", sub: `${shop} will confirm shortly`, icon: "clock", tone: "navy" };
@@ -83,7 +83,7 @@ export function headline(o: TrackOrder): Headline {
     case "shipped": return pickup
       ? { title: "Ready for pickup", sub: `Collect it at ${shop}`, icon: "bag", tone: "mango" }
       : { title: "On the way", sub: "Your rider is heading to you", icon: "truck", tone: "mango" };
-    case "delivered": return { title: pickup ? "Picked up" : "Delivered", sub: "Thanks for shopping with Byme24", icon: "party", tone: "jade" };
+    case "delivered": return { title: pickup ? "Picked up" : "Delivered", sub: "Thanks for shopping with Byme24", icon: "party", tone: "positive" };
     default: return { title: o.status, sub: "", icon: "list", tone: "navy" };
   }
 }

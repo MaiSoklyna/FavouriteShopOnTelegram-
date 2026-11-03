@@ -209,7 +209,7 @@ export default function NearbyPage() {
                         {s.eta_minutes != null && s.eta_max_minutes != null && (
                           <span className="inline-flex items-center gap-0.5"><Icon name="clock" size={12} strokeWidth={2.4} />{formatEta(s.eta_minutes, s.eta_max_minutes)}</span>
                         )}
-                        <span className={`inline-flex items-center gap-0.5 ${s.can_deliver === false ? "text-tone-mango" : "text-tone-jade"}`}>
+                        <span className={`inline-flex items-center gap-0.5 ${s.can_deliver === false ? "text-tone-mango" : "text-tone-positive"}`}>
                           <Icon name="truck" size={13} strokeWidth={2.2} />
                           {s.can_deliver === false ? "Pickup only" : Number(s.delivery_fee) === 0 ? "Free" : `$${Number(s.delivery_fee).toFixed(2)}`}
                         </span>

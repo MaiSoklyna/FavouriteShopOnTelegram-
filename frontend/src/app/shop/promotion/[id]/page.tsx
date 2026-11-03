@@ -131,7 +131,7 @@ export default function PromotionPage() {
             <button type="button" onClick={copy} aria-label={`Copy promo code ${offer.code}`}
               className="fos-press mt-3.5 flex h-12 w-full items-center justify-between gap-2 rounded-md border-[1.5px] border-dashed border-gold-700 bg-[#FBF4E4] pl-3.5 pr-2">
               <span className="truncate font-mono text-[18px] font-extrabold tracking-[0.06em] text-[#081D3C]">{offer.code}</span>
-              <span className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3 text-[12px] font-extrabold ${copied ? "bg-jade-500 text-white" : "bg-[#081D3C] text-gold-400"}`}>
+              <span className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-full px-3 text-[12px] font-extrabold ${copied ? "bg-positive-500 text-white" : "bg-[#081D3C] text-gold-400"}`}>
                 <Icon name={copied ? "check" : "ticket"} size={13} strokeWidth={2.4} />{copied ? "Copied" : "Tap to copy"}
               </span>
             </button>
@@ -142,7 +142,7 @@ export default function PromotionPage() {
             <div className="rounded-md bg-surface px-3 py-2"><dt className="font-semibold text-ink-500">{promo.schedule_type && promo.schedule_type !== "once" ? "This run ends" : "Valid until"}</dt><dd className="font-extrabold text-ink-900">{expiryDate(promo.active_until ?? promo.ends_at) ?? "No end date"}</dd></div>
           </dl>
           <p className="mt-3 flex items-start gap-1.5 text-[12px] leading-[17px] text-ink-500">
-            <Icon name="check" size={14} strokeWidth={2.4} className="mt-px shrink-0 text-tone-jade" />
+            <Icon name="check" size={14} strokeWidth={2.4} className="mt-px shrink-0 text-tone-positive" />
             {promo.is_live === false ? "On sale days it's applied at checkout" : promo.auto_apply ? "No code needed: it's applied automatically at checkout" : "The code is saved. It's applied at checkout"} when you order {promo.scope === "platform" ? "from any shop" : promo.scope === "shop" ? "from this shop" : "the products below from this shop"}.
           </p>
         </section>

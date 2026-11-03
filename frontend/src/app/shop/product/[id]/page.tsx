@@ -14,6 +14,7 @@ import { useWishlist } from "@/lib/useWishlist";
 import { distanceKm, formatEta, formatKm } from "@/lib/mapbox";
 import type { Merchant, Product, VariantGroup } from "@/types";
 import { Icon } from "@/components/shop/Icon";
+import { TelegramLoginPrompt } from "@/components/shop/LoginGate";
 
 interface Review { id: number; user_name?: string; rating: number; comment?: string; created_at?: string }
 
@@ -39,6 +40,9 @@ export default function ProductDetailPage() {
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
   const [notice, setNotice] = useState<{ text: string; tone: "ok" | "error" } | null>(null);
+  // Signed-out shoppers get the Telegram login sheet instead of a dead end
+  const [showLogin, setShowLogin] = useState(false);
+  useEffect(() => { if (user) setShowLogin(false); }, [user]);
   const [imgIdx, setImgIdx] = useState(0);
   const [popKey, setPopKey] = useState(0);
   // variant_id -> option_id
@@ -108,7 +112,7 @@ export default function ProductDetailPage() {
 
   async function handleAddToCart(): Promise<boolean> {
     if (!product) return false;
-    if (!user) { setNotice({ text: "Open the shop from Telegram to add items", tone: "error" }); return false; }
+    if (!user) { setShowLogin(true); return false; }
     const missing = variantGroups.filter((g) => !selectedOptions[g.id]);
     if (missing.length) {
       setShowMissing(true);
@@ -185,7 +189,7 @@ export default function ProductDetailPage() {
           </GlassButton>
           <div className="flex gap-2">
             <GlassButton label={hearted ? "Remove from wishlist" : "Add to wishlist"} onClick={() => { lightHaptic(); wish.toggle(product.id); setPopKey((k) => k + 1); }}>
-              <svg key={popKey} className={popKey ? "fos-pop" : ""} width="18" height="18" viewBox="0 0 24 24" fill={hearted ? "#E5484D" : "none"} stroke={hearted ? "#E5484D" : "currentColor"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <svg key={popKey} className={popKey ? "fos-pop" : ""} width="18" height="18" viewBox="0 0 24 24" fill={hearted ? "var(--fos-accent)" : "none"} stroke={hearted ? "var(--fos-accent)" : "currentColor"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z" />
               </svg>
             </GlassButton>
@@ -226,7 +230,7 @@ export default function ProductDetailPage() {
             ? <Pill variant="gold"><Icon name="star" size={12} filled />{Number(product.rating_avg || 0).toFixed(1)} · {product.review_count}</Pill>
             : <Pill variant="neutral"><Icon name="star" size={12} />New</Pill>}
           {inStock
-            ? <Pill variant="jade">{stock <= 5 ? `Only ${stock} left` : "In stock"}</Pill>
+            ? <Pill variant="positive">{stock <= 5 ? `Only ${stock} left` : "In stock"}</Pill>
             : <Pill variant="mango">Out of stock</Pill>}
           {product.category_name && <Pill variant="neutral">{product.category_name}</Pill>}
         </div>
@@ -281,7 +285,7 @@ export default function ProductDetailPage() {
 
       {/* Toast */}
       {notice && (
-        <div role="status" className={`fos-pop fixed left-4 right-4 z-[120] mx-auto flex max-w-sm items-center gap-2 rounded-card px-4 py-3 text-[13px] font-bold text-white shadow-fos-lg ${notice.tone === "ok" ? "bg-navy-700" : "bg-ruby-500"}`}
+        <div role="status" className={`fos-pop fixed left-4 right-4 z-[120] mx-auto flex max-w-sm items-center gap-2 rounded-card px-4 py-3 text-[13px] font-bold text-white shadow-fos-lg ${notice.tone === "ok" ? "bg-navy-700 text-white" : "bg-gold-400 !text-navy-900"}`}
           style={{ bottom: "calc(84px + env(safe-area-inset-bottom, 0px))" }}>
           <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] shrink-0" {...ICON} strokeWidth={2.2} aria-hidden="true">
             <circle cx="12" cy="12" r="9" />
@@ -304,7 +308,7 @@ export default function ProductDetailPage() {
                   className="fos-press grid h-[52px] w-9 place-items-center text-[20px] font-bold text-navy-700 disabled:text-line">+</button>
               </div>
               {added ? (
-                <Link href="/shop/cart" className="fos-press flex h-[52px] flex-1 items-center justify-center gap-2 rounded-thumb bg-jade-500 text-[15px] font-bold text-white">
+                <Link href="/shop/cart" className="fos-press flex h-[52px] flex-1 items-center justify-center gap-2 rounded-thumb bg-grad-cta text-[15px] font-bold text-white shadow-fos-cta">
                   <Icon name="check" size={18} strokeWidth={2.6} />View cart{count ? ` · ${count}` : ""}
                 </Link>
               ) : (
@@ -322,6 +326,18 @@ export default function ProductDetailPage() {
           )}
         </div>
       </div>
+
+      {showLogin && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-navy-900/45" onClick={() => setShowLogin(false)}>
+          <div className="relative w-full max-w-[480px] rounded-t-[24px] bg-card pb-6" onClick={(e) => e.stopPropagation()}>
+            <button type="button" aria-label="Close" onClick={() => setShowLogin(false)}
+              className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-surface text-ink-900">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+            <TelegramLoginPrompt />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -349,7 +365,7 @@ function VariantPicker({ group, selected, missing, onPick }: { group: VariantGro
       <div className="mb-2.5 flex items-baseline gap-2">
         <span className="text-[13px] font-extrabold text-white">{group.group_name}</span>
         {missing
-          ? <span role="alert" className="truncate text-caption font-semibold text-[#F4A3A6]">Choose a {group.group_name.toLowerCase()} to continue</span>
+          ? <span role="alert" className="truncate text-caption font-semibold text-gold-400">Choose a {group.group_name.toLowerCase()} to continue</span>
           : <span className={`truncate text-caption ${chosen ? "font-bold text-gold-400" : "text-white/60"}`}>{chosen?.label ?? "Choose one"}</span>}
       </div>
       <div className={`flex flex-wrap ${isColor ? "gap-2.5" : "gap-2"}`}>

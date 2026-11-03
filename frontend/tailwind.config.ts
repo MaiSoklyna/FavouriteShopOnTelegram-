@@ -15,9 +15,18 @@ function themeColors() {
     navy: { ...fosTheme.colors.navy, 700: v("navy-700"), 500: v("navy-500") },
     tint: {
       jade: v("tint-jade"), mango: v("tint-mango"), ruby: v("tint-ruby"), gold: v("tint-gold"),
+      positive: v("tint-navy"), caution: v("tint-gold"),
       neutral: v("tint-neutral"), navy: v("tint-navy"), map: v("tint-map"),
     },
-    tone: { jade: v("tone-jade"), mango: v("tone-mango"), navy: v("tone-navy") },
+    tone: {
+      jade: v("tone-jade"), mango: v("tone-mango"), navy: v("tone-navy"),
+      positive: v("tone-navy"), caution: v("tone-mango"),
+    },
+    // Brand roles (same values as --fos-brand* / --fos-accent* in tokens.css):
+    // positive = dark blue (good news), caution = gold (warnings). No green/red in the shop.
+    brand: { DEFAULT: v("navy-700"), tint: v("tint-navy"), text: v("tone-navy") },
+    positive: { 500: v("navy-700") },
+    caution: { 500: v("tone-mango") },
   };
 }
 

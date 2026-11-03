@@ -4,8 +4,8 @@ import { formatWhen, headline, progress, trackSteps, type TrackOrder } from "@/l
 const TONE = {
   navy: "bg-grad-hero",
   mango: "bg-[linear-gradient(135deg,#8A5A19,#B8862B_55%,#D4A53C)]",
-  jade: "bg-[linear-gradient(135deg,#05603A,#12B76A)]",
-  ruby: "bg-[linear-gradient(135deg,#912018,#E5484D)]",
+  positive: "bg-grad-hero",
+  muted: "bg-[linear-gradient(135deg,#3B4656,#5B6472)]",
 } as const;
 
 /** Big status card at the top of the order page: what's happening now + segmented progress. */
@@ -42,7 +42,7 @@ export function OrderStatusHero({ order, eta }: { order: TrackOrder; eta?: strin
   );
 }
 
-/** Vertical tracking timeline: done steps in jade with their time, the current one pulsing mango. */
+/** Vertical tracking timeline: done steps in navy with their time, the current one pulsing mango. */
 export function OrderTimeline({ order }: { order: TrackOrder }) {
   const steps = trackSteps(order);
   return (
@@ -55,11 +55,11 @@ export function OrderTimeline({ order }: { order: TrackOrder }) {
             <li key={s.key} className="flex gap-3" aria-current={s.state === "current" ? "step" : undefined}>
               <div className="flex w-8 flex-col items-center">
                 <span className={`relative grid h-8 w-8 shrink-0 place-items-center rounded-full ${
-                  s.state === "done" ? "bg-jade-500 text-white" : s.state === "current" ? "bg-mango-500 text-white" : "bg-surface text-ink-500"}`}>
+                  s.state === "done" ? "bg-positive-500 text-white" : s.state === "current" ? "bg-mango-500 text-white" : "bg-surface text-ink-500"}`}>
                   {s.state === "current" && <span className="absolute inset-0 animate-ping rounded-full bg-mango-500/40 motion-reduce:animate-none" aria-hidden />}
                   <Icon name={s.state === "done" ? "check" : s.icon} size={16} strokeWidth={s.state === "done" ? 3 : 2} />
                 </span>
-                {!last && <span className={`my-1 w-0.5 flex-1 rounded-full ${s.state === "done" ? "bg-jade-500" : "bg-line"}`} />}
+                {!last && <span className={`my-1 w-0.5 flex-1 rounded-full ${s.state === "done" ? "bg-positive-500" : "bg-line"}`} />}
               </div>
               <div className={`min-w-0 flex-1 ${last ? "" : "pb-4"}`}>
                 <div className="flex items-baseline justify-between gap-2">
@@ -83,7 +83,7 @@ export function OrderProgress({ order }: { order: TrackOrder }) {
   const done = order.status === "delivered";
   return (
     <span className="block h-1.5 overflow-hidden rounded-full bg-surface" aria-hidden>
-      <i className={`block h-full rounded-full transition-[width] duration-300 ${done ? "bg-jade-500" : "bg-mango-500"}`} style={{ width: `${p * 100}%` }} />
+      <i className={`block h-full rounded-full transition-[width] duration-300 ${done ? "bg-positive-500" : "bg-mango-500"}`} style={{ width: `${p * 100}%` }} />
     </span>
   );
 }

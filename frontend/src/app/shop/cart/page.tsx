@@ -180,12 +180,12 @@ export default function CartPage() {
 
         {/* Promo — a code belongs to one shop and only lowers that shop's order */}
         {promo ? (
-          <div className="mt-3 flex h-14 items-center gap-3 rounded-[18px] bg-tint-jade px-4">
-            <Icon name="ticket" size={20} className="text-tone-jade" />
-            <span className="flex-1 truncate text-[14px] font-bold text-tone-jade">
+          <div className="mt-3 flex h-14 items-center gap-3 rounded-[18px] bg-tint-positive px-4">
+            <Icon name="ticket" size={20} className="text-tone-positive" />
+            <span className="flex-1 truncate text-[14px] font-bold text-tone-positive">
               {promo.code} · −{money(promoDiscount)}{promoShop && groups.length > 1 ? ` at ${promoShop}` : ""}
             </span>
-            <button type="button" onClick={clearPromo} className="fos-press h-11 px-2 text-[13px] font-bold text-ruby-500">Remove</button>
+            <button type="button" onClick={clearPromo} className="fos-press h-11 px-2 text-[13px] font-bold text-caution-500">Remove</button>
           </div>
         ) : promoOpen ? (
           <div className="mt-3 rounded-[18px] border border-dashed border-gold-400 bg-card p-2">
@@ -201,7 +201,7 @@ export default function CartPage() {
                 className="fos-press h-11 rounded-md bg-navy-700 px-4 text-[14px] font-bold text-white disabled:opacity-40"
               >{promoLoading ? "…" : "Apply"}</button>
             </div>
-            {promoError && <p className="px-1 pt-1.5 text-caption text-ruby-500">{promoError}</p>}
+            {promoError && <p className="px-1 pt-1.5 text-caption text-caution-500">{promoError}</p>}
           </div>
         ) : (
           <button
@@ -268,8 +268,8 @@ function ShopGroup({ shop, fallbackName, price, located, lines, onQty, onRemove,
   const minShort = quote?.min_order_amount ? Number(quote.min_order_amount) - subtotal : 0;
 
   let feePill = null;
-  if (free) feePill = <Pill variant="jade">Free delivery</Pill>;
-  else if (priced && fee != null) feePill = <Pill variant="jade">{money(fee)}{km != null ? ` · ${km.toFixed(1)} km` : ""}</Pill>;
+  if (free) feePill = <Pill variant="gold">Free delivery</Pill>;
+  else if (priced && fee != null) feePill = <Pill variant="neutral">{money(fee)}{km != null ? ` · ${km.toFixed(1)} km` : ""}</Pill>;
   else if (outOfArea) feePill = <Pill variant="mango">Pickup only</Pill>;
 
   const cta = closed ? "Closed now" : minShort > 0 ? `Add ${money(minShort)} more` : `Checkout ${name}`;
@@ -288,7 +288,7 @@ function ShopGroup({ shop, fallbackName, price, located, lines, onQty, onRemove,
       {closed && <div className="mb-1 mt-2"><Pill variant="mango">Closed now · order opens later</Pill></div>}
       {minShort > 0 && <div className="mb-1 mt-2"><Pill variant="mango">Min. order {money(quote!.min_order_amount)}</Pill></div>}
       {outOfArea && (
-        <p className="mb-1 mt-2 rounded-md bg-tint-ruby px-2.5 py-2 text-[12px] font-semibold text-ruby-500">
+        <p className="mb-1 mt-2 rounded-md bg-tint-caution px-2.5 py-2 text-[12px] font-semibold text-caution-500">
           Doesn&apos;t deliver to your location{price?.error ? ` · ${price.error}` : ""}. Pickup still works.
         </p>
       )}
@@ -300,21 +300,21 @@ function ShopGroup({ shop, fallbackName, price, located, lines, onQty, onRemove,
       <div className="mt-1 border-t border-line pt-2.5 text-[13px] tabular-nums">
         <div className="flex justify-between py-0.5"><span className="text-ink-500">Subtotal</span><span className="font-bold text-ink-900">{money(subtotal)}</span></div>
         {discount > 0 && (
-          <div className="flex justify-between py-0.5 font-bold text-tone-jade"><span className="min-w-0 truncate pr-2">{quote?.promo_title ?? quote?.promo_code ?? "Promo"}{quote?.promo_auto ? " · applied automatically" : ""}</span><span>−{money(discount)}</span></div>
+          <div className="flex justify-between py-0.5 font-bold text-tone-positive"><span className="min-w-0 truncate pr-2">{quote?.promo_title ?? quote?.promo_code ?? "Promo"}{quote?.promo_auto ? " · applied automatically" : ""}</span><span>−{money(discount)}</span></div>
         )}
         <div className="flex justify-between py-0.5">
           <span className="text-ink-500">Delivery</span>
-          <span className={`font-bold ${free || fee === 0 ? "text-tone-jade" : "text-ink-900"}`}>
+          <span className={`font-bold ${free || fee === 0 ? "text-tone-positive" : "text-ink-900"}`}>
             {free || fee === 0 ? "Free" : fee != null ? money(fee) : outOfArea ? "Pickup only" : "At checkout"}
           </span>
         </div>
         {!free && (
           <div className="mt-1.5">
             <div className="text-[11px] font-semibold text-ink-500">
-              Add {money(FREE_DELIVERY_OVER_USD - subtotal)} more for <span className="text-tone-jade">free delivery</span>
+              Add {money(FREE_DELIVERY_OVER_USD - subtotal)} more for <span className="text-tone-positive">free delivery</span>
             </div>
             <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface">
-              <i className="block h-full rounded-full bg-jade-500 transition-[width] duration-300" style={{ width: `${Math.max(4, (subtotal / FREE_DELIVERY_OVER_USD) * 100)}%` }} />
+              <i className="block h-full rounded-full bg-positive-500 transition-[width] duration-300" style={{ width: `${Math.max(4, (subtotal / FREE_DELIVERY_OVER_USD) * 100)}%` }} />
             </div>
           </div>
         )}
@@ -359,7 +359,7 @@ function CartLine({ line, onQty, onRemove }: {
           type="button"
           onClick={() => (line.quantity <= 1 ? onRemove(line) : onQty(line, line.quantity - 1))}
           aria-label={line.quantity <= 1 ? "Remove" : "Decrease"}
-          className={`fos-press grid h-8 w-8 place-items-center ${line.quantity <= 1 ? "text-ruby-500" : "text-ink-900"}`}
+          className={`fos-press grid h-8 w-8 place-items-center ${line.quantity <= 1 ? "text-caution-500" : "text-ink-900"}`}
         >
           {line.quantity <= 1
             ? <svg width="16" height="16" viewBox="0 0 24 24" {...ICON} aria-hidden><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>

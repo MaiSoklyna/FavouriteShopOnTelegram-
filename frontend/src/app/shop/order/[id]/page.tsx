@@ -160,17 +160,17 @@ function OrderDetailContent() {
   return (
     <div className="min-h-screen bg-surface pb-10">
       <TopBar title="Order" code={order.order_code} pill={
-        <Pill variant={cancelled ? "neutral" : order.status === "delivered" ? "jade" : "mango"} className={cancelled ? "!bg-tint-ruby !text-ruby-500" : ""}>
+        <Pill variant={cancelled ? "neutral" : order.status === "delivered" ? "positive" : "mango"} className="">
           {statusLabel(order)}
         </Pill>
       } />
 
       <div className="flex flex-col gap-3 px-gutter pt-2">
         {showSuccess && !unpaid && (
-          <div className="shop-fade-up flex items-center gap-3 rounded-card bg-tint-jade p-3.5" role="status">
+          <div className="shop-fade-up flex items-center gap-3 rounded-card bg-tint-positive p-3.5" role="status">
             <span className="brand-glow grid shrink-0 place-items-center rounded-full text-gold-700"><SuccessIcon size={44} /></span>
             <div className="min-w-0">
-              <div className="text-[14px] font-extrabold text-tone-jade">Order placed!</div>
+              <div className="text-[14px] font-extrabold text-tone-positive">Order placed!</div>
               <div className="text-caption text-ink-500">We&apos;ll message you in Telegram as it moves</div>
             </div>
           </div>
@@ -225,8 +225,8 @@ function OrderDetailContent() {
         <section className="rounded-hero bg-card p-4 text-[14px] shadow-fos-sm">
           <Row label="Items" value={money(order.subtotal || order.total)} />
           <Row label={pickup ? "Pickup" : `Delivery${order.distance_km != null ? ` · ${formatKm(Number(order.distance_km))}` : ""}`}
-            value={deliveryFee > 0 ? money(deliveryFee) : "Free"} tone={deliveryFee > 0 ? undefined : "jade"} />
-          {discount > 0 && <Row label="Discount" value={`−${money(discount)}`} tone="jade" />}
+            value={deliveryFee > 0 ? money(deliveryFee) : "Free"} tone={deliveryFee > 0 ? undefined : "gold"} />
+          {discount > 0 && <Row label="Discount" value={`−${money(discount)}`} tone="gold" />}
           <div className="mt-2 flex items-end justify-between border-t border-line pt-3">
             <span className="text-[15px] font-extrabold text-ink-900">Total</span>
             <span className="text-right">
@@ -237,12 +237,12 @@ function OrderDetailContent() {
           <div className="mt-3 flex items-center gap-2.5 rounded-thumb bg-surface p-2.5">
             {order.payment_method === "khqr"
               ? <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-[#E1232E] text-[8px] font-black text-white">KHQR</span>
-              : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-jade-500 text-[14px] font-black text-white">$</span>}
+              : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-positive-500 text-[14px] font-black text-white">$</span>}
             <span className="min-w-0 flex-1 text-[13px] font-bold text-ink-900">
               {order.payment_method === "khqr" ? "ABA KHQR" : pickup ? "Cash at the shop" : "Cash on delivery"}
             </span>
             {order.payment_method === "khqr" && (
-              order.payment_status === "paid" ? <Pill variant="jade">Paid</Pill> : !cancelled && <Pill variant="mango">Unpaid</Pill>
+              order.payment_status === "paid" ? <Pill variant="positive">Paid</Pill> : !cancelled && <Pill variant="mango">Unpaid</Pill>
             )}
           </div>
           {order.customer_note && (
@@ -282,7 +282,7 @@ function OrderDetailContent() {
             </button>
             {order.status === "pending" && (
               <button type="button" onClick={handleCancel} disabled={cancelling}
-                className="fos-press h-12 flex-1 rounded-thumb bg-card text-[14px] font-extrabold text-ruby-500 shadow-fos-sm disabled:opacity-50">
+                className="fos-press h-12 flex-1 rounded-thumb bg-card text-[14px] font-extrabold text-caution-500 shadow-fos-sm disabled:opacity-50">
                 {cancelling ? "Cancelling…" : "Cancel order"}
               </button>
             )}
@@ -338,11 +338,11 @@ function TopBar({ title, code, pill }: { title: string; code?: string; pill?: Re
   );
 }
 
-function Row({ label, value, tone }: { label: string; value: string; tone?: "jade" }) {
+function Row({ label, value, tone }: { label: string; value: string; tone?: "gold" }) {
   return (
     <div className="flex justify-between py-1">
       <span className="text-ink-500">{label}</span>
-      <span className={`font-bold tabular-nums ${tone === "jade" ? "text-tone-jade" : "text-ink-900"}`}>{value}</span>
+      <span className={`font-bold tabular-nums ${tone === "gold" ? "text-tone-caution" : "text-ink-900"}`}>{value}</span>
     </div>
   );
 }
@@ -384,7 +384,7 @@ function PlaceCard({ pickup, you, shopPoint, shop, shopName, address, name, phon
         </div>
         {pickup && shop?.phone && (
           <a href={`tel:${shop.phone}`} aria-label={`Call ${shopName}`}
-            className="fos-press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-tint-jade text-tone-jade">
+            className="fos-press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-tint-positive text-tone-positive">
             <Icon name="phone" size={18} />
           </a>
         )}

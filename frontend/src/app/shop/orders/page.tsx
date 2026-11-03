@@ -118,7 +118,7 @@ function OrderCard({ order, shop }: { order: Order; shop?: ShopBrief }) {
           <div className="truncate text-[15px] font-extrabold text-ink-900">{name}</div>
           <div className="truncate text-caption text-ink-500">{order.order_code} · {formatWhen(order.created_at)}</div>
         </div>
-        <Pill variant={cancelled ? "neutral" : order.status === "delivered" ? "jade" : "mango"} className={cancelled ? "!bg-tint-ruby !text-ruby-500" : ""}>
+        <Pill variant={cancelled ? "neutral" : order.status === "delivered" ? "positive" : "mango"} className="">
           {statusLabel(order)}
         </Pill>
       </div>

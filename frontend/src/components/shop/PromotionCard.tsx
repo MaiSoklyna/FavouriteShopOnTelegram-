@@ -105,7 +105,7 @@ export function PromotionCard({ promo }: { promo: Promotion }) {
             <button type="button" onClick={copy} aria-label={`Copy promo code ${offer.code}`}
               className="fos-press flex h-10 items-center justify-between gap-2 rounded-md border-[1.5px] border-dashed border-gold-700 bg-[#FBF4E4] pl-3 pr-1.5">
               <span className="truncate font-mono text-[15px] font-extrabold tracking-[0.06em] text-[#081D3C]">{offer.code}</span>
-              <span className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-[11px] font-extrabold ${copied ? "bg-jade-500 text-white" : "bg-[#081D3C] text-gold-400"}`}>
+              <span className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-2.5 text-[11px] font-extrabold ${copied ? "bg-positive-500 text-white" : "bg-[#081D3C] text-gold-400"}`}>
                 <Icon name={copied ? "check" : "ticket"} size={12} strokeWidth={2.4} />{copied ? "Copied" : "Tap to copy"}
               </span>
             </button>

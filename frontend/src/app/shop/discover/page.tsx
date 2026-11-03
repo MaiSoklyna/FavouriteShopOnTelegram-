@@ -212,7 +212,7 @@ const TONES: Record<string, string> = {
   navy: "bg-grad-hero text-white",
   gold: "bg-grad-gold text-[#4A3610]",
   night: "bg-[linear-gradient(135deg,#1F1147,#3B2A7A)] text-white",
-  jade: "bg-[linear-gradient(135deg,#05603A,#12B76A)] text-white",
+  promo: "bg-grad-promo text-white",
 };
 
 function CollectionTile({ href, title, tone, shops }: { href: string; title: string; tone: string; shops: DiscoverShop[] }) {

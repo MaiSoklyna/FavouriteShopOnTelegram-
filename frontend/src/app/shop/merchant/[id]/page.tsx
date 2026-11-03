@@ -178,10 +178,10 @@ export default function MerchantDetailPage() {
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {rating != null ? <RatingPill rating={rating} /> : <Pill variant="neutral"><Icon name="star" size={12} />New shop</Pill>}
-          {near && (near.is_open ? <Pill variant="jade">Open now</Pill> : <Pill variant="neutral" className="!text-ruby-500">Closed</Pill>)}
+          {near && (near.is_open ? <Pill variant="positive">Open now</Pill> : <Pill variant="neutral">Closed</Pill>)}
           {near && <Pill variant="neutral"><Icon name="pin" size={12} />{formatKm(near.distance_km)}{near.eta_minutes != null && near.eta_max_minutes != null ? ` · ${formatEta(near.eta_minutes, near.eta_max_minutes)}` : ""}</Pill>}
           {near && (near.can_deliver
-            ? <Pill variant={fee === 0 ? "jade" : "neutral"}><Icon name="truck" size={12} />{fee === 0 ? "Free delivery" : fee != null ? `${money(fee)} delivery` : "Delivers"}</Pill>
+            ? <Pill variant={fee === 0 ? "gold" : "neutral"}><Icon name="truck" size={12} />{fee === 0 ? "Free delivery" : fee != null ? `${money(fee)} delivery` : "Delivers"}</Pill>
             : <Pill variant="mango">Pickup only</Pill>)}
         </div>
 

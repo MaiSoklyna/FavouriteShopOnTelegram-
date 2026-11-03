@@ -36,12 +36,6 @@ function NotificationsContent() {
   const unread = notifications.filter(n => !n.is_read).length;
 
   const typeIcon: Record<string, IconName> = { promo: "tag", order: "box", system: "gear", loyalty: "star" };
-  const typeColor: Record<string, string> = {
-    promo: "#F59E0B",
-    order: "var(--shop-primary, #1E6BFF)",
-    system: "var(--shop-muted, #8A8F9C)",
-    loyalty: "#F59E0B",
-  };
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--shop-bg, #F7F8FB)" }}>
@@ -56,7 +50,7 @@ function NotificationsContent() {
         </h1>
         {unread > 0 && (
           <span style={{
-            background: "#C62828", color: "#FFFFFF",
+            background: "var(--fos-brand)", color: "#FFFFFF",
             fontSize: 11, fontWeight: 700, padding: "3px 10px",
             borderRadius: "var(--shop-r-pill, 999px)",
           }}>
@@ -80,10 +74,10 @@ function NotificationsContent() {
           <div style={{ textAlign: "center", paddingTop: 80 }}>
             <div style={{
               width: 64, height: 64, borderRadius: "50%",
-              background: "var(--shop-primary-tint, #E8F0FF)",
+              background: "var(--fos-brand-tint)", color: "var(--fos-brand)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 28, margin: "0 auto 16px",
-            }}>&#128276;</div>
+              margin: "0 auto 16px",
+            }}><Icon name="bell" size={28} /></div>
             <p style={{ color: "var(--shop-muted, #8A8F9C)", fontSize: 14 }}>No notifications yet</p>
           </div>
         ) : (
@@ -96,8 +90,8 @@ function NotificationsContent() {
                   onClick={() => isUnread && markRead(n.id)}
                   style={{
                     width: "100%", textAlign: "left", padding: "14px 12px",
-                    background: isUnread ? "var(--shop-primary-tint, #E8F0FF)" : "transparent",
-                    borderLeft: isUnread ? "3px solid var(--shop-primary, #1E6BFF)" : "3px solid transparent",
+                    background: isUnread ? "var(--fos-brand-tint)" : "transparent",
+                    borderLeft: isUnread ? "3px solid var(--fos-brand)" : "3px solid transparent",
                     borderRight: "none", borderTop: "none",
                     borderBottom: isUnread ? "none" : "1px solid var(--shop-divider, #ECEEF3)",
                     cursor: isUnread ? "pointer" : "default",
@@ -108,14 +102,10 @@ function NotificationsContent() {
                   {/* Icon circle */}
                   <div style={{
                     width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
-                    background: isUnread
-                      ? "var(--shop-surface, #FFFFFF)"
-                      : "var(--shop-bg, #F7F8FB)",
+                    background: isUnread ? "var(--shop-surface, #FFFFFF)" : "var(--fos-brand-tint)",
+                    color: "var(--fos-brand)",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 20,
-                    border: isUnread
-                      ? `2px solid var(--shop-primary, #1E6BFF)`
-                      : "1px solid var(--shop-divider, #ECEEF3)",
+                    border: isUnread ? "2px solid var(--fos-brand)" : "1px solid transparent",
                   }}>
                     <Icon name={typeIcon[n.type] || "bell"} size={20} />
                   </div>
@@ -130,7 +120,7 @@ function NotificationsContent() {
                       {isUnread && (
                         <span style={{
                           width: 8, height: 8, borderRadius: "50%",
-                          background: "var(--shop-primary, #1E6BFF)",
+                          background: "var(--fos-brand)",
                           flexShrink: 0, marginTop: 5, marginLeft: 8,
                         }} />
                       )}

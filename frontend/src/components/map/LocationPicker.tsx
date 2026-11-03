@@ -16,7 +16,7 @@ export interface PickedLocation {
   address: string;
 }
 
-/** Delivery-zone line under the address: ok → jade, not ok → ruby. */
+/** Delivery-zone line under the address: ok → navy (positive), not ok → gold (caution). */
 export interface Zone { ok: boolean; text: string }
 
 export interface Suggestion { id: string | number; name: string; address: string; pos: LatLng; icon: IconName }
@@ -241,7 +241,7 @@ export default function LocationPicker({ initial, shop, shopInfo, radiusKm, zone
           </button>
         )}
         {locError && (
-          <p className="absolute inset-x-gutter top-3 rounded-thumb bg-card p-2.5 text-center text-caption font-semibold text-ruby-500 shadow-fos-md">
+          <p className="absolute inset-x-gutter top-3 rounded-thumb bg-card p-2.5 text-center text-caption font-semibold text-caution-500 shadow-fos-md">
             Couldn&apos;t get your location — allow access, or search for your place.
           </p>
         )}
@@ -274,7 +274,7 @@ export default function LocationPicker({ initial, shop, shopInfo, radiusKm, zone
             {!busy && picked && zoneState && (
               zoneState === "checking"
                 ? <span className="mt-2 inline-flex h-6 items-center rounded-full bg-tint-neutral px-2.5 text-[11px] font-bold text-ink-500">Checking delivery…</span>
-                : <span className={`mt-2 inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-[11px] font-bold ${zoneState.ok ? "bg-tint-jade text-tone-jade" : "bg-tint-ruby text-ruby-500"}`}>
+                : <span className={`mt-2 inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-[11px] font-bold ${zoneState.ok ? "bg-tint-positive text-tone-positive" : "bg-tint-caution text-caution-500"}`}>
                     <Icon name={zoneState.ok ? "check" : "alert"} size={12} strokeWidth={2.6} />{zoneState.text}
                   </span>
             )}

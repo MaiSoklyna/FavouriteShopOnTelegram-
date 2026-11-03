@@ -12,6 +12,27 @@
   --fos-jade-500: #12B76A;
   --fos-ruby-500: #E5484D;
 
+  /* Brand roles — the ONE place customer screens take their colours from.
+     Theme-aware: the --fos-c-* values switch in [data-theme="dark"] (globals.css).
+       Dark blue = primary actions, links, active states, and good news (paid, delivered, open)
+       Gold      = highlights, rewards, promotions, savings, and warnings
+     Customer screens use no generic green/red. (Only the official KHQR mark keeps its red.) */
+  --fos-brand: rgb(var(--fos-c-navy-700));
+  --fos-brand-strong: var(--fos-navy-900);
+  --fos-brand-tint: rgb(var(--fos-c-tint-navy));
+  --fos-brand-text: rgb(var(--fos-c-tone-navy));
+  --fos-brand-grad: var(--fos-grad-cta);
+  --fos-accent: var(--fos-gold-400);
+  --fos-accent-strong: var(--fos-mango-500);
+  --fos-accent-tint: rgb(var(--fos-c-tint-gold));
+  --fos-accent-text: rgb(var(--fos-c-tone-mango));
+  /* Roles, mapped onto the two brand colours */
+  --fos-positive: var(--fos-brand);
+  --fos-warning: var(--fos-accent-text);
+  --fos-warning-tint: var(--fos-accent-tint);
+  /* Kept for older code; now brand-coloured */
+  --fos-success: var(--fos-positive);
+
   /* Neutrals */
   --fos-ink-900: #0E1A2B;
   --fos-ink-500: #5B6472;   /* replaces #746D6D */

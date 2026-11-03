@@ -263,12 +263,12 @@ export default function ProfilePage() {
               background: "rgba(239, 68, 68, 0.06)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--shop-muted)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
               </svg>
             </div>
             <span style={{
-              flex: 1, textAlign: "left", fontSize: 14, fontWeight: 500, color: "#EF4444",
+              flex: 1, textAlign: "left", fontSize: 14, fontWeight: 500, color: "var(--shop-text)",
               fontFamily: "'Kantumruy Pro', sans-serif",
             }}>Logout</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--shop-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

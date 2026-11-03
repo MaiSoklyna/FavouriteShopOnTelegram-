@@ -269,7 +269,7 @@ export default function RewardsPage() {
                 return (
                   <div key={tx.id} className="flex items-center justify-between gap-3 rounded-card bg-card px-4 py-3 shadow-fos-sm">
                     <div className="flex min-w-0 items-center gap-3">
-                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${isEarn ? "bg-tint-jade text-tone-jade" : "bg-tint-ruby text-ruby-500"}`}>
+                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${isEarn ? "bg-tint-positive text-tone-positive" : "bg-tint-caution text-caution-500"}`}>
                         <Icon name={isEarn ? "plus" : "gift"} size={16} strokeWidth={2.4} />
                       </span>
                       <div className="min-w-0">
@@ -277,7 +277,7 @@ export default function RewardsPage() {
                         {tx.description && <p className="truncate text-[11px] text-ink-500">{tx.description}</p>}
                       </div>
                     </div>
-                    <span className={`shrink-0 text-[15px] font-extrabold ${isEarn ? "text-tone-jade" : "text-ruby-500"}`}>
+                    <span className={`shrink-0 text-[15px] font-extrabold ${isEarn ? "text-tone-positive" : "text-caution-500"}`}>
                       {isEarn ? "+" : ""}{pts(tx.points)}
                     </span>
                   </div>

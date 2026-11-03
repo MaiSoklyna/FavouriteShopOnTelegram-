@@ -56,7 +56,7 @@ export function KhqrCard({ data, loading, error, timer, onRetry }: {
           ) : (
             <div className="grid h-full place-items-center rounded-thumb bg-surface p-6 text-center">
               <div>
-                <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-tint-ruby text-ruby-500"><Icon name="alert" size={24} /></span>
+                <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-tint-caution text-caution-500"><Icon name="alert" size={24} /></span>
                 <p className="mt-2 text-[14px] font-bold text-ink-900">{error || "Could not create the QR"}</p>
                 <button type="button" onClick={onRetry} className="fos-press mt-3 h-10 rounded-full bg-navy-700 px-5 text-[13px] font-extrabold text-white">Try again</button>
               </div>
@@ -70,11 +70,11 @@ export function KhqrCard({ data, loading, error, timer, onRetry }: {
             {amount != null && <div className="text-caption tabular-nums text-ink-500">{formatKhr(amount)}</div>}
           </div>
           {data && (
-            <span className={`flex items-center gap-1.5 text-[13px] font-extrabold tabular-nums ${expired ? "text-ruby-500" : "text-ink-900"}`}
+            <span className={`flex items-center gap-1.5 text-[13px] font-extrabold tabular-nums ${expired ? "text-caution-500" : "text-ink-900"}`}
               aria-label={expired ? "QR expired" : `Expires in ${mmss}`}>
               <svg width="28" height="28" viewBox="0 0 36 36" aria-hidden>
                 <circle cx="18" cy="18" r="15" fill="none" stroke="#E3E8EF" strokeWidth="4" />
-                <circle cx="18" cy="18" r="15" fill="none" stroke={left < 60 ? "#E5484D" : "#B8862B"} strokeWidth="4" strokeLinecap="round"
+                <circle cx="18" cy="18" r="15" fill="none" stroke={left < 60 ? "var(--fos-gold-700)" : "var(--fos-mango-500)"} strokeWidth="4" strokeLinecap="round"
                   transform="rotate(-90 18 18)" strokeDasharray={C} strokeDashoffset={C * (1 - left / lifetime)}
                   className="transition-[stroke-dashoffset] duration-1000 ease-linear" />
               </svg>
@@ -86,8 +86,8 @@ export function KhqrCard({ data, loading, error, timer, onRetry }: {
         {data && !expired && (
           <p className="mt-2 flex items-center gap-2 text-caption text-ink-500">
             <span className="relative flex h-2 w-2" aria-hidden>
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-jade-500 opacity-60 motion-reduce:animate-none" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-jade-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-positive-500 opacity-60 motion-reduce:animate-none" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-positive-500" />
             </span>
             Waiting for payment · updates by itself
           </p>
@@ -111,10 +111,10 @@ export function KhqrCard({ data, loading, error, timer, onRetry }: {
   );
 }
 
-const CONFETTI = ["#B8862B", "#12B76A", "#D6BA80", "#1B4B8A", "#E5484D", "#D4A53C"];
+const CONFETTI = ["#B8862B", "#103562", "#D6BA80", "#1B4B8A", "#71541A", "#D4A53C"];
 
 /**
- * Full-screen "Paid" moment: jade check, confetti, amount and ETA. Moves on by
+ * Full-screen "Paid" moment: brand check, confetti, amount and ETA. Moves on by
  * itself after `autoMs`, or straight away from the button.
  */
 export function PaidSuccess({ amount, eta, note, cta = "View order", onDone, autoMs = 2600 }: {
@@ -126,7 +126,7 @@ export function PaidSuccess({ amount, eta, note, cta = "View order", onDone, aut
   }, [onDone, autoMs]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden bg-[linear-gradient(160deg,rgb(var(--fos-c-tint-jade)),rgb(var(--fos-c-card))_60%)] px-gutter text-center"
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden bg-[linear-gradient(160deg,rgb(var(--fos-c-tint-positive)),rgb(var(--fos-c-card))_60%)] px-gutter text-center"
       role="status" aria-live="polite">
       <div className="pointer-events-none absolute inset-x-0 top-1/3 h-0 motion-reduce:hidden" aria-hidden>
         {Array.from({ length: 18 }, (_, i) => (
@@ -146,7 +146,7 @@ export function PaidSuccess({ amount, eta, note, cta = "View order", onDone, aut
       <h1 className="mt-5 text-display text-ink-900">Paid</h1>
       {amount != null && <p className="mt-1 text-[15px] font-bold tabular-nums text-ink-500">${amount.toFixed(2)} · {formatKhr(amount)}</p>}
       <div className="mt-3 flex flex-wrap justify-center gap-2">
-        {eta && <span className="inline-flex h-7 items-center gap-1 rounded-full bg-tint-jade px-3 text-[12px] font-extrabold text-tone-jade"><Icon name="truck" size={14} />Arrives in {eta}</span>}
+        {eta && <span className="inline-flex h-7 items-center gap-1 rounded-full bg-tint-positive px-3 text-[12px] font-extrabold text-tone-positive"><Icon name="truck" size={14} />Arrives in {eta}</span>}
         {note && <span className="inline-flex h-7 items-center rounded-full bg-tint-neutral px-3 text-[12px] font-bold text-ink-500">{note}</span>}
       </div>
       <button type="button" onClick={onDone}
