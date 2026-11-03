@@ -46,7 +46,7 @@ _TS_DIGITS = 10  # unix timestamp suffix length in tran_id
 _ORDER_COLUMNS = (
     "id,user_id,merchant_id,order_code,total,status,payment_method,"
     "payment_status,payway_tran_id,customer_name,delivery_name,delivery_phone,"
-    "delivery_fee,commission_rate,payout_mode"
+    "delivery_fee,commission_rate,payout_mode,platform_discount_amount"
 )
 
 
@@ -315,7 +315,7 @@ def _build_payout(order: dict, merchant: dict | None, commission_rate) -> tuple[
     is verified. Otherwise the platform collects everything and the
     merchant is paid from the settlement ledger.
     """
-    if not settlement.split_payout_allowed(merchant):
+    if not settlement.split_payout_allowed(merchant, order):
         return None, "platform"
     split = settlement.compute_split(order, commission_rate)
     if split.net <= 0:

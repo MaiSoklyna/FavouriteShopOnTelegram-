@@ -13,6 +13,9 @@ export function EarningsTable({ rows, loading, empty }: { rows: Earning[]; loadi
           <div className="font-semibold">
             {e.entry_type === "adjustment" ? "Adjustment" : e.order_code ?? (e.order_id ? `#${e.order_id}` : "—")}
           </div>
+          {e.collected_by === "merchant" && (
+            <div className="text-[11px] text-text-muted">Cash on delivery</div>
+          )}
           {e.entry_type === "adjustment" && e.description && (
             <div className="max-w-[260px] truncate text-[11px] text-text-muted" title={e.description}>{e.description}</div>
           )}
@@ -20,7 +23,20 @@ export function EarningsTable({ rows, loading, empty }: { rows: Earning[]; loadi
       ),
     },
     { key: "date", header: "Paid on", render: (e) => <span className="whitespace-nowrap">{formatDate(e.created_at, false)}</span> },
-    { key: "gross", header: "Order total", align: "right", render: (e) => formatMoney(e.gross_amount, e.currency) },
+    { key: "gross", header: "Customer paid us", align: "right", render: (e) => formatMoney(e.gross_amount, e.currency) },
+    {
+      key: "subsidy",
+      header: "Platform discount",
+      align: "right",
+      render: (e) =>
+        Number(e.platform_subsidy ?? 0) !== 0 ? (
+          <span className="text-success" title="Discount paid by Byme24 — added to what you earn">
+            +{formatMoney(e.platform_subsidy, e.currency)}
+          </span>
+        ) : (
+          <span className="text-text-muted">—</span>
+        ),
+    },
     {
       key: "commission",
       header: "Commission",

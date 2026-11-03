@@ -27,6 +27,8 @@ export interface MerchantBalance {
   failed_amount: Money;
   gross_total: Money;
   commission_total: Money;
+  /** Platform-funded discounts the platform pays the shop (migration 022) */
+  subsidy_total?: Money;
   last_earning_at?: string | null;
   // admin list only
   aba_account_masked?: string | null;
@@ -44,6 +46,9 @@ export interface Earning {
   entry_type: "order" | "adjustment";
   currency: string;
   gross_amount: Money;
+  /** Platform-funded discount added to what the shop earns */
+  platform_subsidy?: Money;
+  collected_by?: "platform" | "merchant";
   commission_base: Money;
   commission_rate: Money;
   commission_amount: Money;
@@ -113,6 +118,8 @@ export interface ReportRow {
   currency: string;
   orders: number;
   gross: Money;
+  /** Platform-funded discounts paid to shops */
+  subsidy?: Money;
   commission: Money;
   net: Money;
   paid_out: Money;

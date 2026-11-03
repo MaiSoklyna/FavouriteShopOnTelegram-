@@ -32,14 +32,19 @@ interface Form {
   code: string; discount_type: "percent" | "fixed"; discount_value: string; min_order: string; max_uses: string;
   starts_at: string; ends_at: string; display_locations: Location[]; is_active: boolean;
   schedule_type: ScheduleType; weekdays: number[]; month_days: number[]; yearly_ranges: YearlyRange[]; auto_apply: boolean;
+  /** Who pays the discount. "" = the default: platform-wide → platform, a shop's → the shop */
+  funded_by: "" | "shop" | "platform";
 }
 
 const EMPTY: Form = {
   title: "", subtitle: "", scope: "shop", merchant_id: 0, category_id: 0, product_ids: [],
   has_offer: true, code: "", discount_type: "percent", discount_value: "", min_order: "", max_uses: "",
   starts_at: "", ends_at: "", display_locations: ["home_promotions"], is_active: true,
-  schedule_type: "once", weekdays: [], month_days: [], yearly_ranges: [], auto_apply: true,
+  schedule_type: "once", weekdays: [], month_days: [], yearly_ranges: [], auto_apply: true, funded_by: "",
 };
+
+/** Default funder for a scope, as the backend decides it when none is chosen. */
+const defaultFunder = (scope: Scope) => (scope === "platform" ? "platform" : "shop");
 
 const offerText = (p: PromotionRow) => p.offer ? (p.offer.type === "percent" ? `${Number(p.offer.value)}% OFF` : `$${Number(p.offer.value).toFixed(2)} OFF`) : "Banner only";
 
@@ -126,6 +131,7 @@ export default function PromotionBannersPage() {
       display_locations: Array.from(new Set((p.display_locations || []).map(l => (l === "home_featured" ? "home_promotions" : l)))) as Location[], is_active: p.is_active,
       schedule_type: p.schedule_type ?? "once", weekdays: p.weekdays ?? [], month_days: p.month_days ?? [],
       yearly_ranges: p.yearly_ranges ?? [], auto_apply: p.auto_apply ?? true,
+      funded_by: p.funded_by && p.funded_by !== defaultFunder(p.scope) ? p.funded_by : "",
     });
     setImage(null); setSavedImage(p.image_url); setProductQuery(""); setModal(true);
   }
@@ -155,6 +161,8 @@ export default function PromotionBannersPage() {
       display_locations: form.display_locations, is_active: form.is_active,
       schedule_type: form.schedule_type, weekdays: form.weekdays, month_days: form.month_days,
       yearly_ranges: form.yearly_ranges, auto_apply: form.auto_apply,
+      // Only a super admin may choose; the server ignores it for shop admins
+      funded_by: isSuperAdmin ? form.funded_by || defaultFunder(form.scope) : null,
     };
     setSaving(true);
     try {
@@ -223,6 +231,11 @@ export default function PromotionBannersPage() {
                   <span style={pill(p.is_live ? "#E7F8EF" : "#F1F4F8", p.is_live ? "#067647" : "#5B6472")}>
                     {p.is_live ? "Live now" : !p.is_active ? "Off" : p.next_start ? `Next: ${new Date(p.next_start).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}` : "Ended"}
                   </span>
+                  {p.offer && (
+                    <span style={(p.funded_by ?? defaultFunder(p.scope)) === "platform" ? pill("#E8F0FF", "#1E4FBF") : pill("#F1F4F8", "#5B6472")}>
+                      {(p.funded_by ?? defaultFunder(p.scope)) === "platform" ? "Platform pays" : "Shop pays"}
+                    </span>
+                  )}
                   <span style={pill("#FBF4E4", "#71541A")}>{SCOPES.find(s => s.key === p.scope)?.label}{p.scope === "product" ? ` · ${p.product_ids?.length ?? 0}` : p.scope === "category" && p.category_name ? ` · ${p.category_name}` : ""}</span>
                 </div>
                 <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
@@ -335,7 +348,22 @@ export default function PromotionBannersPage() {
                   <Field label={`Discount amount * (${form.discount_type === "percent" ? "%" : "$"})`}><input className="admin-input" type="number" min="0" step="0.01" value={form.discount_value} onChange={e => set("discount_value", e.target.value)} placeholder={form.discount_type === "percent" ? "30" : "5.00"} /></Field>
                   <Field label="Minimum order ($)"><input className="admin-input" type="number" min="0" step="0.01" value={form.min_order} onChange={e => set("min_order", e.target.value)} placeholder="0" /></Field>
                   <Field label="Usage limit"><input className="admin-input" type="number" min="1" value={form.max_uses} onChange={e => set("max_uses", e.target.value)} placeholder="Unlimited" /></Field>
+                  {isSuperAdmin && (
+                    <Field label="Who pays the discount">
+                      <select className="admin-input" value={form.funded_by || defaultFunder(form.scope)} onChange={e => set("funded_by", e.target.value === defaultFunder(form.scope) ? "" : (e.target.value as Form["funded_by"]))}>
+                        <option value="platform">Platform (shop is paid in full)</option>
+                        <option value="shop">Shop (comes out of its payout)</option>
+                      </select>
+                    </Field>
+                  )}
                 </div>
+                )}
+                {form.has_offer && (
+                  <small style={hint}>
+                    {(isSuperAdmin ? form.funded_by || defaultFunder(form.scope) : "shop") === "platform"
+                      ? "Byme24 pays this discount. The shop still receives the full price, minus commission."
+                      : isSuperAdmin ? "The shop pays this discount: it comes out of the shop's payout." : "Your shop pays this discount: it comes out of your payout."}
+                  </small>
                 )}
               </Section>
 
@@ -477,7 +505,7 @@ function EligibleSummary({ scope, shopName, products, shopChosen, loading, shopP
   scope: Scope; shopName?: string; products: Product[]; shopChosen: boolean; loading: boolean; shopProductCount: number; categoryName?: string;
 }) {
   let line: string;
-  if (scope === "platform") line = "Every product in every shop is eligible. The discount is taken off each shop's order.";
+  if (scope === "platform") line = "Every product in every shop is eligible.";
   else if (!shopChosen) line = "Choose the shop to see which products are eligible.";
   else if (loading) line = `Loading ${shopName ?? "the shop"}'s products…`;
   else if (shopProductCount === 0) line = `${shopName ?? "This shop"} has no products yet, so nothing would be discounted.`;

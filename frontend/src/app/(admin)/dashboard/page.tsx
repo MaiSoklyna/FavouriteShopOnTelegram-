@@ -35,6 +35,9 @@ export default function DashboardPage() {
     { label: "Pending Orders", value: stats?.pendingOrders ?? 0, icon: HiOutlineClock, color: "var(--warning)" },
     { label: "Today's Orders", value: stats?.todayOrders ?? 0, icon: HiOutlineTrendingUp, color: "var(--info)" },
     { label: "Today's Revenue", value: `$${(stats?.todayRevenue ?? 0).toLocaleString()}`, icon: HiOutlineCurrencyDollar, color: "var(--success)" },
+    // Discounts split by who paid: a shop's revenue already includes the platform-paid ones
+    { label: isSuperAdmin ? "Shop-paid Discounts" : "Your Shop's Discounts", value: `$${(stats?.merchantFundedDiscounts ?? 0).toLocaleString()}`, icon: HiOutlineCurrencyDollar, color: "var(--warning)" },
+    { label: isSuperAdmin ? "Platform-paid Discounts" : "Paid by Byme24", value: `$${(stats?.platformFundedDiscounts ?? 0).toLocaleString()}`, icon: HiOutlineCurrencyDollar, color: "var(--info)" },
   ];
 
   if (isSuperAdmin) {

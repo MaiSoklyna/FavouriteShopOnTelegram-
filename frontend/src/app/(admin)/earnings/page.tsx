@@ -164,9 +164,14 @@ export default function MerchantEarningsPage() {
               <li>We transfer your available balance to your verified ABA account.</li>
               <li>The payout appears above with its bank reference.</li>
             </ol>
+            <p className="px-4 pb-3 text-[12px] text-text-muted">
+              Byme24 promotions are paid by Byme24: you still earn the full price. Discounts from your own
+              promotions come out of your payout. Cash-on-delivery orders with a Byme24 discount earn you that discount here.
+            </p>
             {usd && (
               <div className="border-t border-border px-4 py-3 text-xs text-text-muted">
                 Lifetime sales {formatMoney(usd.gross_total, currency)} · commission {formatMoney(usd.commission_total, currency)}
+                {Number(usd.subsidy_total ?? 0) > 0 && <> · platform-paid discounts +{formatMoney(usd.subsidy_total, currency)}</>}
               </div>
             )}
           </Panel>

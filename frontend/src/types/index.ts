@@ -384,4 +384,8 @@ export interface DashboardStats {
   totalUsers: number;
   todayOrders: number;
   todayRevenue: number;
+  /** Discounts paid by the shop (came out of its revenue) */
+  merchantFundedDiscounts?: number;
+  /** Discounts paid by the platform (a shop's revenue already includes them) */
+  platformFundedDiscounts?: number;
 }

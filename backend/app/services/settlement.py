@@ -2,10 +2,16 @@
 
 One rule set for every payment path:
 
-    commission_base   = order.total - delivery_fee   (or total, if
+    subsidy           = order.platform_discount_amount  (discount the platform pays)
+    merchant_gross    = order.total + subsidy        (what the sale is worth to the shop)
+    commission_base   = merchant_gross - delivery_fee   (or merchant_gross, if
                         COMMISSION_INCLUDES_DELIVERY)
     commission_amount = round(commission_base * rate / 100, 2)
-    net_amount        = order.total - commission_amount   → owed to merchant
+    net_amount        = merchant_gross - commission_amount   → owed to merchant
+
+A platform-funded discount never reduces what the merchant earns: $100 sale,
+$10 platform discount → customer pays $90, merchant is owed $100 - commission.
+A shop-funded discount is already inside order.total, so the shop bears it.
 
 `compute_split()` is used both when building a PayWay `payout` (future
 ABA Split & Payout) and when recording the earning after payment, so the
@@ -42,7 +48,8 @@ def money(value: Any) -> Decimal:
 
 @dataclass(frozen=True)
 class Split:
-    gross: Decimal
+    gross: Decimal              # what the platform received for the order
+    subsidy: Decimal            # platform-funded discount, owed to the merchant by the platform
     commission_base: Decimal
     commission_rate: Decimal
     commission: Decimal
@@ -64,25 +71,41 @@ def compute_split(order: dict, rate: Decimal | None = None) -> Split:
     Uses the commission rate frozen on the order when present.
     """
     gross = money(order["total"])
+    subsidy = max(money(order.get("platform_discount_amount")), Decimal("0"))
     if rate is None:
         rate = (
             money(order["commission_rate"])
             if order.get("commission_rate") is not None
             else default_commission_rate()
         )
-    base = gross if settings.COMMISSION_INCLUDES_DELIVERY else gross - money(order.get("delivery_fee"))
+    merchant_gross = gross + subsidy
+    base = merchant_gross if settings.COMMISSION_INCLUDES_DELIVERY else merchant_gross - money(order.get("delivery_fee"))
     base = max(base, Decimal("0"))
     commission = (base * rate / 100).quantize(CENT, rounding=ROUND_HALF_UP)
-    return Split(gross=gross, commission_base=base, commission_rate=rate,
-                 commission=commission, net=gross - commission)
+    return Split(gross=gross, subsidy=subsidy, commission_base=base, commission_rate=rate,
+                 commission=commission, net=merchant_gross - commission)
 
 
-def split_payout_allowed(merchant: dict | None) -> bool:
+def subsidy_only_split(order: dict) -> Split:
+    """Earning for an order the merchant collected (COD): only the platform-funded
+    discount is owed. No commission, as on any COD order today."""
+    subsidy = max(money(order.get("platform_discount_amount")), Decimal("0"))
+    zero = Decimal("0.00")
+    rate = money(order["commission_rate"]) if order.get("commission_rate") is not None else default_commission_rate()
+    return Split(gross=zero, subsidy=subsidy, commission_base=zero, commission_rate=rate,
+                 commission=zero, net=subsidy)
+
+
+def split_payout_allowed(merchant: dict | None, order: dict | None = None) -> bool:
     """True when this payment may be routed through ABA Split & Payout.
 
     Needs the platform switch AND a verified, enabled merchant account.
     Otherwise the platform collects and the merchant is paid manually.
+    An order with a platform-funded discount is always paid from the ledger:
+    the merchant is owed more than ABA receives for it.
     """
+    if order and money(order.get("platform_discount_amount")) > 0:
+        return False
     m = merchant or {}
     return bool(
         settings.PAYWAY_PAYOUT_ENABLED
@@ -121,9 +144,13 @@ async def record_order_earning(db, order: dict, *, actor_type: str = "system",
                                actor_id: str | None = None) -> dict | None:
     """Record what a paid order earns its merchant. Idempotent per order.
 
-    Only orders where the platform holds the money produce an earning.
+    Orders where the platform holds the money produce a full earning. A
+    cash-on-delivery order produces one only when the platform funded part of
+    the discount: the merchant holds the cash, so the platform owes just the
+    subsidy (gross 0, no commission — COD commission isn't collected).
     """
-    if order.get("payment_method") not in PLATFORM_COLLECTED_METHODS:
+    platform_collected = order.get("payment_method") in PLATFORM_COLLECTED_METHODS
+    if not platform_collected and money(order.get("platform_discount_amount")) <= 0:
         return None
     if order.get("status") == "cancelled":
         # Customer paid a cancelled order — the platform owes the customer
@@ -131,9 +158,15 @@ async def record_order_earning(db, order: dict, *, actor_type: str = "system",
         logger.error("Order %s paid after cancellation — refund customer, no earning", order["id"])
         return None
 
-    split = compute_split(order)
-    method = "aba_split" if order.get("payout_mode") == "aba_split" else "manual"
-    earning = await rpc(db, "record_order_earning", {
+    if platform_collected:
+        split = compute_split(order)
+        method = "aba_split" if order.get("payout_mode") == "aba_split" else "manual"
+        collected_by, description = "platform", None
+    else:
+        split = subsidy_only_split(order)
+        method, collected_by = "manual", "merchant"
+        description = "Platform-funded discount on a cash-on-delivery order"
+    params = {
         "p_order_id": order["id"],
         "p_merchant_id": order["merchant_id"],
         "p_currency": settings.CURRENCY,
@@ -142,12 +175,18 @@ async def record_order_earning(db, order: dict, *, actor_type: str = "system",
         "p_commission_rate": str(split.commission_rate),
         "p_commission_amount": str(split.commission),
         "p_net_amount": str(split.net),
-        "p_collected_by": "platform",
+        "p_collected_by": collected_by,
         "p_settlement_method": method,
         "p_payway_tran_id": order.get("payway_tran_id"),
         "p_actor_type": actor_type,
         "p_actor_id": actor_id,
-    })
+    }
+    # Only sent when used, so plain orders keep working before migration 022.
+    if split.subsidy > 0:
+        params["p_platform_subsidy"] = str(split.subsidy)
+    if description:
+        params["p_description"] = description
+    earning = await rpc(db, "record_order_earning", params)
 
     # Delivered before the payment was recorded (e.g. backfill)
     if earning and order.get("status") == "delivered":

@@ -129,10 +129,27 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
 
         if promo:
             order_data["promo_code_id"] = promo["id"]
+        # Migration 022 columns — only sent with a discount, so other orders work without it
+        merchant_discount, platform_discount = discount_parts(priced["discount"], priced["discount_funded_by"])
+        if priced["discount"] > 0:
+            order_data["merchant_discount_amount"] = float(merchant_discount)
+            order_data["platform_discount_amount"] = float(platform_discount)
 
         rows = await db.from_("orders").insert(order_data)
         order = rows[0]
         order_id = order["id"]
+
+        # Cash on delivery: the shop collects the customer's money, so the platform
+        # owes it the platform-funded part of the discount (QR orders get this when paid).
+        if platform_discount > 0 and order_data["payment_method"] not in settlement.PLATFORM_COLLECTED_METHODS:
+            try:
+                await settlement.record_order_earning(
+                    db, {**order, "platform_discount_amount": str(platform_discount)},
+                    actor_type="system", actor_id=None,
+                )
+            except Exception:
+                # The order stands; /settlements/admin/backfill records it later.
+                logger.exception("Subsidy earning not recorded for COD order %s", order_id)
 
         # ── Create order items + decrement stock ────────────────
         for item in items:
@@ -553,6 +570,8 @@ async def _price_cart(
         "shop_open": is_open(shop.get("opening_hours")),
         "min_order": _money(shop["min_order_amount"]) if shop.get("min_order_amount") else None,
         "total": subtotal - discount + delivery_fee,
+        # Who pays the discount: the shop (comes out of its payout) or the platform
+        "discount_funded_by": discount_funder(promo, promotion) if discount > 0 else None,
         "promo": promo,
         "promo_error": promo_error,
         "promo_owned": promo_owned,
@@ -560,6 +579,29 @@ async def _price_cart(
         "promotion": {"id": promotion["id"], "title": promotion["title"]} if promo and promotion else None,
         "promo_auto": bool(promo) and not promo_code,
     }
+
+
+def discount_funder(promo: dict | None, promotion: dict | None) -> str:
+    """'platform' or 'shop': who pays for this discount.
+
+    The promotion's funded_by decides (migration 022). Without it: a platform
+    promotion, or a code that belongs to no shop, is paid by the platform;
+    everything else by the shop.
+    """
+    if promotion:
+        if promotion.get("funded_by") in ("shop", "platform"):
+            return promotion["funded_by"]
+        if promotion.get("scope") == "platform" or not promotion.get("merchant_id"):
+            return "platform"
+        return "shop"
+    return "platform" if promo and not promo.get("merchant_id") else "shop"
+
+
+def discount_parts(discount: Decimal, funded_by: str | None) -> tuple[Decimal, Decimal]:
+    """(merchant_discount, platform_discount) — they add up to the discount."""
+    if discount <= 0:
+        return Decimal("0.00"), Decimal("0.00")
+    return (Decimal("0.00"), discount) if funded_by == "platform" else (discount, Decimal("0.00"))
 
 
 def _parse_delivery(body: dict) -> tuple[str, tuple[float, float] | None]:

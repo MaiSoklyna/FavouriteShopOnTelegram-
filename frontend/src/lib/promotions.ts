@@ -57,6 +57,8 @@ export interface PromotionRow {
   month_days?: number[];
   yearly_ranges?: { start: string; end: string }[];
   auto_apply?: boolean;
+  /** Who pays the discount: the platform (shop is paid in full) or the shop */
+  funded_by?: "shop" | "platform";
   /** "Every weekend (Saturday and Sunday)" */
   schedule_text?: string;
   /** End of the current run (e.g. Sunday midnight for a weekend sale) */

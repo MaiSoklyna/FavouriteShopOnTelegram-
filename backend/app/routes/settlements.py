@@ -418,7 +418,7 @@ async def admin_settlement_report(
             db.from_("merchant_earnings")
             .gte("created_at", start.isoformat()).lt("created_at", end.isoformat())
             .neq("status", "reversed")
-            .select("merchant_id,currency,gross_amount,commission_amount,net_amount,entry_type")
+            .select("merchant_id,currency,gross_amount,platform_subsidy,commission_amount,net_amount,entry_type")
         )
         payouts = await (
             db.from_("merchant_payouts")
@@ -436,7 +436,7 @@ async def admin_settlement_report(
             rows[key] = {
                 "merchant_id": merchant_id, "merchant_name": merchants.get(merchant_id),
                 "currency": currency, "orders": 0, "gross": Decimal("0"),
-                "commission": Decimal("0"), "net": Decimal("0"),
+                "subsidy": Decimal("0"), "commission": Decimal("0"), "net": Decimal("0"),
                 "paid_out": Decimal("0"), "payouts": 0,
             }
         return rows[key]
@@ -446,6 +446,8 @@ async def admin_settlement_report(
         if e["entry_type"] == "order":
             r["orders"] += 1
         r["gross"] += settlement.money(e["gross_amount"])
+        # Platform-funded discounts the platform pays the shop on top of what it collected
+        r["subsidy"] += settlement.money(e.get("platform_subsidy"))
         r["commission"] += settlement.money(e["commission_amount"])
         r["net"] += settlement.money(e["net_amount"])
     for p in payouts:
@@ -457,10 +459,10 @@ async def admin_settlement_report(
     totals: dict[str, dict] = {}
     for r in merchants_out:
         t = totals.setdefault(r["currency"], {
-            "currency": r["currency"], "orders": 0, "gross": Decimal("0"),
+            "currency": r["currency"], "orders": 0, "gross": Decimal("0"), "subsidy": Decimal("0"),
             "commission": Decimal("0"), "net": Decimal("0"), "paid_out": Decimal("0"), "payouts": 0,
         })
-        for k in ("orders", "gross", "commission", "net", "paid_out", "payouts"):
+        for k in ("orders", "gross", "subsidy", "commission", "net", "paid_out", "payouts"):
             t[k] += r[k]
 
     def out(d: dict) -> dict:
@@ -491,7 +493,18 @@ async def admin_backfill_earnings(
             .order("id")
             .limit(limit)
             .select("id,merchant_id,total,delivery_fee,status,payment_method,"
-                    "payway_tran_id,commission_rate,payout_mode")
+                    "payway_tran_id,commission_rate,payout_mode,platform_discount_amount")
+        )
+        # Cash-on-delivery orders whose discount the platform funded are owed that subsidy
+        orders += await (
+            db.from_("orders")
+            .gt("platform_discount_amount", 0)
+            .not_("payment_method", "in", f"({','.join(settlement.PLATFORM_COLLECTED_METHODS)})")
+            .neq("status", "cancelled")
+            .order("id")
+            .limit(limit)
+            .select("id,merchant_id,total,delivery_fee,status,payment_method,"
+                    "payway_tran_id,commission_rate,payout_mode,platform_discount_amount")
         )
         order_ids = [o["id"] for o in orders]
         existing = set()

@@ -54,6 +54,7 @@ export function BalancesTab({ balances, loading, onPay, onManage, onBackfill, ba
     { key: "owed", header: "Owed", align: "right", render: (b) => <span className="font-bold">{formatMoney(b.owed_amount, b.currency)}</span> },
     { key: "paid", header: "Paid", align: "right", render: (b) => <span className="text-text-muted">{formatMoney(b.paid_amount, b.currency)}</span> },
     { key: "commission", header: "Commission", align: "right", render: (b) => <span className="text-text-muted">{formatMoney(b.commission_total, b.currency)}</span> },
+    { key: "subsidy", header: "Platform discounts", align: "right", render: (b) => <span className="text-text-muted">{formatMoney(b.subsidy_total ?? 0, b.currency)}</span> },
     {
       key: "actions",
       header: "",
@@ -83,11 +84,11 @@ export function BalancesTab({ balances, loading, onPay, onManage, onBackfill, ba
   function exportCsv() {
     downloadCsv(
       `merchant-balances-${new Date().toISOString().slice(0, 10)}.csv`,
-      ["Merchant ID", "Merchant", "Currency", "Verification", "Pending", "Available", "In payout", "Owed", "Paid", "Gross sales", "Commission"],
+      ["Merchant ID", "Merchant", "Currency", "Verification", "Pending", "Available", "In payout", "Owed", "Paid", "Gross sales", "Commission", "Platform discounts"],
       rows.map((b) => [
         b.merchant_id, b.merchant_name, b.currency, b.payout_verification_status,
         b.pending_amount, b.available_amount, b.in_payout_amount, b.owed_amount,
-        b.paid_amount, b.gross_total, b.commission_total,
+        b.paid_amount, b.gross_total, b.commission_total, b.subsidy_total ?? 0,
       ]),
     );
   }

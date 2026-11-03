@@ -109,6 +109,8 @@ export default function AnalyticsPage() {
     { label: "Today Orders", value: stats?.todayOrders ?? 0, accent: "var(--warning)" },
     { label: "Pending Orders", value: stats?.pendingOrders ?? 0, accent: "var(--danger)" },
     { label: "Products", value: stats?.totalProducts ?? 0, accent: "var(--text)" },
+    { label: "Shop-paid Discounts", value: fmtMoney(stats?.merchantFundedDiscounts), accent: "var(--warning)" },
+    { label: "Platform-paid Discounts", value: fmtMoney(stats?.platformFundedDiscounts), accent: "var(--info)" },
   ];
 
   const formatTick = (iso: string) => {

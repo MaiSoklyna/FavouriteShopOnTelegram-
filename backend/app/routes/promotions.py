@@ -69,6 +69,9 @@ class PromotionIn(BaseModel):
     yearly_ranges: list[dict] = []
     # Applied at checkout without the customer typing the code
     auto_apply: bool = True
+    # Who pays the discount (migration 022). None = the default for the scope:
+    # platform-wide → platform, a shop's promotion → the shop. Super admin only.
+    funded_by: str | None = Field(None, pattern=r"^(shop|platform)$")
 
     @field_validator("weekdays")
     @classmethod
@@ -309,7 +312,21 @@ async def _sync_code(db, body: PromotionIn, merchant_id: int | None, promotion_i
     return (await db.from_("promo_codes").insert(row))[0]["id"]
 
 
-def _promotion_row(body: PromotionIn, merchant_id: int | None, code_id: int | None) -> dict:
+def funded_by_for(body: PromotionIn, merchant_id: int | None, user: TokenClaims) -> str:
+    """Who pays this promotion's discount.
+
+    A merchant admin's promotions are always paid by their shop — otherwise a
+    shop could raise its own payout. A super admin may choose; by default a
+    platform-wide promotion is paid by the platform and a shop's by the shop.
+    """
+    if user.role != Role.SUPER_ADMIN:
+        return "shop"
+    if body.funded_by:
+        return body.funded_by
+    return "platform" if body.scope == "platform" or not merchant_id else "shop"
+
+
+def _promotion_row(body: PromotionIn, merchant_id: int | None, code_id: int | None, funded_by: str) -> dict:
     return {
         "title": body.title.strip(), "subtitle": (body.subtitle or "").strip() or None, "scope": body.scope,
         # Platform-wide may be limited to one category (its products from every shop)
@@ -323,6 +340,7 @@ def _promotion_row(body: PromotionIn, merchant_id: int | None, code_id: int | No
         "month_days": body.month_days if body.schedule_type == "monthly" else [],
         "yearly_ranges": body.yearly_ranges if body.schedule_type == "yearly" else [],
         "auto_apply": body.auto_apply,
+        "funded_by": funded_by,
     }
 
 
@@ -359,7 +377,7 @@ async def admin_create(body: PromotionIn, user: TokenClaims = require_any_admin(
         merchant_id = _own_shop(user, body.merchant_id, body.scope)
         product_ids = await _check_targets(db, body, merchant_id)
         code_id = await _sync_code(db, body, merchant_id, None, None)
-        p = (await db.from_("promotions").insert(_promotion_row(body, merchant_id, code_id)))[0]
+        p = (await db.from_("promotions").insert(_promotion_row(body, merchant_id, code_id, funded_by_for(body, merchant_id, user))))[0]
         if product_ids:
             await db.from_("promotion_products").insert([{"promotion_id": p["id"], "product_id": i} for i in product_ids])
         return p
@@ -374,7 +392,9 @@ async def admin_update(promotion_id: int, body: PromotionIn, user: TokenClaims =
             raise ForbiddenError("Only a super admin can create platform-wide promotions")
         product_ids = await _check_targets(db, body, merchant_id)
         code_id = await _sync_code(db, body, merchant_id, promotion_id, current.get("promo_code_id") if merchant_id == current.get("merchant_id") else None)
-        row = _promotion_row(body, merchant_id, code_id) | {"updated_at": datetime.now(timezone.utc).isoformat()}
+        # A merchant admin's edit keeps whatever the super admin decided about funding
+        funded_by = funded_by_for(body, merchant_id, user) if user.role == Role.SUPER_ADMIN else (current.get("funded_by") or "shop")
+        row = _promotion_row(body, merchant_id, code_id, funded_by) | {"updated_at": datetime.now(timezone.utc).isoformat()}
         p = (await db.from_("promotions").eq("id", promotion_id).update(row))[0]
         await db.from_("promotion_products").eq("promotion_id", promotion_id).delete()
         if product_ids:
