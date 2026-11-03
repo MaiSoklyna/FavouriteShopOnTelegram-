@@ -29,24 +29,61 @@ class ApiError extends Error {
   }
 }
 
-function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("token");
+/**
+ * Two sessions side by side: the customer shop (/shop/*) and the admin / seller
+ * dashboard (everything else). Each keeps its own token, so signing in to one
+ * never signs you out of the other in the same browser.
+ */
+export type Area = "shop" | "admin";
+const TOKEN_KEY: Record<Area, string> = { admin: "token", shop: "shop_token" };
+
+/** The session the page you are on uses: /shop/* is the customer shop, the rest is admin. */
+function currentArea(): Area {
+  if (typeof window === "undefined") return "admin";
+  return window.location.pathname.startsWith("/shop") ? "shop" : "admin";
 }
 
-function setToken(token: string): void {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("token", token);
-    // Also set as cookie for middleware auth check
-    document.cookie = `admin_token=${token}; path=/; max-age=${60 * 60 * 24}; SameSite=Lax`;
+/** Which session a token belongs to, from its app_role claim (customers are "user"). */
+function tokenArea(token: string): Area {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return payload.app_role === "user" ? "shop" : "admin";
+  } catch {
+    return currentArea();
   }
 }
 
-function clearToken(): void {
-  if (typeof window !== "undefined") {
-    localStorage.removeItem("token");
+/** Before the split, a customer token could sit in the admin slot: move it to its own. */
+function migrateLegacyToken(): void {
+  const legacy = localStorage.getItem(TOKEN_KEY.admin);
+  if (legacy && tokenArea(legacy) === "shop") {
+    if (!localStorage.getItem(TOKEN_KEY.shop)) localStorage.setItem(TOKEN_KEY.shop, legacy);
+    localStorage.removeItem(TOKEN_KEY.admin);
     document.cookie = "admin_token=; path=/; max-age=0";
   }
+}
+
+function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  migrateLegacyToken();
+  return localStorage.getItem(TOKEN_KEY[currentArea()]);
+}
+
+/** Stores the token in the slot it belongs to, whichever page it arrived on. */
+function setToken(token: string): void {
+  if (typeof window === "undefined") return;
+  const area = tokenArea(token);
+  localStorage.setItem(TOKEN_KEY[area], token);
+  // The middleware guards admin pages by this cookie
+  if (area === "admin") document.cookie = `admin_token=${token}; path=/; max-age=${60 * 60 * 24}; SameSite=Lax`;
+}
+
+/** Signs out of the session for the current area only. */
+function clearToken(): void {
+  if (typeof window === "undefined") return;
+  const area = currentArea();
+  localStorage.removeItem(TOKEN_KEY[area]);
+  if (area === "admin") document.cookie = "admin_token=; path=/; max-age=0";
 }
 
 async function request<T = unknown>(
@@ -151,4 +188,4 @@ export const api = {
   upload,
 };
 
-export { ApiError, getToken, setToken, clearToken };
+export { ApiError, getToken, setToken, clearToken, currentArea, tokenArea };

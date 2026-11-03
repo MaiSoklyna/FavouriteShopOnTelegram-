@@ -23,6 +23,7 @@ from app.core.constants import (
     ADMIN_TOKEN_EXPIRY,
     LOGIN_SESSION_PREFIX,
     LOGIN_SESSION_TTL,
+    SHOP_LOGIN_SESSION_PREFIX,
     USER_TOKEN_EXPIRY,
     Role,
 )
@@ -52,6 +53,7 @@ from app.models.auth import (
     ChangePasswordRequest,
     CreateMerchantAdminRequest,
     UpdateMerchantAdminRequest,
+    LoginSessionRequest,
     LoginSessionResponse,
     PollSessionResponse,
     TelegramAuthResponse,
@@ -300,13 +302,15 @@ async def _login_merchant_admin(db, body: AdminLoginRequest) -> AdminLoginRespon
 
 @router.post("/tg-session", response_model=LoginSessionResponse)
 @limiter.limit("10/minute")
-async def create_tg_session(request: Request):
-    """Create a Telegram login session for the dashboard.
+async def create_tg_session(request: Request, body: LoginSessionRequest | None = None):
+    """Create a Telegram login session for the dashboard or the customer shop.
 
     The browser shows a QR/link to t.me/bot?start=SESSION_ID.
-    The bot completes the session when the admin taps it.
+    The bot completes a ``dash_`` session with an admin token and any other
+    session (``shop_``) with a customer token.
     """
-    session_id = LOGIN_SESSION_PREFIX + secrets.token_urlsafe(32)
+    prefix = SHOP_LOGIN_SESSION_PREFIX if body and body.area == "shop" else LOGIN_SESSION_PREFIX
+    session_id = prefix + secrets.token_urlsafe(32)
     async with SupabaseClient.service_role() as db:
         await db.from_("login_sessions").insert({"session_id": session_id})
     return LoginSessionResponse(session_id=session_id)
@@ -371,6 +375,13 @@ async def _resolve_admin_user(db, session_row: dict) -> Optional[dict]:
         # Token expired or unsigned — fall back to the legacy behaviour but
         # log loudly so the failure mode is visible.
         logger.warning("Could not decode session jwt_token; falling back to id-only lookup")
+
+    if minted_role == Role.USER:
+        # Customer (shop) session: never fall through to the admin tables, whose
+        # ids overlap with users.id.
+        if not claims.telegram_id:
+            return None
+        return await db.from_("users").eq("telegram_id", claims.telegram_id).select_one()
 
     if minted_role == Role.MERCHANT_ADMIN:
         admin = await db.from_("merchant_admins").eq("id", user_id).select_one(

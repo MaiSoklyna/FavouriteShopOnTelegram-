@@ -41,6 +41,8 @@ TELEGRAM_AUTH_MAX_AGE = 3_600    # 1 hour — reject stale initData
 
 LOGIN_SESSION_TTL = 300          # 5 minutes until a pending session expires
 LOGIN_SESSION_PREFIX = "dash_"
+# Shop sessions must NOT start with "dash_": the bot completes any other id as a customer login.
+SHOP_LOGIN_SESSION_PREFIX = "shop_"
 
 
 # ── Orders ──────────────────────────────────────────────────────

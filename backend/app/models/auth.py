@@ -6,7 +6,7 @@ telegram_auth.py, and miniapp_api.py into a single module.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -91,6 +91,12 @@ class TokenResponse(BaseModel):
 
 
 # ── Login Sessions (Telegram → Dashboard polling) ──────────────
+
+
+class LoginSessionRequest(BaseModel):
+    """Which app is asking: the admin dashboard (default) or the customer shop."""
+
+    area: Literal["admin", "shop"] = "admin"
 
 
 class LoginSessionResponse(BaseModel):

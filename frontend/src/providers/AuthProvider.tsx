@@ -1,7 +1,8 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from "react";
-import { api, ApiError, setToken, clearToken, getToken } from "@/lib/api";
+import { usePathname } from "next/navigation";
+import { api, ApiError, setToken, clearToken, getToken, tokenArea, type Area } from "@/lib/api";
 import { getTelegramUser, initTelegram, isInTelegram } from "@/lib/telegram";
 import type { AdminUser, TelegramUser } from "@/types";
 
@@ -30,23 +31,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // The shop (/shop/*) and the dashboard keep separate sessions (see lib/api.ts).
+  // Moving between them swaps which account this provider holds.
+  const pathname = usePathname();
+  const area: Area = pathname?.startsWith("/shop") ? "shop" : "admin";
+  // Bumped on every area switch so a slow restore for the old area is dropped.
+  const initGen = useRef(0);
+
   // Resolve user type helpers
   const isAdmin = !!user && "email" in user;
   const isSuperAdmin = isAdmin && (user as AdminUser).role === "super_admin";
   const isShopUser = !!user && "telegram_id" in user;
 
-  // ── Init: restore session on mount ───────────────────────────
+  // ── Init: restore the session for this area (on mount and on area switch) ──
   useEffect(() => {
-    initAuth();
-  }, []);
+    const gen = ++initGen.current;
+    stopPolling();
+    setLoginPending(false);
+    setUser(null);
+    setLoading(true);
+    initAuth(area, () => gen === initGen.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [area]);
 
-  async function initAuth() {
+  async function initAuth(area: Area, isCurrent: () => boolean) {
+    const done = (u: AuthUser) => {
+      if (!isCurrent()) return;
+      setUser(u);
+      setLoading(false);
+    };
     try {
       // 1. Check URL token (from Telegram bot "Open Shop" button)
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
         const urlToken = params.get("auth");
         if (urlToken) {
+          // Filed under its own role, so an admin link never lands in the shop slot.
           setToken(urlToken);
           window.history.replaceState({}, "", window.location.pathname);
         }
@@ -56,9 +76,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const token = getToken();
       if (token) {
         try {
-          const me = await api.get<AdminUser | TelegramUser>("/auth/me");
-          setUser(me);
-          setLoading(false);
+          const me = await api.get<AdminUser | TelegramUser>("/auth/me", { token });
+          done(me);
           return;
         } catch (e) {
           // Only a rejected token logs you out; a slow or dropped request keeps it for the next load.
@@ -66,8 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // 3. Telegram WebApp auto-auth
-      if (isInTelegram()) {
+      // 3. Telegram WebApp auto-auth — customer accounts only, so shop pages only
+      if (area === "shop" && isInTelegram()) {
         initTelegram();
         const tgUser = getTelegramUser();
         if (tgUser) {
@@ -82,13 +101,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             { token: null },
           );
           setToken(resp.access_token);
-          setUser(resp.user);
+          done(resp.user);
+          return;
         }
       }
+      done(null);
     } catch (err) {
       console.error("Auth init failed:", err);
-    } finally {
-      setLoading(false);
+      done(null);
     }
   }
 
@@ -105,9 +125,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(resp.user);
   }
 
-  // ── Telegram session login (dashboard) ───────────────────────
+  // ── Telegram session login (dashboard or shop) ───────────────
+  // The bot signs a dashboard session in as an admin and a shop session in as a customer.
   async function startTgSession(): Promise<string> {
-    const resp = await api.post<{ session_id: string }>("/auth/tg-session", {}, { token: null });
+    const resp = await api.post<{ session_id: string }>("/auth/tg-session", { area }, { token: null });
     return resp.session_id;
   }
 
@@ -117,15 +138,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     pollRef.current = setInterval(async () => {
       try {
-        const resp = await api.get<{ status: string; token?: string; user?: AdminUser }>(
+        const resp = await api.get<{ status: string; token?: string; user?: AdminUser | TelegramUser | null }>(
           "/auth/poll-session",
           { params: { session_id: sessionId }, token: null },
         );
-        if (resp.status === "completed" && resp.token && resp.user) {
+        if (resp.status === "completed" && resp.token) {
           stopPolling();
           setToken(resp.token);
-          setUser(resp.user);
-          setLoginPending(false);
+          // Only sign this page in if the token is for this page's area.
+          try {
+            if (tokenArea(resp.token) === area) {
+              setUser(resp.user ?? (await api.get<AdminUser | TelegramUser>("/auth/me", { token: resp.token })));
+            }
+          } finally {
+            setLoginPending(false);
+          }
         } else if (resp.status === "expired") {
           stopPolling();
           setLoginPending(false);
