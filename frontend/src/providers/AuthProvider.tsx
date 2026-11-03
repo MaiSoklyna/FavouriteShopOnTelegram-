@@ -30,6 +30,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loginPending, setLoginPending] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The Telegram session being signed in. A second tap (or a double tap while the first
+  // request is still in flight) reuses it, so the bot and the browser always wait on the same one.
+  const sessionRef = useRef<Promise<string> | null>(null);
 
   // The shop (/shop/*) and the dashboard keep separate sessions (see lib/api.ts).
   // Moving between them swaps which account this provider holds.
@@ -127,14 +130,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Telegram session login (dashboard or shop) ───────────────
   // The bot signs a dashboard session in as an admin and a shop session in as a customer.
-  async function startTgSession(): Promise<string> {
-    const resp = await api.post<{ session_id: string }>("/auth/tg-session", { area }, { token: null });
-    return resp.session_id;
+  function startTgSession(): Promise<string> {
+    if (!sessionRef.current) {
+      const started = api
+        .post<{ session_id: string }>("/auth/tg-session", { area }, { token: null })
+        .then((r) => r.session_id);
+      started.catch(() => { if (sessionRef.current === started) sessionRef.current = null; });
+      sessionRef.current = started;
+    }
+    return sessionRef.current;
+  }
+
+  function clearTimers() {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    pollRef.current = null;
+    timeoutRef.current = null;
   }
 
   function pollSession(sessionId: string) {
     setLoginPending(true);
-    stopPolling();
+    clearTimers();
 
     pollRef.current = setInterval(async () => {
       try {
@@ -169,11 +185,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 5 * 60 * 1000);
   }
 
+  /** Ends the login attempt: timers stop and the next tap starts a fresh session. */
   const stopPolling = useCallback(() => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    pollRef.current = null;
-    timeoutRef.current = null;
+    clearTimers();
+    sessionRef.current = null;
+    setLoginPending(false);
   }, []);
 
   function logout() {
