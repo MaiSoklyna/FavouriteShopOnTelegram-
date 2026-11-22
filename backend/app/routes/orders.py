@@ -24,7 +24,7 @@ from app.core.dependencies import require_any_admin, require_role
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.services import deliveries, inventory, notify, order_status, settlement, shop_reviews
+from app.services import coupons, deliveries, inventory, notify, order_status, settlement, shop_reviews
 from app.services import promo_schedule
 from app.services.delivery import is_open, quote_delivery, valid_point
 
@@ -138,7 +138,14 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
         # ── Take the stock first, atomically, before anything else exists ──
         # One database call takes every line or none: the last unit can only go to one
         # buyer, and a sold-out item stops the order here instead of after it is created.
-        await inventory.reserve_stock(db, items)
+        # Count the coupon use first, atomically (the database checks the limits), so a coupon that was just
+        # used up stops the order here, before stock is taken
+        coupon_claim = await coupons.claim_use(db, promo, user_id, discount) if promo else None
+        try:
+            await inventory.reserve_stock(db, items)
+        except Exception:
+            await coupons.release_use(db, coupon_claim)
+            raise
         order_id = None
         try:
             rows = await db.from_("orders").insert(order_data)
@@ -176,9 +183,13 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
                     "subtotal": round(item.get("unit_price", product["base_price"]) * item["quantity"], 2),
                 })
 
+            if promo:
+                await coupons.finish_use(db, coupon_claim, promo, user_id, order_id, discount)
+
         except Exception:
-            # Nothing may keep stock for an order that does not exist
+            # Nothing may keep stock or a coupon use for an order that does not exist
             await inventory.release_stock(db, items)
+            await coupons.release_use(db, coupon_claim)
             if order_id is not None:
                 try:
                     await db.from_("orders").eq("id", order_id).update(
@@ -187,17 +198,6 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
                 except Exception:
                     logger.exception("Could not cancel half-created order %s", order_id)
             raise
-
-        # ── Record promo usage ──────────────────────────────────
-        if promo:
-            await db.from_("promo_usages").insert({
-                "promo_code_id": promo["id"],
-                "user_id": user_id,
-                "order_id": order_id,
-                "discount_applied": discount,
-            })
-            used_count = promo.get("used_count", 0) + 1
-            await db.from_("promo_codes").eq("id", promo["id"]).update({"used_count": used_count})
 
         # ── Clean up cart ───────────────────────────────────────
         await db.from_("cart_items").eq("cart_id", cart["id"]).delete()
@@ -415,6 +415,7 @@ async def cancel_order(order_id: int, user: TokenClaims = require_role(Role.USER
             raise BadRequestError("Only pending orders can be cancelled")
         items = await db.from_("order_items").eq("order_id", order_id).select("product_id,quantity,selected_variants")
         await inventory.release_stock(db, items)
+        await coupons.release_for_order(db, order_id)
         await notify.order_status_changed(db, order_id, "cancelled", by_customer=True)
     return {"success": True, "message": "Order cancelled"}
 
@@ -523,7 +524,7 @@ async def _price_cart(
     promotion = None
     discount = Decimal("0.00")
     if promo_code:
-        promo, promo_error, promo_owned = await _validate_promo(db, promo_code, merchant_id, subtotal)
+        promo, promo_error, promo_owned = await _validate_promo(db, promo_code, merchant_id, subtotal, user_id)
         if promo:
             promotion = await _promotion_for_code(db, promo["id"])
             if promotion and not promo_schedule.window(promotion)[0]:
@@ -538,7 +539,7 @@ async def _price_cart(
                 discount = _discount(promo, base)
     else:
         # No code typed: the best live promotion this cart qualifies for applies by itself
-        promo, promotion, discount = await _best_auto_promotion(db, merchant_id, items, subtotal)
+        promo, promotion, discount = await _best_auto_promotion(db, merchant_id, items, subtotal, user_id)
 
     return {
         "cart": cart,
@@ -667,7 +668,8 @@ async def _eligible_base(db, promotion: dict | None, items: list[dict], subtotal
     return eligible_subtotal(items, {r["id"] for r in rows})
 
 
-async def _best_auto_promotion(db, merchant_id: int, items: list[dict], subtotal: Decimal) -> tuple[dict | None, dict | None, Decimal]:
+async def _best_auto_promotion(db, merchant_id: int, items: list[dict], subtotal: Decimal,
+                               user_id: int | None = None) -> tuple[dict | None, dict | None, Decimal]:
     """(code row, promotion, discount) for the biggest live auto-apply promotion this cart
     qualifies for — this shop's or a platform-wide one — or (None, None, 0)."""
     try:
@@ -681,11 +683,17 @@ async def _best_auto_promotion(db, merchant_id: int, items: list[dict], subtotal
     if not live:
         return None, None, Decimal("0.00")
     codes = {c["id"]: c for c in await db.from_("promo_codes").in_("id", [r["promo_code_id"] for r in live]).select()}
+    uses = await coupons.user_use_counts(db, user_id, list(codes))
+    wallet = await coupons.wallet_code_ids(db, user_id) if any(c.get("audience") == "private" for c in codes.values()) else set()
     best: tuple[dict | None, dict | None, Decimal] = (None, None, Decimal("0.00"))
     for promotion in live:
         code = codes.get(promotion["promo_code_id"])
         if not code or not code.get("is_active"):
             continue
+        if code.get("audience") == "private" and code["id"] not in wallet:
+            continue
+        if code.get("per_user_limit") and uses.get(code["id"], 0) >= code["per_user_limit"]:
+            continue  # this customer has had their share of this promotion
         if code.get("max_uses") and (code.get("used_count") or 0) >= code["max_uses"]:
             continue
         if code.get("min_order") and subtotal < _money(code["min_order"]):
@@ -703,7 +711,8 @@ def _money(value) -> Decimal:
     return Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-async def _validate_promo(db, code: str, merchant_id: int, subtotal: Decimal) -> tuple[dict | None, str | None, bool]:
+async def _validate_promo(db, code: str, merchant_id: int, subtotal: Decimal,
+                          user_id: int | None = None) -> tuple[dict | None, str | None, bool]:
     """Validate a promo code for one shop.
 
     Returns (promo, error, owned): `owned` is True when the code exists for
@@ -721,6 +730,10 @@ async def _validate_promo(db, code: str, merchant_id: int, subtotal: Decimal) ->
     if not promo:
         return None, None, False
 
+    # A private code only exists for the customers it was given to: anyone else is told nothing about it
+    if promo.get("audience") == "private" and promo["id"] not in await coupons.wallet_code_ids(db, user_id):
+        return None, None, False
+
     if promo.get("expires_at"):
         exp = datetime.fromisoformat(promo["expires_at"].replace("Z", "+00:00"))
         if datetime.now(timezone.utc) > exp:
@@ -731,5 +744,9 @@ async def _validate_promo(db, code: str, merchant_id: int, subtotal: Decimal) ->
 
     if promo.get("min_order") and subtotal < _money(promo["min_order"]):
         return None, f"Minimum order ${_money(promo['min_order'])} required for this code", True
+
+    limit = promo.get("per_user_limit")
+    if limit and user_id and (await coupons.user_use_counts(db, user_id, [promo["id"]])).get(promo["id"], 0) >= limit:
+        return None, "You've already used this promo code" if limit == 1 else f"You've used this promo code {limit} times", True
 
     return promo, None, True

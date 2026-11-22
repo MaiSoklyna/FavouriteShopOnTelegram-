@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { BrandLoader } from "@/components/ui/Spinner";
+import { GrantCouponModal } from "@/components/admin/GrantCouponModal";
 import type { AdminUser, Category, Merchant, Product } from "@/types";
 import type { PromotionRow } from "@/lib/promotions";
 import { MonthDaysPicker, SCHEDULES, WeekdayPicker, YearlyRangesPicker, fromLocal, scheduleText, toLocal, type ScheduleType, type YearlyRange } from "@/components/admin/ScheduleInputs";
@@ -30,6 +31,8 @@ interface Form {
   /** Off = a banner-only promotion (announcement), no code or discount */
   has_offer: boolean;
   code: string; discount_type: "percent" | "fixed"; discount_value: string; min_order: string; max_uses: string;
+  /** Public: listed, anyone can use it. Private: hidden, only for customers you give it to */
+  audience: "public" | "private"; per_user_limit: string;
   starts_at: string; ends_at: string; display_locations: Location[]; is_active: boolean;
   schedule_type: ScheduleType; weekdays: number[]; month_days: number[]; yearly_ranges: YearlyRange[]; auto_apply: boolean;
   /** Who pays the discount. "" = the default: platform-wide → platform, a shop's → the shop */
@@ -38,7 +41,7 @@ interface Form {
 
 const EMPTY: Form = {
   title: "", subtitle: "", scope: "shop", merchant_id: 0, category_id: 0, product_ids: [],
-  has_offer: true, code: "", discount_type: "percent", discount_value: "", min_order: "", max_uses: "",
+  has_offer: true, code: "", discount_type: "percent", discount_value: "", min_order: "", max_uses: "", audience: "public", per_user_limit: "",
   starts_at: "", ends_at: "", display_locations: ["home_promotions"], is_active: true,
   schedule_type: "once", weekdays: [], month_days: [], yearly_ranges: [], auto_apply: true, funded_by: "",
 };
@@ -75,6 +78,7 @@ export default function PromotionBannersPage() {
     setTimeout(() => setToast(t => ({ ...t, show: false })), 3500);
   };
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm(f => ({ ...f, [k]: v }));
+  const [giving, setGiving] = useState<{ id: number; title: string } | null>(null);
 
   async function load() {
     try {
@@ -127,7 +131,8 @@ export default function PromotionBannersPage() {
       title: p.title, subtitle: p.subtitle || "", scope: p.scope, merchant_id: p.merchant_id ?? 0, category_id: p.category_id || 0,
       product_ids: p.product_ids || [], has_offer: !!p.offer, code: p.offer?.code || "", discount_type: p.offer?.type || "percent",
       discount_value: p.offer ? String(Number(p.offer.value)) : "", min_order: p.offer?.min_order ? String(Number(p.offer.min_order)) : "",
-      max_uses: p.offer?.max_uses ? String(p.offer.max_uses) : "", starts_at: toLocal(p.starts_at), ends_at: toLocal(p.ends_at),
+      max_uses: p.offer?.max_uses ? String(p.offer.max_uses) : "", audience: p.offer?.audience === "private" ? "private" : "public",
+      per_user_limit: p.offer?.per_user_limit ? String(p.offer.per_user_limit) : "", starts_at: toLocal(p.starts_at), ends_at: toLocal(p.ends_at),
       display_locations: Array.from(new Set((p.display_locations || []).map(l => (l === "home_featured" ? "home_promotions" : l)))) as Location[], is_active: p.is_active,
       schedule_type: p.schedule_type ?? "once", weekdays: p.weekdays ?? [], month_days: p.month_days ?? [],
       yearly_ranges: p.yearly_ranges ?? [], auto_apply: p.auto_apply ?? true,
@@ -157,10 +162,12 @@ export default function PromotionBannersPage() {
       discount_value: form.has_offer ? Number(form.discount_value) : null,
       min_order: form.has_offer ? Number(form.min_order) || 0 : 0,
       max_uses: form.has_offer && form.max_uses ? Number(form.max_uses) : null,
+      audience: form.has_offer ? form.audience : "public",
+      per_user_limit: form.has_offer && form.per_user_limit ? Number(form.per_user_limit) : null,
       starts_at: fromLocal(form.starts_at), ends_at: fromLocal(form.ends_at),
       display_locations: form.display_locations, is_active: form.is_active,
       schedule_type: form.schedule_type, weekdays: form.weekdays, month_days: form.month_days,
-      yearly_ranges: form.yearly_ranges, auto_apply: form.auto_apply,
+      yearly_ranges: form.yearly_ranges, auto_apply: form.has_offer && form.audience === "private" ? false : form.auto_apply,
       // Only a super admin may choose; the server ignores it for shop admins
       funded_by: isSuperAdmin ? form.funded_by || defaultFunder(form.scope) : null,
     };
@@ -239,7 +246,7 @@ export default function PromotionBannersPage() {
                   <span style={pill("#FBF4E4", "#71541A")}>{SCOPES.find(s => s.key === p.scope)?.label}{p.scope === "product" ? ` · ${p.product_ids?.length ?? 0}` : p.scope === "category" && p.category_name ? ` · ${p.category_name}` : ""}</span>
                 </div>
                 <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 4 }}>
-                  <b style={{ color: "var(--text)" }}>{offerText(p)}</b>{p.offer ? <> · code <code>{p.offer.code}</code> · used {p.offer.used_count ?? 0}{p.offer.max_uses ? ` of ${p.offer.max_uses}` : ""} times</> : null}
+                  <b style={{ color: "var(--text)" }}>{offerText(p)}</b>{p.offer ? <> · code <code>{p.offer.code}</code> · used {p.offer.used_count ?? 0}{p.offer.max_uses ? ` of ${p.offer.max_uses}` : ""} times{p.offer.per_user_limit ? ` · ${p.offer.per_user_limit} per customer` : ""}{p.offer.audience === "private" ? <> · <b style={{ color: "#71541A" }}>Private</b></> : ""}</> : null}
                   {p.offer?.min_order ? ` · min $${Number(p.offer.min_order).toFixed(2)}` : ""} · {p.scope === "platform" ? "Every shop" : p.shop?.name ?? `Shop #${p.merchant_id}`}
                 </div>
                 <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
@@ -249,6 +256,9 @@ export default function PromotionBannersPage() {
                 </div>
               </div>
               <div style={{ display: "flex", gap: 6 }}>
+                {p.offer?.audience === "private" && p.offer.id && (
+                  <button className="btn-primary" onClick={() => setGiving({ id: p.offer!.id!, title: p.title })}>Give to customers</button>
+                )}
                 <button className="btn-outline" onClick={() => openEdit(p)}>Edit</button>
                 <button className="btn-outline" style={{ color: "#EF4444" }} onClick={() => remove(p)}>Delete</button>
               </div>
@@ -256,6 +266,8 @@ export default function PromotionBannersPage() {
           ))}
         </div>
       )}
+
+      {giving && <GrantCouponModal codeId={giving.id} title={giving.title} onClose={() => setGiving(null)} />}
 
       {modal && (
         <div className="modal-overlay" onClick={() => setModal(false)}>
@@ -347,7 +359,14 @@ export default function PromotionBannersPage() {
                   </Field>
                   <Field label={`Discount amount * (${form.discount_type === "percent" ? "%" : "$"})`}><input className="admin-input" type="number" min="0" step="0.01" value={form.discount_value} onChange={e => set("discount_value", e.target.value)} placeholder={form.discount_type === "percent" ? "30" : "5.00"} /></Field>
                   <Field label="Minimum order ($)"><input className="admin-input" type="number" min="0" step="0.01" value={form.min_order} onChange={e => set("min_order", e.target.value)} placeholder="0" /></Field>
-                  <Field label="Usage limit"><input className="admin-input" type="number" min="1" value={form.max_uses} onChange={e => set("max_uses", e.target.value)} placeholder="Unlimited" /></Field>
+                  <Field label="Usage limit (everyone)"><input className="admin-input" type="number" min="1" value={form.max_uses} onChange={e => set("max_uses", e.target.value)} placeholder="Unlimited" /></Field>
+                  <Field label="Uses per customer"><input className="admin-input" type="number" min="1" value={form.per_user_limit} onChange={e => set("per_user_limit", e.target.value)} placeholder="Unlimited" /></Field>
+                  <Field label="Who can use it">
+                    <select className="admin-input" value={form.audience} onChange={e => { const v = e.target.value as Form["audience"]; set("audience", v); if (v === "private") set("auto_apply", false); }}>
+                      <option value="public">Everyone (listed in Coupons)</option>
+                      <option value="private">Only customers I give it to</option>
+                    </select>
+                  </Field>
                   {isSuperAdmin && (
                     <Field label="Who pays the discount">
                       <select className="admin-input" value={form.funded_by || defaultFunder(form.scope)} onChange={e => set("funded_by", e.target.value === defaultFunder(form.scope) ? "" : (e.target.value as Form["funded_by"]))}>

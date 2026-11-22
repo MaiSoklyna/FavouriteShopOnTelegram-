@@ -27,3 +27,5 @@ export { ShopCategoryTiles, CategoryChips } from "./ShopCategoryTiles";
 export { Stars, StarInput } from "./Stars";
 export { ShopReviews } from "./ShopReviews";
 export { ShopReviewCard } from "./ShopReviewCard";
+export { CouponCard } from "./CouponCard";
+export { CouponSheet } from "./CouponSheet";

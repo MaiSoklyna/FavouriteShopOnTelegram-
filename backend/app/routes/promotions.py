@@ -10,6 +10,8 @@ schedule (services/promo_schedule, migration 019) — checked on every read.
 
 from __future__ import annotations
 
+import httpx
+
 import logging
 import time
 from datetime import datetime, timezone
@@ -57,6 +59,10 @@ class PromotionIn(BaseModel):
     discount_value: float | None = Field(None, gt=0)
     min_order: float = Field(0, ge=0)
     max_uses: int | None = Field(None, ge=1)
+    # Coupon settings (migration 030). A private coupon is hidden and only usable by customers it is given to;
+    # per_user_limit caps one customer's uses (None = unlimited, e.g. a weekend sale)
+    audience: str = Field("public", pattern=r"^(public|private)$")
+    per_user_limit: int | None = Field(None, ge=1, le=1000)
     starts_at: datetime | None = None
     ends_at: datetime | None = None
     display_locations: list[str] = ["home_promotions"]
@@ -115,6 +121,8 @@ class PromotionIn(BaseModel):
     def _offer_complete(self):
         if bool(self.code) != bool(self.discount_type and self.discount_value):
             raise ValueError("A coupon code needs a discount, and a discount needs a code")
+        if self.audience == "private" and (self.auto_apply or not self.code):
+            raise ValueError("A private coupon needs a code and cannot apply automatically")
         return self
 
     @field_validator("display_locations")
@@ -140,6 +148,19 @@ def _with_schedule(p: dict, now: datetime | None = None) -> dict:
     return p
 
 
+OFFER_COLUMNS = "id,code,type,value,min_order,max_uses,used_count,is_active"
+
+
+async def _select_offers(db, code_ids: list[int]) -> list[dict]:
+    """The codes behind promotions, with audience and per-customer limit once migration 030 is applied."""
+    try:
+        return await db.from_("promo_codes").in_("id", code_ids).select(OFFER_COLUMNS + ",audience,per_user_limit")
+    except httpx.HTTPStatusError as exc:
+        if "audience" not in getattr(exc.response, "text", "") and "per_user_limit" not in getattr(exc.response, "text", ""):
+            raise
+        return await db.from_("promo_codes").in_("id", code_ids).select(OFFER_COLUMNS)
+
+
 async def _enrich(db, rows: list[dict]) -> list[dict]:
     """Attach shop, category name, the offer (code row) and product count."""
     if not rows:
@@ -150,7 +171,7 @@ async def _enrich(db, rows: list[dict]) -> list[dict]:
     pids = [r["id"] for r in rows if r["scope"] == "product"]
     shops = {m["id"]: m for m in (await db.from_("merchants").in_("id", mids).select("id,name,logo_url,icon_emoji,accent_color") if mids else [])}
     cats = {c["id"]: c["name"] for c in (await db.from_("categories").in_("id", cids).select("id,name") if cids else [])}
-    offers = {c["id"]: c for c in (await db.from_("promo_codes").in_("id", codes).select("id,code,type,value,min_order,max_uses,used_count,is_active") if codes else [])}
+    offers = {c["id"]: c for c in (await _select_offers(db, codes) if codes else [])}
     counts: dict[int, int] = {}
     if pids:
         for link in await db.from_("promotion_products").in_("promotion_id", pids).select("promotion_id"):
@@ -159,7 +180,7 @@ async def _enrich(db, rows: list[dict]) -> list[dict]:
         r["shop"] = shops.get(r.get("merchant_id"))
         r["category_name"] = cats.get(r.get("category_id"))
         o = offers.get(r.get("promo_code_id"))
-        r["offer"] = {k: o[k] for k in ("code", "type", "value", "min_order", "max_uses", "used_count", "is_active")} if o else None
+        r["offer"] = {k: o[k] for k in ("id", "code", "type", "value", "min_order", "max_uses", "used_count", "is_active", "audience", "per_user_limit") if k in o} if o else None
         r["product_count"] = counts.get(r["id"]) if r["scope"] == "product" else None
     return rows
 
@@ -184,6 +205,8 @@ async def list_promotions(location: str | None = None, merchant_id: int | None =
         want = "home_promotions" if location == "home_featured" else location
         rows = [r for r in rows if r["is_live"] and (not want or want in ["home_promotions" if x == "home_featured" else x for x in (r.get("display_locations") or [])])]
         rows = await _enrich(db, rows)
+        # A private coupon is for the customers it was given to: its promotion is never shown to everyone
+        rows = [r for r in rows if not (r["offer"] and r["offer"].get("audience") == "private")]
         # Every promotion shows; one whose code was switched off or used up shows without its offer
         for r in rows:
             o = r["offer"]
@@ -212,6 +235,8 @@ async def get_promotion(promotion_id: int):
                 raise NotFoundError("Promotion", promotion_id)
             p["next_start"] = nxt.isoformat()
         p = (await _enrich(db, [p]))[0]
+        if p["offer"] and p["offer"].get("audience") == "private":
+            raise NotFoundError("Promotion", promotion_id)
         q = db.from_("products").eq("is_active", True)
         if p.get("merchant_id"):
             q = q.eq("merchant_id", p["merchant_id"])
@@ -305,11 +330,30 @@ async def _sync_code(db, body: PromotionIn, merchant_id: int | None, promotion_i
         "value": body.discount_value, "min_order": body.min_order, "max_uses": body.max_uses,
         "expires_at": body.ends_at.isoformat() if body.ends_at else None, "is_active": body.is_active,
     }
+    row["audience"], row["per_user_limit"] = body.audience, body.per_user_limit
     code_id = existing["id"] if existing else current_code_id
-    if code_id:
-        await db.from_("promo_codes").eq("id", code_id).update(row)
-        return code_id
-    return (await db.from_("promo_codes").insert(row))[0]["id"]
+    return await _write_code(db, code_id, row, body)
+
+
+async def _write_code(db, code_id: int | None, row: dict, body: PromotionIn) -> int:
+    """Save the promo_codes row. Before migration 030 it has no audience / per_user_limit columns: a plain
+    promotion still saves, but asking for a private coupon or a per-customer limit says what to run."""
+    try:
+        if code_id:
+            await db.from_("promo_codes").eq("id", code_id).update(row)
+            return code_id
+        return (await db.from_("promo_codes").insert(row))[0]["id"]
+    except httpx.HTTPStatusError as exc:
+        text = getattr(exc.response, "text", "")
+        if "audience" not in text and "per_user_limit" not in text:
+            raise
+        if body.audience != "public" or body.per_user_limit is not None:
+            raise BadRequestError("Private coupons and per-customer limits need supabase/migrations/030_coupons.sql")
+        plain = {k: v for k, v in row.items() if k not in ("audience", "per_user_limit")}
+        if code_id:
+            await db.from_("promo_codes").eq("id", code_id).update(plain)
+            return code_id
+        return (await db.from_("promo_codes").insert(plain))[0]["id"]
 
 
 def funded_by_for(body: PromotionIn, merchant_id: int | None, user: TokenClaims) -> str:

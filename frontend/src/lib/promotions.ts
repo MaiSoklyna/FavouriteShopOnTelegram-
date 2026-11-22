@@ -66,7 +66,7 @@ export interface PromotionRow {
   /** When it next switches on (admin list; detail page on an off day) */
   next_start?: string | null;
   shop?: { id: number; name: string; logo_url?: string | null; icon_emoji?: string | null; accent_color?: string | null } | null;
-  offer: { code: string; type: "percent" | "fixed"; value: number | string; min_order: number | string | null; max_uses: number | null; used_count: number | null; is_active: boolean } | null;
+  offer: { id?: number; code: string; type: "percent" | "fixed"; value: number | string; min_order: number | string | null; max_uses: number | null; used_count: number | null; is_active: boolean; audience?: "public" | "private"; per_user_limit?: number | null } | null;
   product_count?: number | null;
   /** detail only */
   products?: Product[];

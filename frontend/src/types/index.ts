@@ -209,6 +209,55 @@ export interface Order {
   shop_review?: { id: number; rating: number; comment?: string | null; created_at?: string } | null;
 }
 
+// ── Coupons ────────────────────────────────────────────────────
+
+export interface Coupon {
+  id: number;
+  code: string;
+  title: string;
+  subtitle?: string | null;
+  type: "percent" | "fixed" | string;
+  value: number | string;
+  /** "10% off" / "$2 off" */
+  discount_text: string;
+  min_order: number;
+  expires_at?: string | null;
+  /** Null = valid at every shop. */
+  merchant_id: number | null;
+  shop_name?: string | null;
+  per_user_limit?: number | null;
+  /** Uses left for everyone, when the coupon has a cap. */
+  remaining?: number | null;
+  audience: "public" | "private";
+  /** Applied at checkout without picking it. */
+  auto_apply: boolean;
+}
+
+/** A public coupon in the browse list. */
+export interface PublicCoupon extends Coupon {
+  claimed: boolean;
+  used_by_me: number;
+  usable: boolean;
+  reason?: string | null;
+}
+
+/** A coupon in the customer's wallet. */
+export interface WalletCoupon extends Coupon {
+  status: "available" | "used" | "expired" | "used_up" | "inactive";
+  source: "claimed" | "granted";
+  used_by_me: number;
+}
+
+/** A coupon offered for the cart at checkout. */
+export interface EligibleCoupon extends Coupon {
+  eligible: boolean;
+  /** Why it cannot be used yet, e.g. "Spend $4.20 more (minimum $20.00)". */
+  reason?: string | null;
+  /** What it would take off this cart. */
+  discount: number;
+  in_wallet: boolean;
+}
+
 // ── Shop reviews ───────────────────────────────────────────────
 
 export interface ShopReviewSummary {

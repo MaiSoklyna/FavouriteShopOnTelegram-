@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
-import { EmptyState, KhqrCard, PaidSuccess, Pill, Skeleton } from "@/components/shop";
+import { CouponSheet, EmptyState, KhqrCard, PaidSuccess, Pill, Skeleton } from "@/components/shop";
 import type { KhqrData } from "@/components/shop/Khqr";
 import { StripePayScreen } from "@/components/shop/StripePayScreen";
 import { ENABLED_ONLINE, STRIPE_DEMO_NOTE, isEnabled, type PaymentMethod } from "@/lib/paymentProviders";
@@ -87,6 +87,8 @@ function CheckoutContent() {
   const [qrError, setQrError] = useState("");
   const orderId = qrOrderIds[qrIndex] ?? null;
   const [quote, setQuote] = useState<CartQuote | null>(null);
+  const [couponsOpen, setCouponsOpen] = useState(false);
+  const [promoTick, setPromoTick] = useState(0); // bumps when a coupon is chosen, to price the cart again
   const [quoteError, setQuoteError] = useState("");
   const [deliveryType, setDeliveryType] = useState<"delivery" | "pickup">("delivery");
   const [pin, setPin] = useState<LatLng | null>(null);
@@ -146,7 +148,7 @@ function CheckoutContent() {
         setQuoteError(msg.replace(/^Delivery unavailable for this location\.\s*/, ""));
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, items, merchantId, paying, deliveryType, pin?.lat, pin?.lng]);
+  }, [user, items, merchantId, paying, deliveryType, pin?.lat, pin?.lng, promoTick]);
 
   useEffect(() => {
     if (!user) return;
@@ -254,6 +256,12 @@ function CheckoutContent() {
 
   async function removeSaved(id: number) {
     try { await deleteAddress(id); setSaved((rows) => rows.filter((a) => a.id !== id)); } catch { /* keep the chip */ }
+  }
+
+  /** Use this coupon (or none): remember it and price the cart again; the server decides if it applies. */
+  function applyCoupon(code: string | null) {
+    savePromo(code, merchantId);
+    setPromoTick((t) => t + 1);
   }
 
   function removePromo() {
@@ -651,6 +659,25 @@ function CheckoutContent() {
         </div>
 
         {/* Summary */}
+        {/* Coupons: pick one for this cart */}
+        {merchantId != null && (
+          <button type="button" onClick={() => setCouponsOpen(true)} data-testid="coupon-row"
+            className="fos-press mt-3 flex w-full items-center gap-3 rounded-card bg-card p-3.5 text-left shadow-fos-sm">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[12px] bg-tint-mango text-mango-500"><Icon name="ticket" size={18} /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-extrabold text-ink-900">Coupons</span>
+              <span className="block truncate text-caption text-ink-500">
+                {quote?.promo?.applied && !quote.orders[0]?.promo_auto ? `${quote.promo.code} applied` : quote?.orders[0]?.promo_auto ? "A promotion was applied for you" : "Choose or enter a coupon"}
+              </span>
+            </span>
+            <Icon name="chevron" size={16} className="shrink-0 text-ink-500" />
+          </button>
+        )}
+        {couponsOpen && merchantId != null && (
+          <CouponSheet merchantId={merchantId} appliedCode={quote?.promo?.applied && !quote.orders[0]?.promo_auto ? quote.promo.code : null}
+            onApply={applyCoupon} onClose={() => setCouponsOpen(false)} />
+        )}
+
         <section className="mt-3 rounded-card bg-card p-3.5 text-[14px] shadow-fos-sm tabular-nums">
           {/* Only this shop's items — other shops in the cart are separate orders */}
           <div className="mb-1.5 divide-y divide-line border-b border-line pb-1.5">

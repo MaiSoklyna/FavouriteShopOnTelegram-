@@ -27,6 +27,11 @@ async def validate_promo(body: PromoValidateRequest, user: TokenClaims = require
             .eq("is_active", True)
             .select_one()
         )
+        if promo and promo.get("audience") == "private":
+            person = await db.from_("users").eq("telegram_id", user.telegram_id).select_one("id") if user.telegram_id else None
+            held = {w["promo_code_id"] for w in await db.from_("coupon_wallet").eq("user_id", person["id"]).select("promo_code_id")} if person else set()
+            if promo["id"] not in held:
+                promo = None
         if not promo:
             raise NotFoundError("Promo code")
 
@@ -77,7 +82,7 @@ async def list_active_promos(merchant_id: int | None = None):
             owned = {r["promo_code_id"] for r in await db.from_("promotions").not_("promo_code_id", "is", "null").select("promo_code_id")}
         except Exception:  # no promotions table yet: every code is a plain code
             owned = set()
-        promos = [p for p in promos if p["id"] not in owned]
+        promos = [p for p in promos if p["id"] not in owned and p.get("audience") != "private"]
 
     # Filter out expired promos server-side
     now = datetime.now(timezone.utc)

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from app.core.constants import ORDER_STATUS_TRANSITIONS
 from app.core.exceptions import BadRequestError, ConflictError
-from app.services import inventory, notify, settlement
+from app.services import coupons, inventory, notify, settlement
 
 
 async def change_status(
@@ -47,6 +47,7 @@ async def change_status(
         # A cancelled order no longer holds stock
         items = await db.from_("order_items").eq("order_id", order_id).select("product_id,quantity,selected_variants")
         await inventory.release_stock(db, items)
+        await coupons.release_for_order(db, order_id)
 
     if new_status == "delivered":
         await settlement.on_order_status_changed(db, order_id, new_status, **actor)
