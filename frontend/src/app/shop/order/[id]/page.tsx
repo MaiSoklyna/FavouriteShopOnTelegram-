@@ -6,7 +6,8 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
-import type { Order } from "@/types";
+import type { DeliveryInfo, Order } from "@/types";
+import { CUSTOMER_DELIVERY_LABEL, telUrl } from "@/lib/deliveries";
 import { KhqrPayPanel } from "@/components/shop/KhqrPayPanel";
 import { StripePayScreen } from "@/components/shop/StripePayScreen";
 import { Icon } from "@/components/shop/Icon";
@@ -191,6 +192,9 @@ function OrderDetailContent() {
         {unpaid && order.payment_method !== "stripe" && <KhqrPayPanel orderId={order.id} total={Number(order.total)} onPaid={fetchOrder} />}
 
         <OrderStatusHero order={track} />
+
+        {/* Delivery orders: who is coming */}
+        {!pickup && !cancelled && order.status !== "delivered" && order.delivery && <DriverCard delivery={order.delivery} />}
 
         {/* Where it's going (delivery) or where to collect it (pickup) */}
         <PlaceCard pickup={pickup} you={you} shopPoint={shopPoint} shop={shop} shopName={shopName}
@@ -404,5 +408,26 @@ function PlaceCard({ pickup, you, shopPoint, shop, shopName, address, name, phon
         )}
       </div>
     </section>
+  );
+}
+
+
+/** Who is bringing the order and how far it got, with a call button. */
+function DriverCard({ delivery }: { delivery: DeliveryInfo }) {
+  const call = telUrl(delivery.driver.phone);
+  const name = delivery.driver.name || "Your driver";
+  return (
+    <div data-testid="driver-card" className="mb-3 flex items-center gap-3 rounded-hero bg-card p-3.5 shadow-fos-sm">
+      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-tint-mango text-mango-500"><Icon name="truck" size={22} strokeWidth={2} /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-extrabold text-ink-900">{name}{delivery.driver.vehicle ? ` · ${delivery.driver.vehicle}` : ""}</span>
+        <span className="block text-caption text-ink-500">{CUSTOMER_DELIVERY_LABEL[delivery.status] ?? "On the way"}</span>
+      </span>
+      {call && (
+        <a href={call} aria-label={`Call ${name}`} className="fos-press grid h-10 w-10 shrink-0 place-items-center rounded-full bg-navy-700 text-white">
+          <Icon name="phone" size={18} />
+        </a>
+      )}
+    </div>
   );
 }

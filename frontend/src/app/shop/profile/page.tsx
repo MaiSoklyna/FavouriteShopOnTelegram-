@@ -6,6 +6,15 @@ import { useAuth } from "@/providers/AuthProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
 import { api } from "@/lib/api";
 
+const DRIVER_ITEM = {
+  label: "Driver dashboard", href: "/shop/driver",
+  icon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--shop-primary)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+    </svg>
+  ),
+};
+
 const MENU = [
   {
     label: "My Orders", href: "/shop/orders",
@@ -51,6 +60,11 @@ const MENU = [
 
 export default function ProfilePage() {
   const router = useRouter();
+  const [isDriver, setIsDriver] = useState(false);
+  useEffect(() => {
+    // Only drivers see the entry; everyone else gets {driver: null}
+    api.get<{ driver: unknown | null }>("/deliveries/me").then((r) => setIsDriver(!!r.driver)).catch(() => {});
+  }, []);
   const { user, isShopUser, logout } = useAuth();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "" });
@@ -86,6 +100,8 @@ export default function ProfilePage() {
 
   const displayName = ("name" in user ? (user as any).name : (user as any).username) || "User";
   const initial = displayName[0]?.toUpperCase() || "?";
+
+  const menu = isDriver ? [DRIVER_ITEM, ...MENU] : MENU;
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--shop-bg)", paddingBottom: 80 }}>
@@ -227,12 +243,12 @@ export default function ProfilePage() {
           boxShadow: "var(--shop-shadow)",
           overflow: "hidden",
         }}>
-          {MENU.map((item, i) => (
+          {menu.map((item, i) => (
             <button key={i} onClick={() => router.push(item.href)} style={{
               width: "100%", display: "flex", alignItems: "center", gap: 12,
               padding: "14px 16px",
               background: "none", border: "none", cursor: "pointer",
-              borderBottom: i < MENU.length - 1 ? "1px solid var(--shop-divider)" : "none",
+              borderBottom: i < menu.length - 1 ? "1px solid var(--shop-divider)" : "none",
             }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 8, flexShrink: 0,

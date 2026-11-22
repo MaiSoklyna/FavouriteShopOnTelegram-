@@ -24,6 +24,7 @@ from app.routes import (
     auth,
     banners,
     cart,
+    deliveries,
     featured_categories,
     loyalty,
     merchants,
@@ -112,6 +113,9 @@ app.include_router(cart.router, prefix="/api")
 # Orders (user placement + admin management)
 app.include_router(orders.router, prefix="/api")
 app.include_router(addresses.router, prefix="/api")
+
+# Drivers and deliveries (driver app, shop assignment, driver management)
+app.include_router(deliveries.router, prefix="/api")
 
 # ABA PayWay QR payments
 app.include_router(payments.router, prefix="/api")

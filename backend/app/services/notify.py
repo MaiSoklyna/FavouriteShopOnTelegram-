@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 KIND_TYPE = {
     "order_placed": "order_update", "order_paid": "order_update", "order_status": "order_update",
     "review_request": "order_update", "new_order": "order_update", "order_cancelled": "order_update",
+    "delivery_assigned": "order_update", "delivery_update": "order_update",
     "payout": "system", "low_stock": "system", "system": "system", "loyalty": "system",
     "promo": "promo",
 }
@@ -124,6 +125,17 @@ async def _push(db, order: dict, title: str, body: str) -> None:
         )
     except Exception:
         logger.exception("Telegram status push failed for order %s", order.get("id"))
+
+
+async def push_to_driver(db, driver: dict, *, title: str, body: str) -> None:
+    """Telegram copy of a driver's assignment. Never raises."""
+    try:
+        from bot.status_notifications import send_driver_message
+
+        user = await db.from_("users").eq("id", driver["user_id"]).select_one("telegram_id") or {}
+        await send_driver_message(user.get("telegram_id"), title=title, body=body)
+    except Exception:
+        logger.exception("Telegram push to driver failed")
 
 
 async def order_status_changed(db, order_id: int, status: str, *, by_customer: bool = False) -> None:

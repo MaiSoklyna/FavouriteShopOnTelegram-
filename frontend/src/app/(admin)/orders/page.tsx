@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
-import type { Order } from "@/types";
+import type { AssignableDriver, DeliveryInfo, Order } from "@/types";
 import { BrandLoader } from "@/components/ui/Spinner";
 
 const TABS = ["all", "pending", "confirmed", "processing", "shipped", "delivered", "cancelled"];
@@ -128,6 +128,9 @@ export default function OrdersPage() {
                 ))}
               </div>
             )}
+            {detail.delivery_type === "delivery" && ["confirmed", "processing", "shipped"].includes(detail.status) && (
+              <DriverPanel key={detail.id} order={detail} onChanged={() => openDetail(detail.id)} />
+            )}
             {NEXT[detail.status] && (
               <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
                 {NEXT[detail.status].map(s => (
@@ -140,6 +143,71 @@ export default function OrdersPage() {
             <button className="btn-outline" style={{ width: "100%" }} onClick={() => setDetail(null)}>Close</button>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+
+const DELIVERY_TEXT: Record<string, string> = {
+  assigned: "Waiting for the driver to accept", accepted: "Driver is heading to the shop", picked_up: "Driver is on the way to the customer",
+  delivered: "Delivered", failed: "Delivery failed",
+};
+
+/** Give a delivery order to a driver, see how it is going, or take it away again. */
+function DriverPanel({ order, onChanged }: { order: Order; onChanged: () => void }) {
+  const [delivery, setDelivery] = useState<DeliveryInfo | null | undefined>(undefined);
+  const [drivers, setDrivers] = useState<AssignableDriver[]>([]);
+  const [pick, setPick] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const d = await api.get<{ data: DeliveryInfo | null }>(`/deliveries/orders/${order.id}`);
+      setDelivery(d.data);
+      const l = await api.get<{ data: AssignableDriver[] }>(`/deliveries/orders/${order.id}/drivers`);
+      setDrivers(l.data);
+    } catch { setDelivery(null); }
+  }, [order.id]);
+  useEffect(() => { load(); }, [load]);
+
+  async function run(call: () => Promise<unknown>) {
+    setBusy(true); setError("");
+    try { await call(); setPick(""); await load(); onChanged(); }
+    catch (e: any) { setError(e?.detail || e?.message || "Something went wrong"); }
+    finally { setBusy(false); }
+  }
+
+  const active = delivery && ["assigned", "accepted", "picked_up"].includes(delivery.status);
+  const choosable = drivers.filter(d => d.is_available);
+  return (
+    <div data-testid="driver-panel" style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+      <h4 style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", marginBottom: 8, textTransform: "uppercase" }}>Driver</h4>
+      {delivery === undefined ? <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Loading…</span> : (
+        <>
+          {delivery && delivery.status !== "cancelled" && (
+            <div style={{ fontSize: 13, marginBottom: 8 }}>
+              <strong>{delivery.driver.name || "Driver"}</strong>
+              {delivery.driver.phone && <> · <a href={`tel:${delivery.driver.phone}`} style={{ color: "var(--info)" }}>{delivery.driver.phone}</a></>}
+              <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{DELIVERY_TEXT[delivery.status] ?? delivery.status}</div>
+              {delivery.status === "failed" && delivery.failure_reason && <div style={{ fontSize: 12, color: "var(--danger, #B42318)", marginTop: 2 }}>Reason: {delivery.failure_reason}</div>}
+            </div>
+          )}
+          {active && delivery.status !== "picked_up" && (
+            <button className="btn-outline" disabled={busy} onClick={() => run(() => api.post(`/deliveries/orders/${order.id}/unassign`))}>Take away from driver</button>
+          )}
+          {(!delivery || ["failed", "cancelled", "declined"].includes(delivery.status) || (active && delivery.status !== "picked_up")) && (
+            <div style={{ display: "flex", gap: 8, marginTop: active ? 8 : 0 }}>
+              <select className="admin-input" style={{ flex: 1 }} value={pick} onChange={e => setPick(e.target.value)} aria-label="Choose a driver">
+                <option value="">{choosable.length ? (active ? "Give to someone else…" : "Choose a driver…") : "No driver is on shift"}</option>
+                {choosable.map(d => <option key={d.id} value={d.id}>{d.full_name}{d.merchant_id ? " (our rider)" : ""} · {d.active_jobs} active</option>)}
+              </select>
+              <button className="btn-primary" disabled={busy || !pick} onClick={() => run(() => api.post(`/deliveries/orders/${order.id}/assign`, { driver_id: Number(pick) }))}>Assign</button>
+            </div>
+          )}
+          {error && <p role="alert" style={{ color: "var(--danger, #B42318)", fontSize: 12, marginTop: 6 }}>{error}</p>}
+        </>
       )}
     </div>
   );

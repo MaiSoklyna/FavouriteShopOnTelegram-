@@ -24,7 +24,7 @@ from app.core.dependencies import require_any_admin, require_role
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.services import inventory, notify, settlement
+from app.services import deliveries, inventory, notify, order_status, settlement
 from app.services import promo_schedule
 from app.services.delivery import is_open, quote_delivery, valid_point
 
@@ -382,6 +382,8 @@ async def get_order(order_id: int, user: TokenClaims = require_role(Role.USER, R
 
         items = await db.from_("order_items").eq("order_id", order_id).select()
         order["items"] = items
+        # Who is bringing it and how far it got (null for pickup orders and until a driver is assigned)
+        order["delivery"] = await deliveries.customer_view(db, order_id)
     return order
 
 
@@ -465,44 +467,11 @@ async def update_order_status(
         if user.role == Role.MERCHANT_ADMIN and order.get("merchant_id") != user.merchant_id:
             raise ForbiddenError("You can only manage your merchant's orders")
 
-        # Validate transition
-        allowed = ORDER_STATUS_TRANSITIONS.get(order["status"], [])
-        if new_status not in allowed:
-            raise BadRequestError(
-                f"Cannot transition from '{order['status']}' to '{new_status}'. "
-                f"Allowed: {allowed}"
-            )
-
-        update_data: dict = {"status": new_status}
-        if body.get("admin_note"):
-            update_data["admin_note"] = body["admin_note"]
-        if body.get("payment_status"):
-            update_data["payment_status"] = body["payment_status"]
-
-        actor = {"actor_type": str(user.role), "actor_id": user.sub}
-        # Reverse first: it refuses if the earning sits in an open payout,
-        # and that must stop the cancellation too.
-        if new_status == "cancelled":
-            await settlement.on_order_status_changed(
-                db, order_id, new_status, reason=body.get("admin_note"), **actor,
-            )
-
-        # Only apply the change if the order is still in the status we validated against, so two
-        # people (or two taps) cannot both make the same transition.
-        changed = await db.from_("orders").eq("id", order_id).eq("status", order["status"]).update(update_data)
-        if not changed:
-            raise ConflictError("This order was just updated by someone else. Refresh and try again.")
-
-        if new_status == "cancelled":
-            # A cancelled order no longer holds stock (this used to be lost for admin cancellations)
-            items = await db.from_("order_items").eq("order_id", order_id).select("product_id,quantity,selected_variants")
-            await inventory.release_stock(db, items)
-
-        if new_status == "delivered":
-            await settlement.on_order_status_changed(db, order_id, new_status, **actor)
-
-        # Tell the customer (and the shop on a cancellation); on delivery, ask how it went
-        await notify.order_status_changed(db, order_id, new_status)
+        await order_status.change_status(
+            db, order, new_status,
+            actor_type=str(user.role), actor_id=user.sub,
+            admin_note=body.get("admin_note"), payment_status=body.get("payment_status"),
+        )
     return {"success": True}
 
 

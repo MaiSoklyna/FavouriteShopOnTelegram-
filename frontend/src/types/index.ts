@@ -200,6 +200,58 @@ export interface Order {
   distance_km?: number | null;
   paid_at?: string | null;
   items?: OrderItem[];
+  /** Who is bringing it and how far it got (null for pickup orders and until a driver is assigned). */
+  delivery?: DeliveryInfo | null;
+}
+
+// ── Deliveries ─────────────────────────────────────────────────
+
+/** assigned -> accepted -> picked_up -> delivered, or failed / cancelled / declined */
+export interface DeliveryInfo {
+  status: string;
+  driver: { name?: string | null; phone?: string | null; vehicle?: string | null };
+  accepted_at?: string | null;
+  picked_up_at?: string | null;
+  delivered_at?: string | null;
+  /** Only in the shop's view. */
+  failure_reason?: string | null;
+}
+
+export interface DriverProfile {
+  id: number;
+  merchant_id: number | null;
+  full_name: string;
+  phone: string;
+  vehicle?: string | null;
+  is_active: boolean;
+  is_available: boolean;
+}
+
+/** One delivery as the driver sees it: everything needed to do the job. */
+export interface DriverJob {
+  delivery: { id: number; status: string; assigned_at?: string; accepted_at?: string | null; picked_up_at?: string | null; delivered_at?: string | null; failure_reason?: string | null };
+  order: { id: number; code: string; status: string; total: number | string; payment_method: string; note?: string | null; created_at?: string; item_count: number; items: string[] };
+  /** Cash the driver must collect (cash on delivery, not yet paid); 0 otherwise. */
+  collect_cash: number;
+  shop: { name?: string | null; phone?: string | null; address?: string | null; lat?: number | null; lng?: number | null };
+  customer: { name?: string | null; phone?: string | null; address?: string | null; lat?: number | null; lng?: number | null; distance_km?: number | string | null };
+}
+
+/** A driver a shop can give an order to. */
+export interface AssignableDriver {
+  id: number;
+  full_name: string;
+  phone: string;
+  vehicle?: string | null;
+  merchant_id: number | null;
+  is_available: boolean;
+  active_jobs: number;
+}
+
+/** A driver in the admin lists. */
+export interface AdminDriver extends DriverProfile {
+  shop_name?: string | null;
+  active_jobs: number;
 }
 
 // ── Cart ───────────────────────────────────────────────────────

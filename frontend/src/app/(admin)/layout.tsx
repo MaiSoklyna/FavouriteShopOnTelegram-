@@ -20,6 +20,7 @@ const MENU = [
   { href: "/earnings", label: "Earnings", icon: PayoutIcon, merchantOnly: true },
   { href: "/settlements", label: "Settlements", icon: PayoutIcon, superOnly: true },
   { href: "/reviews", label: "Reviews", icon: HiOutlineChatAlt2 },
+  { href: "/drivers", label: "Drivers", icon: CustomersIcon },
   { href: "/support", label: "Support", icon: SupportIcon },
   { href: "/loyalty", label: "Loyalty", icon: RewardsIcon },
   { href: "/notifications", label: "Notifications", icon: BellIcon, superOnly: true },
