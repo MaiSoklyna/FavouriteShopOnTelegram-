@@ -23,6 +23,9 @@ const TABS = [
 type Tab = (typeof TABS)[number]["key"];
 
 interface PointsTransaction { id: number; type: string; points: number; description?: string; created_at: string; }
+interface Redeemed { code: string; value: number; expires_at: string; points: number; }
+
+const TX_LABEL: Record<string, string> = { earn: "Earned", redeem: "Redeemed", reversal: "Returned", adjust: "Adjustment" };
 
 const money = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const pts = (n: number) => n.toLocaleString("en-US");
@@ -49,23 +52,48 @@ export default function RewardsPage() {
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [tab, setTab] = useState<Tab>("overview");
+  /** Points that open orders will earn once they are delivered */
+  const [pending, setPending] = useState({ points: 0, orders: 0 });
+  const [redeeming, setRedeeming] = useState<number | null>(null);
+  const [redeemError, setRedeemError] = useState<string | null>(null);
+  const [redeemed, setRedeemed] = useState<Redeemed | null>(null);
+
+  const load = () => Promise.allSettled([
+    api.get<LoyaltyAccount>("/loyalty/account"),
+    api.get<PointsTransaction[]>("/loyalty/history", { params: { limit: 20 } }),
+    api.get<LoyaltySettings>("/loyalty/settings"),
+    api.get<{ points: number; orders: number }>("/loyalty/pending"),
+  ]);
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
     setLoading(true);
     setFailed(false);
     // Each part loads on its own: a failed history or settings call must not hide the balance
-    Promise.allSettled([
-      api.get<LoyaltyAccount>("/loyalty/account"),
-      api.get<PointsTransaction[]>("/loyalty/history", { params: { limit: 20 } }),
-      api.get<LoyaltySettings>("/loyalty/settings"),
-    ]).then(([acct, hist, cfg]) => {
+    load().then(([acct, hist, cfg, pend]) => {
+      if (pend.status === "fulfilled" && pend.value) setPending(pend.value);
       if (acct.status === "fulfilled") setAccount(acct.value);
       else setFailed(true);
       if (hist.status === "fulfilled") setHistory(hist.value || []);
       if (cfg.status === "fulfilled") setSettings(cfg.value || null);
     }).finally(() => setLoading(false));
   }, [user, attempt]);
+
+  const redeem = async (points: number) => {
+    if (redeeming !== null) return;          // one at a time: a double tap must not spend twice
+    setRedeeming(points); setRedeemError(null);
+    try {
+      const r = await api.post<{ data: { coupon: { code: string; value: number; expires_at: string }; points_redeemed: number } }>("/loyalty/redeem", { points });
+      setRedeemed({ ...r.data.coupon, points: r.data.points_redeemed });
+      const [acct, hist] = await load();
+      if (acct.status === "fulfilled") setAccount(acct.value);
+      if (hist.status === "fulfilled") setHistory(hist.value || []);
+    } catch (e) {
+      setRedeemError(e instanceof Error && e.message ? e.message : "Couldn't redeem right now. Your points were not used.");
+    } finally {
+      setRedeeming(null);
+    }
+  };
 
   if (!user) return <LoginGate><div /></LoginGate>;
   if (loading) return <Page><Skeleton /></Page>;
@@ -148,6 +176,11 @@ export default function RewardsPage() {
           <p className="mt-2 text-[15px] font-bold" style={{ color: tier.soft }}>
             ≈ <b className="font-extrabold" style={{ color: tier.ink }}>{money(balanceWorth)}</b> available rewards
           </p>
+          {pending.points > 0 && (
+            <p data-testid="pending-points" className="mt-2 text-[13px] font-bold" style={{ color: tier.soft }}>
+              +{pts(pending.points)} pts on the way · added when {pending.orders === 1 ? "your order is" : `your ${pending.orders} orders are`} delivered
+            </p>
+          )}
           {multiplier && (
             <span className="mt-4 inline-flex h-7 items-center gap-1 rounded-full px-3 text-[12px] font-extrabold" style={{ background: tier.ink, color: account.tier === "bronze" ? "#7E4E1E" : "#D6BA80" }}>
               <Icon name="bolt" size={13} strokeWidth={2.4} />{multiplier}× points on every order
@@ -188,7 +221,7 @@ export default function RewardsPage() {
               </Link>
             </div>
             <p className="mt-3 flex items-center gap-1.5 border-t border-white/10 pt-3 text-[12px] font-semibold text-white/60">
-              <Icon name="clock" size={13} strokeWidth={2.2} />Redeeming points at checkout is coming soon. Your points are saved until then.
+              <Icon name="ticket" size={13} strokeWidth={2.2} />Redeem points for a coupon below. It goes to My Coupons for your next order.
             </p>
           </>
         ) : (
@@ -236,7 +269,17 @@ export default function RewardsPage() {
           </div>
 
           {/* 6. What points are worth, at a glance */}
-          <h2 className="mt-5 text-section text-ink-900">Popular Redemptions</h2>
+          {redeemed && (
+            <div data-testid="redeemed" role="status" className="mt-4 rounded-card border border-gold-400/60 bg-tint-gold p-4">
+              <p className="text-[15px] font-extrabold text-ink-900">Your {money(redeemed.value)} coupon is ready</p>
+              <p className="mt-1 font-mono text-[18px] font-extrabold tracking-wider text-gold-700">{redeemed.code}</p>
+              <p className="mt-1 text-[12px] text-ink-500">Used {pts(redeemed.points)} pts · valid until {new Date(redeemed.expires_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · one use</p>
+              <Link href="/shop/coupons" className="fos-press mt-3 inline-flex h-10 items-center rounded-full bg-navy-900 px-4 text-[13px] font-extrabold text-gold-400">See in My Coupons</Link>
+            </div>
+          )}
+          {redeemError && <p role="alert" className="mt-4 rounded-thumb bg-tint-caution p-3 text-[13px] font-bold text-caution-500">{redeemError}</p>}
+
+          <h2 className="mt-5 text-section text-ink-900">Redeem for a coupon</h2>
           <div className="mt-2.5 overflow-hidden rounded-card bg-card shadow-fos-md">
             {examples.map((p, i) => {
               const owned = account.balance >= p;
@@ -247,7 +290,11 @@ export default function RewardsPage() {
                   </span>
                   <p className="flex-1 text-[15px] font-extrabold text-ink-900">{pts(p)} pts</p>
                   <span aria-hidden className="text-ink-500">=</span>
-                  <p className="w-20 text-right text-[16px] font-extrabold text-gold-700">{money(worth(p))}</p>
+                  <p className="w-16 text-right text-[16px] font-extrabold text-gold-700">{money(worth(p))}</p>
+                  <button type="button" disabled={!owned || redeeming !== null} onClick={() => redeem(p)} aria-label={`Redeem ${pts(p)} points`}
+                    className="fos-press h-9 w-[84px] shrink-0 rounded-full bg-navy-900 text-[12px] font-extrabold text-gold-400 disabled:bg-line disabled:text-ink-500">
+                    {redeeming === p ? "Working…" : owned ? "Redeem" : "Locked"}
+                  </button>
                 </div>
               );
             })}
@@ -273,7 +320,7 @@ export default function RewardsPage() {
                         <Icon name={isEarn ? "plus" : "gift"} size={16} strokeWidth={2.4} />
                       </span>
                       <div className="min-w-0">
-                        <p className="text-[13px] font-bold capitalize text-ink-900">{tx.type}</p>
+                        <p className="text-[13px] font-bold text-ink-900">{TX_LABEL[tx.type] ?? tx.type}</p>
                         {tx.description && <p className="truncate text-[11px] text-ink-500">{tx.description}</p>}
                       </div>
                     </div>
@@ -291,9 +338,9 @@ export default function RewardsPage() {
       {tab === "how" && (
         <div className="mt-4 flex flex-col gap-2.5">
           {([
-            { icon: "bag", title: "Shop & Earn", desc: `Earn ${pointsPerDollar} points for every $1 you spend. Higher tiers earn even more.` },
+            { icon: "bag", title: "Shop & Earn", desc: `Earn ${pointsPerDollar} points for every $1 you pay (after discounts). Points are added when your order is delivered. Higher tiers earn even more. Shops can choose not to take part.` },
             { icon: "trophy", title: "Level Up", desc: `Earn ${pts(silverAt)} lifetime points to reach Silver (${silverMult}×) and ${pts(goldAt)} for Gold (${goldMult}×).` },
-            { icon: "gift", title: "Redeem", desc: `Every ${pts(Math.round(100 / pointValueCents))} points is worth $1. Redeem from ${pts(minRedeem)} points (${money(worth(minRedeem))} off). Redeeming at checkout is coming soon.` },
+            { icon: "gift", title: "Redeem", desc: `Every ${pts(Math.round(100 / pointValueCents))} points is worth $1. Redeem from ${pts(minRedeem)} points (${money(worth(minRedeem))} off) for a one-use coupon in My Coupons. If an order is cancelled, its points are returned.` },
           ] as { icon: IconName; title: string; desc: string }[]).map((item) => (
             <div key={item.title} className="flex items-start gap-3.5 rounded-card bg-card p-4 shadow-fos-sm">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-thumb bg-tint-gold text-gold-700"><Icon name={item.icon} size={19} strokeWidth={2} /></span>

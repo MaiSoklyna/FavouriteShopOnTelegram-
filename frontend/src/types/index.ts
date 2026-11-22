@@ -499,6 +499,7 @@ export interface LoyaltySettings {
   gold_threshold: number;
   silver_multiplier: number;
   gold_multiplier: number;
+  redeem_coupon_days?: number;
 }
 
 // ── AI ─────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import type { AdminUser } from "@/types";
@@ -14,6 +14,20 @@ export default function SettingsPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [toast, setToast] = useState({ show: false, msg: "", ok: true });
+  // Does this shop take part in the rewards program? (shops only)
+  const [rewards, setRewards] = useState<boolean | null>(null);
+  const [savingRewards, setSavingRewards] = useState(false);
+  useEffect(() => {
+    if (admin?.role !== "merchant") return;
+    api.get<{ enabled: boolean }>("/loyalty/shop").then((r) => setRewards(r.enabled)).catch(() => setRewards(null));
+  }, [admin?.role]);
+
+  async function toggleRewards(on: boolean) {
+    setSavingRewards(true);
+    try { const r = await api.put<{ enabled: boolean }>("/loyalty/shop", { enabled: on }); setRewards(r.enabled); flash(on ? "Rewards are on for your shop" : "Rewards are off for your shop"); }
+    catch (e: any) { flash(e.detail || "Could not change this", false); }
+    setSavingRewards(false);
+  }
 
   const flash = (msg: string, ok = true) => { setToast({ show: true, msg, ok }); setTimeout(() => setToast(t => ({ ...t, show: false })), 3000); };
 
@@ -51,6 +65,20 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* Customer rewards: a shop can choose not to take part */}
+      {rewards !== null && (
+        <div className="admin-card" style={{ marginBottom: 20 }} data-testid="shop-rewards">
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>Customer rewards</h3>
+          <p style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 12 }}>
+            Customers earn points when an order from your shop is delivered, and spend them on any shop. The platform pays for the points, not you. Turn this off and your orders earn no points. Points already earned are kept.
+          </p>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text)" }}>
+            <input type="checkbox" checked={rewards} disabled={savingRewards} onChange={e => toggleRewards(e.target.checked)} />
+            Customers earn points on my orders
+          </label>
+        </div>
+      )}
 
       {/* Password */}
       <div className="admin-card" style={{ marginBottom: 20 }}>

@@ -287,7 +287,6 @@ def shop(monkeypatch):
     # Never message anyone for real from a test
     monkeypatch.setattr(notifications, "send_order_placed_to_customer", noop)
     monkeypatch.setattr(notifications, "send_order_placed_to_merchant_group", noop)
-    monkeypatch.setattr(loyalty, "earn_points", noop)
     return state
 
 

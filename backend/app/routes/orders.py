@@ -203,14 +203,6 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
         await db.from_("cart_items").eq("cart_id", cart["id"]).delete()
         await db.from_("cart").eq("id", cart["id"]).delete()
 
-        # ── Earn loyalty points (best-effort) ───────────────────
-        loyalty_result = None
-        try:
-            from app.services.loyalty import earn_points
-            loyalty_result = await earn_points(user_id, order_id, float(total))
-        except Exception as exc:
-            logger.warning("Loyalty points not awarded for order %s: %s", order_id, exc)
-
         # ── Telegram notifications (best-effort) ────────────────
         try:
             merchant_row = await db.from_("merchants").eq("id", merchant_id).select_one(
@@ -274,7 +266,6 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
             "total": total,
             "status": "pending",
             "payment_method": order_data["payment_method"],
-            "loyalty": loyalty_result,
         },
     }
 

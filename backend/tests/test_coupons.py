@@ -415,7 +415,6 @@ def shop(monkeypatch, db):
     monkeypatch.setattr(inventory, "release_stock", release)
     monkeypatch.setattr(bot_notifications, "send_order_placed_to_customer", noop)
     monkeypatch.setattr(bot_notifications, "send_order_placed_to_merchant_group", noop)
-    monkeypatch.setattr(loyalty, "earn_points", noop)
     return state
 
 

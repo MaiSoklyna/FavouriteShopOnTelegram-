@@ -22,7 +22,7 @@ const MENU = [
   { href: "/reviews", label: "Reviews", icon: HiOutlineChatAlt2 },
   { href: "/drivers", label: "Drivers", icon: CustomersIcon },
   { href: "/support", label: "Support", icon: SupportIcon },
-  { href: "/loyalty", label: "Loyalty", icon: RewardsIcon },
+  { href: "/loyalty", label: "Loyalty", icon: RewardsIcon, superOnly: true },
   { href: "/notifications", label: "Notifications", icon: BellIcon, superOnly: true },
   { href: "/inbox", label: "Inbox", icon: BellIcon, merchantOnly: true },
   { href: "/merchants", label: "Merchants", icon: StoreIcon, superOnly: true },
