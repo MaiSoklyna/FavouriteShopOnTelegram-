@@ -7,6 +7,7 @@ the demo can never charge a real card.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import time
@@ -18,6 +19,8 @@ from app.config import settings
 
 API = "https://api.stripe.com/v1"
 WEBHOOK_TOLERANCE_SECONDS = 300
+IDEMPOTENCY_ATTEMPTS = 5
+IDEMPOTENCY_RETRY_SECONDS = 0.4
 
 
 class StripeError(Exception):
@@ -46,7 +49,24 @@ def _error_message(r: httpx.Response) -> str:
         return "Stripe error"
 
 
-async def create_payment_intent(*, amount, currency: str, order_id: int, order_code: str) -> dict:
+def intent_idempotency_key(order_id: int, amount, replaces: str | None = None) -> str:
+    """Stripe Idempotency-Key for an order's PaymentIntent.
+
+    Every request that starts a PaymentIntent for the same order (React Strict
+    Mode double mount, double tap, two tabs, a retried request, two serverless
+    instances) sends the same key, so Stripe returns the same PaymentIntent
+    instead of creating another. The amount is part of the key because Stripe
+    rejects a reused key whose parameters changed. `replaces` is the id of a
+    cancelled intent being superseded; it gives the replacement a fresh key
+    while every concurrent caller that saw the same cancelled intent still
+    agrees on it.
+    """
+    return f"fos-pi-order-{order_id}-{to_minor_units(amount)}-{replaces or 'first'}"
+
+
+async def create_payment_intent(
+    *, amount, currency: str, order_id: int, order_code: str, idempotency_key: str | None = None,
+) -> dict:
     data = {
         "amount": to_minor_units(amount),
         "currency": currency.lower(),
@@ -56,8 +76,18 @@ async def create_payment_intent(*, amount, currency: str, order_id: int, order_c
         "metadata[order_code]": order_code,
         "description": f"Favourite of Shop order {order_code} (demo)",
     }
-    async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.post(f"{API}/payment_intents", data=data, headers=_headers())
+    headers = _headers()
+    if idempotency_key:
+        headers["Idempotency-Key"] = idempotency_key
+    for attempt in range(IDEMPOTENCY_ATTEMPTS):
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.post(f"{API}/payment_intents", data=data, headers=headers)
+        # 409 = another request with this key is still in flight. Wait for it to
+        # finish, then the same key replays its saved response (the same intent).
+        if r.status_code == 409 and idempotency_key and attempt < IDEMPOTENCY_ATTEMPTS - 1:
+            await asyncio.sleep(IDEMPOTENCY_RETRY_SECONDS * (attempt + 1))
+            continue
+        break
     if r.status_code >= 400:
         raise StripeError(_error_message(r))
     return r.json()

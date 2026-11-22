@@ -14,8 +14,10 @@ Kept parallel to payments.py (KHQR) so either provider can be enabled.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import weakref
 
 from fastapi import APIRouter, Request
 
@@ -48,39 +50,97 @@ async def create_intent(request: Request, order_id: int, user: TokenClaims = req
         raise BadRequestError("Card payment is not available right now. Please choose cash on delivery.")
 
     async with SupabaseClient.service_role() as db:
+        return {"data": await ensure_payment_intent(db, order_id, user)}
+
+
+# One lock per order inside this process. Locks vanish once nobody holds or waits
+# on them. It is an optimisation (concurrent callers reuse the first caller's
+# intent instead of all asking Stripe); the Idempotency-Key is the guarantee that
+# also holds across serverless instances.
+_order_locks: "weakref.WeakValueDictionary[int, asyncio.Lock]" = weakref.WeakValueDictionary()
+
+
+def _lock_for(order_id: int) -> asyncio.Lock:
+    lock = _order_locks.get(order_id)
+    if lock is None:
+        lock = _order_locks[order_id] = asyncio.Lock()
+    return lock
+
+
+async def ensure_payment_intent(db, order_id: int, user: TokenClaims) -> dict:
+    """Return the order's one PaymentIntent, creating it only if none exists.
+
+    Safe to call any number of times, concurrently: a double mount, a double
+    tap, two tabs, a retry after a declined card. They all end up with the same
+    PaymentIntent, so the id we store is always the one the customer pays.
+    """
+    async with _lock_for(order_id):
+        # Read inside the lock so a waiting caller sees what the first one stored
         order = await _get_own_order(db, order_id, user)
         if order.get("payment_status") == "paid":
-            return {"data": {"payment_status": "paid"}}
+            return {"payment_status": "paid"}
         if order.get("payment_method") != METHOD:
             raise BadRequestError("This order is not set up for card payment")
         if order.get("status") != "pending":
             raise BadRequestError("Only pending orders can be paid")
 
-        # Reuse an open intent so a retry after a declined card keeps one PaymentIntent.
         existing = order.get("stripe_payment_intent_id")
+        replaces = None
         if existing:
             try:
                 intent = await stripe_pay.retrieve_payment_intent(existing)
-                if intent["status"] == "succeeded":
-                    await _settle(db, order, intent)
-                    return {"data": {"payment_status": "paid"}}
-                if intent["status"] in ("requires_payment_method", "requires_confirmation", "requires_action"):
-                    return {"data": _intent_payload(order, intent)}
             except stripe_pay.StripeError:
-                logger.warning("Could not reuse Stripe intent %s", existing, exc_info=True)
+                # Never replace an intent we could not inspect: the customer may
+                # already have paid it, and a replacement would orphan that payment.
+                logger.warning("Could not check Stripe intent %s", existing, exc_info=True)
+                raise BadRequestError("Could not check your card payment right now. Please try again in a moment.")
+            status = intent["status"]
+            if status == "succeeded":
+                if await _settle(db, order, intent) != "paid":
+                    # Stripe took a different amount than the order total: never call it paid
+                    raise BadRequestError("We received a payment but could not match it to this order. Please contact support.")
+                return {"payment_status": "paid"}
+            if status in ("requires_payment_method", "requires_confirmation", "requires_action"):
+                # Open intent: a retry after a declined card keeps the same one
+                return _intent_payload(order, intent)
+            if status != "canceled":
+                # e.g. "processing": paying again could charge the card twice
+                raise BadRequestError("Your payment is still being processed. Please check your order in a moment.")
+            replaces = existing  # cancelled intent: start a fresh one below
 
         try:
             intent = await stripe_pay.create_payment_intent(
                 amount=order["total"], currency=settings.CURRENCY,
                 order_id=order["id"], order_code=order["order_code"],
+                idempotency_key=stripe_pay.intent_idempotency_key(order["id"], order["total"], replaces),
             )
         except stripe_pay.StripeError as exc:
             logger.warning("Stripe intent failed for order %s: %s", order_id, exc)
             raise BadRequestError(f"Could not start card payment: {exc}")
 
-        await db.from_("orders").eq("id", order_id).update({"stripe_payment_intent_id": intent["id"]})
+        intent = await _claim_intent(db, order_id, intent, replaces)
+    return _intent_payload(order, intent)
 
-    return {"data": _intent_payload(order, intent)}
+
+async def _claim_intent(db, order_id: int, intent: dict, replaces: str | None) -> dict:
+    """Store `intent` on the order unless another request stored one first.
+
+    First writer wins; a loser adopts the winner's intent, so the id on the
+    order is always the one the customer was handed.
+    """
+    query = db.from_("orders").eq("id", order_id)
+    query = query.eq("stripe_payment_intent_id", replaces) if replaces else query.is_("stripe_payment_intent_id", "null")
+    if await query.update({"stripe_payment_intent_id": intent["id"]}):
+        return intent
+    stored = await db.from_("orders").eq("id", order_id).select_one("stripe_payment_intent_id")
+    winner = (stored or {}).get("stripe_payment_intent_id")
+    if not winner or winner == intent["id"]:
+        return intent
+    logger.warning("Order %s: adopting stored Stripe intent %s over %s", order_id, winner, intent["id"])
+    try:
+        return await stripe_pay.retrieve_payment_intent(winner)
+    except stripe_pay.StripeError:
+        raise BadRequestError("Could not start card payment. Please try again in a moment.")
 
 
 @router.get("/orders/{order_id}/status")
