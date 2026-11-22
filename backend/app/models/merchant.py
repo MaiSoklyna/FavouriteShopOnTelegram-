@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 
 
 class MerchantCreate(BaseModel):
+    shop_category_id: int | None = None
+    shop_subcategory_id: int | None = None
     name: str = Field(..., min_length=1, max_length=200)
     slug: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-z0-9-]+$")
     owner_name: str = Field(..., min_length=1, max_length=200)
@@ -36,6 +38,8 @@ class MerchantCreate(BaseModel):
 
 
 class MerchantUpdate(BaseModel):
+    shop_category_id: int | None = None
+    shop_subcategory_id: int | None = None
     name: str | None = Field(None, min_length=1, max_length=200)
     owner_name: str | None = Field(None, min_length=1, max_length=200)
     email: str | None = Field(None, min_length=3, max_length=254)
@@ -64,6 +68,8 @@ class MerchantUpdate(BaseModel):
 
 
 class MerchantResponse(BaseModel):
+    shop_category_id: int | None = None
+    shop_subcategory_id: int | None = None
     id: int
     name: str
     slug: str

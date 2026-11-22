@@ -54,9 +54,22 @@ export interface Merchant {
   delivery_base_fee?: number | string | null;
   delivery_per_km_fee?: number | string | null;
   min_order_amount?: number | string | null;
+  /** Migration 024. Null = not categorised yet; the names come from the API next to the ids. */
+  shop_category_id?: number | null;
+  shop_subcategory_id?: number | null;
+  shop_category?: string | null;
+  shop_subcategory?: string | null;
   product_count?: number;
   order_count?: number;
   created_at?: string;
+}
+
+/** What kind of shop a merchant runs (GET /shop-categories). `shop_count` = active shops under it. */
+export interface ShopCategory {
+  id: number;
+  name: string;
+  shop_count?: number;
+  subcategories: { id: number; name: string; shop_count?: number }[];
 }
 
 // ── Product ────────────────────────────────────────────────────

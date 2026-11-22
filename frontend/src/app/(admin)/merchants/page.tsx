@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import { HeroImagesEditor } from "@/components/admin/HeroImagesEditor";
 
 const MapPicker = dynamic(() => import("@/components/map/MapPicker"), { ssr: false });
-import type { Merchant } from "@/types";
+import type { Merchant, ShopCategory } from "@/types";
 import { BrandLoader } from "@/components/ui/Spinner";
 import { AddIcon, EditIcon } from "@/components/brand/Icons";
 
@@ -38,6 +38,8 @@ const EMPTY_FORM = {
   delivery_base_fee: "",
   delivery_per_km_fee: "",
   min_order_amount: "",
+  shop_category_id: "",
+  shop_subcategory_id: "",
   hours_custom: false,
   hours_open: "08:00",
   hours_close: "20:00",
@@ -78,6 +80,7 @@ function slugify(name: string): string {
 export default function MerchantsPage() {
   const { isSuperAdmin } = useAuth();
   const [merchants, setMerchants] = useState<Merchant[]>([]);
+  const [shopCats, setShopCats] = useState<ShopCategory[]>([]);
   const autoAddress = useRef("");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -107,6 +110,10 @@ export default function MerchantsPage() {
   async function load() { try { setMerchants(await api.get<Merchant[]>("/merchants", { params: search ? { search } : undefined })); } catch { /* */ } finally { setLoading(false); } }
   useEffect(() => { load(); }, []);
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [search]);
+  // Shop categories for the editor's pickers (all of them, including ones nobody sells under yet)
+  useEffect(() => {
+    api.get<{ data: ShopCategory[] }>("/shop-categories").then(r => setShopCats(r.data || [])).catch(() => {});
+  }, []);
 
   async function toggleStatus(m: Merchant) {
     const newStatus = m.status === "active" ? "suspended" : "active";
@@ -148,6 +155,8 @@ export default function MerchantsPage() {
       delivery_base_fee: m.delivery_base_fee != null ? String(m.delivery_base_fee) : "",
       delivery_per_km_fee: m.delivery_per_km_fee != null ? String(m.delivery_per_km_fee) : "",
       min_order_amount: m.min_order_amount != null ? String(m.min_order_amount) : "",
+      shop_category_id: m.shop_category_id != null ? String(m.shop_category_id) : "",
+      shop_subcategory_id: m.shop_subcategory_id != null ? String(m.shop_subcategory_id) : "",
       ...hoursToForm(m.opening_hours),
     });
     setLogoFile(null);
@@ -236,6 +245,18 @@ export default function MerchantsPage() {
     if (form.hours_custom && (!form.hours_days.length || form.hours_open === form.hours_close)) {
       flash("Pick at least one open day and different open/close times", false);
       return;
+    }
+
+    // Shop category: where customers find this shop. Super admin only (the backend enforces it too);
+    // on edit it is sent only when changed, always together with the subcategory.
+    if (isSuperAdmin) {
+      const catId = form.shop_category_id ? Number(form.shop_category_id) : null;
+      const subId = form.shop_subcategory_id ? Number(form.shop_subcategory_id) : null;
+      if (subId !== null && catId === null) { flash("Choose a shop category before a subcategory", false); return; }
+      if (catId !== (original?.shop_category_id ?? null) || subId !== (original?.shop_subcategory_id ?? null)) {
+        merchantPayload.shop_category_id = catId;
+        merchantPayload.shop_subcategory_id = subId;
+      }
     }
 
     if (isEditMode) {
@@ -511,7 +532,11 @@ export default function MerchantsPage() {
               </div>
             )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12 }}>
-              {[["Owner", detail.owner_name], ["Email", detail.email], ["Phone", detail.phone], ["Plan", detail.plan], ["Status", detail.status], ["Products", detail.product_count], ["Orders", detail.order_count], ["Joined", detail.created_at ? new Date(detail.created_at).toLocaleDateString() : "—"]].map(([k, v]) => (
+              {[["Owner", detail.owner_name], ["Email", detail.email], ["Phone", detail.phone], ["Plan", detail.plan], ["Status", detail.status], ["Category", (() => {
+                const cat = shopCats.find(c => c.id === detail.shop_category_id);
+                const sub = cat?.subcategories.find(s => s.id === detail.shop_subcategory_id);
+                return cat ? `${cat.name}${sub ? ` › ${sub.name}` : ""}` : "Not categorised";
+              })()], ["Products", detail.product_count], ["Orders", detail.order_count], ["Joined", detail.created_at ? new Date(detail.created_at).toLocaleDateString() : "—"]].map(([k, v]) => (
                 <div key={k as string}><span style={{ color: "var(--text-muted)" }}>{k}: </span><span style={{ color: "var(--text)" }}>{v ?? "—"}</span></div>
               ))}
               {detail.tagline && <div style={{ gridColumn: "1/3" }}><span style={{ color: "var(--text-muted)" }}>Tagline: </span>{detail.tagline}</div>}
@@ -663,6 +688,27 @@ export default function MerchantsPage() {
                       boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
                     }} />
                   </button>
+                </div>
+              )}
+
+              {isSuperAdmin && (
+                <div>
+                  <label style={lbl}>Shop category</label>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <select className="admin-input" value={form.shop_category_id}
+                      onChange={e => setForm({ ...form, shop_category_id: e.target.value, shop_subcategory_id: "" })}>
+                      <option value="">Not categorised</option>
+                      {shopCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <select className="admin-input" value={form.shop_subcategory_id} disabled={!form.shop_category_id}
+                      onChange={e => setForm({ ...form, shop_subcategory_id: e.target.value })}>
+                      <option value="">{form.shop_category_id ? "No subcategory" : "Pick a category first"}</option>
+                      {(shopCats.find(c => String(c.id) === form.shop_category_id)?.subcategories ?? []).map(s => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Decides where customers find this shop when browsing by category.</div>
                 </div>
               )}
 

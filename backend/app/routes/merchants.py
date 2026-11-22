@@ -48,6 +48,19 @@ def public_view(merchant: dict) -> dict:
     return {k: merchant[k] for k in PUBLIC_FIELDS if k in merchant}
 
 
+async def validate_shop_category(db, category_id: int | None, subcategory_id: int | None) -> None:
+    """A shop's subcategory must belong to its category, and neither may be made up."""
+    if subcategory_id is not None and category_id is None:
+        raise BadRequestError("Choose a shop category before a subcategory")
+    if category_id is not None:
+        if not await db.from_("shop_categories").eq("id", category_id).select_one("id"):
+            raise BadRequestError("Unknown shop category")
+    if subcategory_id is not None:
+        sub = await db.from_("shop_subcategories").eq("id", subcategory_id).select_one("id,category_id")
+        if not sub or sub["category_id"] != category_id:
+            raise BadRequestError("That subcategory does not belong to the chosen category")
+
+
 def sees_private_fields(user: TokenClaims | None, merchant_id: int) -> bool:
     """Super admin sees every shop's full row; a merchant admin only their own."""
     if not user:
@@ -182,9 +195,11 @@ async def create_merchant(body: MerchantCreate, user: TokenClaims = require_role
         if existing:
             raise ConflictError(f"Merchant slug '{body.slug}' already exists")
 
+        await validate_shop_category(db, body.shop_category_id, body.shop_subcategory_id)
         data = body.model_dump()
-        # Columns from migrations 016/017 — don't send them unless set
-        for k in ("address", "latitude", "longitude", "delivery_radius_km", *DELIVERY_SETTING_FIELDS):
+        # Columns from migrations 016/017/024 — don't send them unless set
+        for k in ("address", "latitude", "longitude", "delivery_radius_km", "shop_category_id",
+                  "shop_subcategory_id", *DELIVERY_SETTING_FIELDS):
             if data.get(k) is None:
                 data.pop(k, None)
         data["status"] = "active"
@@ -200,7 +215,9 @@ async def update_merchant(
 ):
     """Update a merchant."""
     async with SupabaseClient.service_role() as db:
-        existing = await db.from_("merchants").eq("id", merchant_id).select_one("id")
+        existing = await db.from_("merchants").eq("id", merchant_id).select_one(
+            "id,shop_category_id,shop_subcategory_id"
+        )
         if not existing:
             raise NotFoundError("Merchant", merchant_id)
 
@@ -208,6 +225,20 @@ async def update_merchant(
             raise ForbiddenError("You can only update your own merchant")
 
         data = body.model_dump(exclude_none=True)
+        data.pop("shop_category_id", None)
+        data.pop("shop_subcategory_id", None)
+        # The shop's category decides where customers find it, so only a super admin sets it.
+        # Sending null clears it; changing the category without a subcategory clears the subcategory.
+        if user.role == Role.SUPER_ADMIN and {"shop_category_id", "shop_subcategory_id"} & body.model_fields_set:
+            category = body.shop_category_id if "shop_category_id" in body.model_fields_set else existing.get("shop_category_id")
+            if "shop_subcategory_id" in body.model_fields_set:
+                subcategory = body.shop_subcategory_id
+            elif category == existing.get("shop_category_id"):
+                subcategory = existing.get("shop_subcategory_id")
+            else:
+                subcategory = None
+            await validate_shop_category(db, category, subcategory)
+            data["shop_category_id"], data["shop_subcategory_id"] = category, subcategory
         # Delivery settings can be cleared back to "platform default" by sending null
         for k in DELIVERY_SETTING_FIELDS:
             if k in body.model_fields_set:
