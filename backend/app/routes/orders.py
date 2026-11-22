@@ -24,7 +24,7 @@ from app.core.dependencies import require_any_admin, require_role
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.services import inventory, settlement
+from app.services import inventory, notify, settlement
 from app.services import promo_schedule
 from app.services.delivery import is_open, quote_delivery, valid_point
 
@@ -260,6 +260,9 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
         except Exception:
             logger.exception("Order notification dispatch failed (non-fatal)")
 
+        # In-app: the customer's receipt, and a new-order alert for the shop (cash orders)
+        await notify.order_placed(db, order_id)
+
     return {
         "success": True,
         "data": {
@@ -408,6 +411,7 @@ async def cancel_order(order_id: int, user: TokenClaims = require_role(Role.USER
             raise BadRequestError("Only pending orders can be cancelled")
         items = await db.from_("order_items").eq("order_id", order_id).select("product_id,quantity,selected_variants")
         await inventory.release_stock(db, items)
+        await notify.order_status_changed(db, order_id, "cancelled", by_customer=True)
     return {"success": True, "message": "Order cancelled"}
 
 
@@ -496,6 +500,9 @@ async def update_order_status(
 
         if new_status == "delivered":
             await settlement.on_order_status_changed(db, order_id, new_status, **actor)
+
+        # Tell the customer (and the shop on a cancellation); on delivery, ask how it went
+        await notify.order_status_changed(db, order_id, new_status)
     return {"success": True}
 
 

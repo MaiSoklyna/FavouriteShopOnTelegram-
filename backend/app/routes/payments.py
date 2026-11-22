@@ -35,7 +35,7 @@ from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.rate_limit import limiter
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.services import payway, settlement
+from app.services import notify, payway, settlement
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments/payway", tags=["Payments"])
@@ -275,6 +275,7 @@ async def _notify_paid(db, order: dict) -> None:
     Only called by the request that actually flipped payment_status to
     paid, so each order is announced once.
     """
+    await notify.order_paid(db, order["id"])  # in-app: customer receipt + shop alert (never raises)
     try:
         from bot.notifications import (
             send_order_placed_to_merchant_group,

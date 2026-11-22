@@ -14,7 +14,7 @@ import {
   ProductCard, PromotionCard, PromotionCardSkeleton, SearchBar, SectionHeader, ShopCard, ShopCardSkeleton, Skeleton,
   type ShopCardData,
 } from "@/components/shop";
-import type { Product, Category, Merchant, PromoCode, Notification } from "@/types";
+import type { Product, Category, Merchant, PromoCode } from "@/types";
 import { Icon } from "@/components/shop/Icon";
 
 const PAGE_SIZE = 20;
@@ -57,8 +57,8 @@ export default function ShopHomePage() {
     let cancelled = false;
     async function loadUnread() {
       try {
-        const list = await api.get<Notification[]>("/notifications");
-        if (!cancelled) setUnreadCount(list.filter(n => !n.is_read).length);
+        const { count } = await api.get<{ count: number }>("/notifications/unread-count");
+        if (!cancelled) setUnreadCount(count);
       } catch { /* not logged in or endpoint unavailable */ }
     }
     loadUnread();

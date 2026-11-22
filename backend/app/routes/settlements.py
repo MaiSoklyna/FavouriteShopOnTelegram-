@@ -32,7 +32,7 @@ from app.models.settlement import (
     PayoutStatus,
     VerificationStatus,
 )
-from app.services import settlement
+from app.services import notify, settlement
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settlements", tags=["Settlements"])
@@ -272,6 +272,7 @@ async def admin_create_payout(
             "p_actor_type": str(user.role),
             "p_actor_id": user.sub,
         })
+        await notify.payout_event(db, payout, "created")
     return {"data": payout}
 
 
@@ -321,6 +322,7 @@ async def admin_monthly_settlement(
                     "p_period_end": period_end.isoformat(),
                 })
                 created.append({"merchant_id": mid, "name": b.get("merchant_name"), "payout": payout})
+                await notify.payout_event(db, payout, "created")
             except BadRequestError as exc:
                 # Nothing delivered in this month (or already settled): not an error.
                 if "Nothing to pay out" not in str(exc):
@@ -380,6 +382,7 @@ async def admin_complete_payout(
             "p_actor_type": str(user.role),
             "p_actor_id": user.sub,
         })
+        await notify.payout_event(db, payout, "paid")
     return {"data": payout}
 
 
@@ -398,6 +401,7 @@ async def admin_fail_payout(
             "p_actor_type": str(user.role),
             "p_actor_id": user.sub,
         })
+        await notify.payout_event(db, payout, "failed")
     return {"data": payout}
 
 
@@ -419,6 +423,7 @@ async def admin_reverse_payout(
             "p_actor_type": str(user.role),
             "p_actor_id": user.sub,
         })
+        await notify.payout_event(db, payout, "reversed")
     return {"data": payout}
 
 

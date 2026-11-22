@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import type { AdminUser } from "@/types";
 import { HiOutlineMenu, HiOutlineX, HiOutlineChatAlt2 } from "react-icons/hi";
@@ -21,7 +22,8 @@ const MENU = [
   { href: "/reviews", label: "Reviews", icon: HiOutlineChatAlt2 },
   { href: "/support", label: "Support", icon: SupportIcon },
   { href: "/loyalty", label: "Loyalty", icon: RewardsIcon },
-  { href: "/notifications", label: "Notifications", icon: BellIcon, adminOnly: false },
+  { href: "/notifications", label: "Notifications", icon: BellIcon, superOnly: true },
+  { href: "/inbox", label: "Inbox", icon: BellIcon, merchantOnly: true },
   { href: "/merchants", label: "Merchants", icon: StoreIcon, superOnly: true },
   { href: "/seller-applications", label: "Seller Applications", icon: ApproveIcon, superOnly: true },
   { href: "/users", label: "Users", icon: CustomersIcon, superOnly: true },
@@ -34,6 +36,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { user, loading, isAdmin, isSuperAdmin, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [inboxUnread, setInboxUnread] = useState(0);
+
+  // A shop's unread count for the Inbox badge (a cheap count, refreshed while the dashboard is open)
+  useEffect(() => {
+    if (!isAdmin || isSuperAdmin) return;
+    let live = true;
+    const load = () => api.get<{ count: number }>("/notifications/merchant/unread-count")
+      .then((r) => { if (live) setInboxUnread(r.count); }).catch(() => {});
+    load();
+    const t = setInterval(load, 30000);
+    return () => { live = false; clearInterval(t); };
+  }, [isAdmin, isSuperAdmin, pathname]);
 
   useEffect(() => {
     if (!loading && !isAdmin) {
@@ -138,6 +152,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               >
                 <Icon size={18} />
                 {!collapsed && item.label}
+                {item.href === "/inbox" && inboxUnread > 0 && (
+                  <span aria-label={`${inboxUnread} unread`} style={{
+                    marginLeft: "auto", minWidth: 20, height: 20, padding: "0 6px", borderRadius: 10,
+                    background: "#D6BA80", color: "#081D3C", fontSize: 11, fontWeight: 700,
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  }}>{inboxUnread > 99 ? "99+" : inboxUnread}</span>
+                )}
               </a>
             );
           })}

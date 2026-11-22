@@ -413,3 +413,13 @@ def test_two_admins_cancelling_at_once_release_once(shop):
     results = run(go())
     assert sum(isinstance(r, ConflictError) for r in results) == 1
     assert db.stock(1) == 5  # +2 once
+
+
+def test_placing_an_order_notifies_the_customer_and_the_shop(shop):
+    """A cash order is a receipt for the customer and a new-order alert for the shop, in the app."""
+    shop["db"] = db = StockDb([plain(5)])
+    shop["items"] = [item(1, 1)]
+    run(place(shop))
+    sent = db.tables["notifications"]
+    assert [(n.get("user_id"), n.get("merchant_id"), n["title"]) for n in sent] == [(1, None, "Order placed"), (None, 3, "New order")]
+    assert sent[0]["link"].startswith("/shop/order/")

@@ -300,11 +300,18 @@ export interface Review {
 
 export interface Notification {
   id: number;
-  user_id: number;
+  /** Null on a shop-inbox notification (those carry merchant_id instead). */
+  user_id?: number | null;
+  merchant_id?: number | null;
+  /** The stored enum: order_update | promo | system. */
   type: string;
+  /** What happened (migration 027): order_placed, order_paid, order_status, review_request, new_order, payout, ... */
+  kind?: string | null;
   title: string;
   body: string;
   ref_id?: number | null;
+  /** Where a tap goes inside the app, e.g. /shop/order/35 (migration 027). */
+  link?: string | null;
   is_read?: boolean;
   sent_at?: string;
   user_name?: string;
