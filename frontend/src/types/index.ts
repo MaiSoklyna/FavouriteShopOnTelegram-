@@ -54,6 +54,9 @@ export interface Merchant {
   delivery_base_fee?: number | string | null;
   delivery_per_km_fee?: number | string | null;
   min_order_amount?: number | string | null;
+  /** Migration 029: the average of the shop's visible reviews and how many there are. */
+  rating?: number | null;
+  rating_count?: number;
   /** Migration 024. Null = not categorised yet; the names come from the API next to the ids. */
   shop_category_id?: number | null;
   shop_subcategory_id?: number | null;
@@ -202,6 +205,29 @@ export interface Order {
   items?: OrderItem[];
   /** Who is bringing it and how far it got (null for pickup orders and until a driver is assigned). */
   delivery?: DeliveryInfo | null;
+  /** The customer's review of the shop for this order (null until they leave one). */
+  shop_review?: { id: number; rating: number; comment?: string | null; created_at?: string } | null;
+}
+
+// ── Shop reviews ───────────────────────────────────────────────
+
+export interface ShopReviewSummary {
+  rating: number | null;
+  count: number;
+  /** How many reviews gave each star, "5" .. "1". */
+  distribution: Record<string, number>;
+}
+
+export interface ShopReview {
+  id: number;
+  rating: number;
+  comment?: string | null;
+  created_at?: string;
+  /** First name and last initial, e.g. "Mai S." */
+  reviewer: string;
+  /** Admin lists only. */
+  is_visible?: boolean;
+  shop_name?: string | null;
 }
 
 // ── Deliveries ─────────────────────────────────────────────────

@@ -25,7 +25,7 @@ const MAP_HEIGHT = "clamp(190px, 28vh, 250px)";
 const SORTS = ["Nearest", "Fastest", "Cheapest"] as const;
 type Sort = (typeof SORTS)[number];
 
-type Shop = ShopCardData & { lat: number; lng: number };
+type Shop = ShopCardData & { lat: number; lng: number; shopRating?: number | null };
 
 function sortShops(shops: Shop[], sort: Sort): Shop[] {
   const fee = (s: Shop) => (s.can_deliver === false || s.delivery_fee == null ? Infinity : Number(s.delivery_fee));
@@ -73,13 +73,14 @@ export default function NearbyPage() {
       id: s.id, name: s.name, tagline: s.tagline, logo_url: s.logo_url, icon_emoji: s.icon_emoji,
       shop_category_id: s.shop_category_id, shop_subcategory_id: s.shop_subcategory_id,
       shop_category: s.shop_category, shop_subcategory: s.shop_subcategory,
+      shopRating: (s.rating_count ?? 0) > 0 && s.rating != null ? Number(s.rating) : null,
       distance_km: s.distance_km, can_deliver: s.can_deliver, delivery_fee: s.delivery_fee,
       eta_minutes: s.eta_minutes, eta_max_minutes: s.eta_max_minutes, is_open: s.is_open,
       lat: Number(s.latitude), lng: Number(s.longitude),
     })), [rows]);
   const extras = useShopExtras(base);
   const shops = useMemo(
-    () => sortShops(applyShopFilter(base, filter), sort).map((s) => ({ ...s, theme: themeFromShopCategory(s.shop_category) ?? extras[s.id]?.theme, rating: extras[s.id]?.rating ?? null })),
+    () => sortShops(applyShopFilter(base, filter), sort).map((s) => ({ ...s, theme: themeFromShopCategory(s.shop_category) ?? extras[s.id]?.theme, rating: s.shopRating ?? extras[s.id]?.rating ?? null })),
     [base, filter, sort, extras],
   );
   const pins = useMemo(() => shops.map((s) => ({ id: s.id, name: s.name, lat: s.lat, lng: s.lng, logo_url: s.logo_url, distance_km: s.distance_km })), [shops]);

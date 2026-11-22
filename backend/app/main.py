@@ -39,6 +39,7 @@ from app.routes import (
     sellers,
     settlements,
     shop_categories,
+    shop_reviews,
     support,
     telegram_webhook,
     users,
@@ -116,6 +117,9 @@ app.include_router(addresses.router, prefix="/api")
 
 # Drivers and deliveries (driver app, shop assignment, driver management)
 app.include_router(deliveries.router, prefix="/api")
+
+# Shop ratings & reviews (after delivery)
+app.include_router(shop_reviews.router, prefix="/api")
 
 # ABA PayWay QR payments
 app.include_router(payments.router, prefix="/api")

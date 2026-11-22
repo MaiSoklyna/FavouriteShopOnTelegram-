@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { CategoryIcon, EmptyState, Pill, ProductCard, RatingPill, ShopCover, Skeleton } from "@/components/shop";
+import { CategoryIcon, EmptyState, Pill, ProductCard, RatingPill, ShopCover, ShopReviews, Skeleton } from "@/components/shop";
 import { useCart } from "@/providers/CartProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { useHomeLocation } from "@/lib/useHomeLocation";
@@ -86,15 +86,17 @@ export default function MerchantDetailPage() {
     return () => clearInterval(t);
   }, [heroImages.length]);
 
-  // Rating = review-weighted average of this shop's products; null = no reviews yet
+  // Rating = the shop's own reviews (one per delivered order); until it has any, the review-weighted
+  // average of its products; null = no reviews yet
   const { rating, reviews } = useMemo(() => {
+    if ((merchant?.rating_count ?? 0) > 0 && merchant?.rating != null) return { rating: Number(merchant.rating), reviews: merchant.rating_count ?? 0 };
     let sum = 0, n = 0;
     for (const p of products) {
       const c = Number(p.review_count) || 0;
       if (c > 0) { sum += (Number(p.rating_avg) || 0) * c; n += c; }
     }
     return { rating: n ? sum / n : null, reviews: n };
-  }, [products]);
+  }, [products, merchant?.rating, merchant?.rating_count]);
   const theme = useMemo(
     () => classifyShop([merchant?.name || "", merchant?.name || "", merchant?.tagline || "", ...products.map((p) => p.name)]),
     [merchant?.name, merchant?.tagline, products],
@@ -245,6 +247,8 @@ export default function MerchantDetailPage() {
           </div>
         )}
       </div>
+
+      <ShopReviews merchantId={merchant.id} />
     </div>
   );
 }

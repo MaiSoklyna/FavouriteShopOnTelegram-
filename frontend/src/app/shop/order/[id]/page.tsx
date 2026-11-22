@@ -11,7 +11,7 @@ import { CUSTOMER_DELIVERY_LABEL, telUrl } from "@/lib/deliveries";
 import { KhqrPayPanel } from "@/components/shop/KhqrPayPanel";
 import { StripePayScreen } from "@/components/shop/StripePayScreen";
 import { Icon } from "@/components/shop/Icon";
-import { EmptyState, OrderStatusHero, OrderTimeline, Pill, Skeleton } from "@/components/shop";
+import { EmptyState, OrderStatusHero, OrderTimeline, Pill, ShopReviewCard, Skeleton } from "@/components/shop";
 import { awaitingPayment, isPickup, statusLabel } from "@/lib/orderStatus";
 import { formatKm, staticMapUrl, type LatLng } from "@/lib/mapbox";
 import { formatKhr } from "@/lib/currency";
@@ -270,13 +270,16 @@ function OrderDetailContent() {
           )}
         </section>
 
+        {/* Delivered: rate the shop (the "How was your order?" notification lands here) */}
+        {order.status === "delivered" && <ShopReviewCard order={order} shopName={shopName} onSubmitted={fetchOrder} />}
+
         {/* Actions */}
         <div className="flex flex-col gap-2.5">
           {order.status === "delivered" && (
             (order.items?.length || 0) <= 1 ? (
               <button type="button" onClick={() => openReview()}
                 className="fos-press flex h-[52px] items-center justify-center gap-2 rounded-thumb bg-grad-cta text-[15px] font-extrabold text-white shadow-fos-cta">
-                <Icon name="star" size={18} filled />Rate your order
+                <Icon name="star" size={18} filled />Rate the product
               </button>
             ) : (
               <section className="rounded-hero bg-card p-4 shadow-fos-sm">

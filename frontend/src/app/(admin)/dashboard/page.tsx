@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
-import type { DashboardStats, AdminUser } from "@/types";
+import type { DashboardStats, AdminUser, ShopReview, ShopReviewSummary } from "@/types";
+import { RatingSummary } from "@/components/admin/ShopReviewsPanel";
 import { HiOutlineShoppingBag, HiOutlineClipboardList, HiOutlineCurrencyDollar, HiOutlineClock, HiOutlineUsers, HiOutlineTrendingUp } from "react-icons/hi";
 
 export default function DashboardPage() {
@@ -87,7 +88,37 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {!isSuperAdmin && <ShopRatingCard />}
+
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
+    </div>
+  );
+}
+
+/** The shop's rating, the spread of stars and its latest reviews. */
+function ShopRatingCard() {
+  const [data, setData] = useState<{ summary: ShopReviewSummary; latest: ShopReview[] } | null>(null);
+  useEffect(() => { api.get<{ summary: ShopReviewSummary; latest: ShopReview[] }>("/shop-reviews/merchant/summary").then(setData).catch(() => {}); }, []);
+  if (!data) return null;
+  return (
+    <div data-testid="shop-rating-card" style={{ marginTop: 24, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20, boxShadow: "var(--shadow-sm)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Customer reviews</span>
+        <a href="/reviews" style={{ fontSize: 13, color: "var(--info)" }}>See all</a>
+      </div>
+      {data.summary.count === 0 ? (
+        <p style={{ fontSize: 13, color: "var(--text-muted)" }}>No reviews yet. Customers can rate your shop once their order is delivered.</p>
+      ) : (
+        <>
+          <RatingSummary summary={data.summary} />
+          {data.latest.slice(0, 3).map((r) => (
+            <div key={r.id} style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10, fontSize: 13 }}>
+              <strong>{r.reviewer}</strong> <span style={{ color: "var(--warning)" }}>{"★".repeat(r.rating)}</span>
+              {r.comment && <div style={{ color: "var(--text-muted)", marginTop: 2 }}>{r.comment}</div>}
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }

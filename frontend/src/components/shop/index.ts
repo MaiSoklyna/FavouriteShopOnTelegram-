@@ -24,3 +24,6 @@ export { HomeTopBar, SearchBar } from "./HomeTopBar";
 export { LocationSheet } from "./LocationSheet";
 export { PromotionCard, PromotionCardSkeleton } from "./PromotionCard";
 export { ShopCategoryTiles, CategoryChips } from "./ShopCategoryTiles";
+export { Stars, StarInput } from "./Stars";
+export { ShopReviews } from "./ShopReviews";
+export { ShopReviewCard } from "./ShopReviewCard";

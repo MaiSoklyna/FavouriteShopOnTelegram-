@@ -20,6 +20,7 @@ interface MerchantRow {
   is_featured?: boolean; created_at?: string; opening_hours?: DiscoverShop["opening_hours"];
   shop_category_id?: number | null; shop_subcategory_id?: number | null;
   shop_category?: string | null; shop_subcategory?: string | null;
+  rating?: number | null; rating_count?: number;
 }
 interface NearbyRow {
   id: number; distance_km: number; can_deliver: boolean; delivery_fee: string | null;
@@ -94,7 +95,9 @@ export function useDiscoverShops(location: HomeLocation | null, shopCategoryId?:
       id: m.id, name: m.name, tagline: m.tagline, logo_url: m.logo_url, icon_emoji: m.icon_emoji,
       is_featured: m.is_featured, created_at: m.created_at, opening_hours: m.opening_hours,
       cover_url: covers[m.id] ?? null,
-      rating: x?.rating ?? null, reviews: x?.reviews ?? 0,
+      // The shop's own reviews (migration 029) win; until it has any, the guess from its products' reviews
+      rating: (m.rating_count ?? 0) > 0 && m.rating != null ? Number(m.rating) : x?.rating ?? null,
+      reviews: (m.rating_count ?? 0) > 0 ? m.rating_count! : x?.reviews ?? 0,
       // A categorised shop's cover comes from its real category; the keyword guess is only the fallback
       theme: themeFromShopCategory(m.shop_category) ?? x?.theme,
       shop_category_id: m.shop_category_id, shop_subcategory_id: m.shop_subcategory_id,

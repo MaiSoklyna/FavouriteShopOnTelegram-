@@ -24,7 +24,7 @@ from app.core.dependencies import require_any_admin, require_role
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.services import deliveries, inventory, notify, order_status, settlement
+from app.services import deliveries, inventory, notify, order_status, settlement, shop_reviews
 from app.services import promo_schedule
 from app.services.delivery import is_open, quote_delivery, valid_point
 
@@ -384,6 +384,8 @@ async def get_order(order_id: int, user: TokenClaims = require_role(Role.USER, R
         order["items"] = items
         # Who is bringing it and how far it got (null for pickup orders and until a driver is assigned)
         order["delivery"] = await deliveries.customer_view(db, order_id)
+        # The review this order's customer left for the shop (null until they do)
+        order["shop_review"] = await shop_reviews.for_order(db, order_id)
     return order
 
 

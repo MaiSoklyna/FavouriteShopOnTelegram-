@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 KIND_TYPE = {
     "order_placed": "order_update", "order_paid": "order_update", "order_status": "order_update",
     "review_request": "order_update", "new_order": "order_update", "order_cancelled": "order_update",
-    "delivery_assigned": "order_update", "delivery_update": "order_update",
+    "delivery_assigned": "order_update", "delivery_update": "order_update", "review": "system",
     "payout": "system", "low_stock": "system", "system": "system", "loyalty": "system",
     "promo": "promo",
 }

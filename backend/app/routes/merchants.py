@@ -31,7 +31,7 @@ DELIVERY_SETTING_FIELDS = ("opening_hours", "delivery_base_fee", "delivery_per_k
 NEARBY_PUBLIC_FIELDS = (
     "id", "name", "slug", "tagline", "icon_emoji", "accent_color", "logo_url",
     "is_featured", "address", "latitude", "longitude", "delivery_radius_km",
-    "min_order_amount", "rating", "shop_category_id", "shop_subcategory_id",
+    "min_order_amount", "rating", "rating_count", "shop_category_id", "shop_subcategory_id",
 )
 # Fields any visitor may see on a shop. The rest of the row (owner_name, email,
 # telegram_token, telegram_group_id, plan, logo_update_history) is admin-only.
@@ -39,7 +39,7 @@ NEARBY_PUBLIC_FIELDS = (
 PUBLIC_FIELDS = (
     "id", "name", "slug", "tagline", "description", "icon_emoji", "accent_color", "logo_url",
     "is_featured", "status", "phone", "fb_page", "instagram", "deep_link_code", "created_at",
-    "address", "latitude", "longitude", "delivery_radius_km", "rating",
+    "address", "latitude", "longitude", "delivery_radius_km", "rating", "rating_count",
     "shop_category_id", "shop_subcategory_id",
     *DELIVERY_SETTING_FIELDS,
 )
