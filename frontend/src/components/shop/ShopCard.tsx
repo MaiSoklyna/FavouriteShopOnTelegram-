@@ -15,6 +15,11 @@ export interface ShopCardData {
   theme?: ShopTheme;
   /** Null = no reviews yet → "New". */
   rating?: number | null;
+  /** What kind of shop this is (set by the admin); null = not categorised yet. */
+  shop_category_id?: number | null;
+  shop_subcategory_id?: number | null;
+  shop_category?: string | null;
+  shop_subcategory?: string | null;
   /** The rest are only known once the customer has a location. */
   distance_km?: number;
   can_deliver?: boolean;
@@ -79,7 +84,7 @@ export function ShopCard({ shop, variant = "rail", selected = false, located = f
           )}
         </div>
         <p className={`mt-2 truncate font-extrabold leading-5 text-ink-900 ${wide ? "text-[17px]" : "text-[16px]"}`}>{shop.name}</p>
-        <p className="mt-0.5 truncate text-[12px] font-semibold text-ink-500">{shop.tagline || THEMES[theme].label}</p>
+        <p className="mt-0.5 truncate text-[12px] font-semibold text-ink-500">{[shop.shop_subcategory || shop.shop_category, shop.tagline].filter(Boolean).join(" · ") || THEMES[theme].label}</p>
 
         {known ? (
           <div className="mt-2.5 flex flex-wrap gap-1.5">

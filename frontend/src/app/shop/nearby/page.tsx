@@ -8,9 +8,10 @@ import { useAuth } from "@/providers/AuthProvider";
 import { fetchNearbyShops, type NearbyShop } from "@/lib/addresses";
 import { formatEta, formatKm } from "@/lib/mapbox";
 import { useHomeLocation } from "@/lib/useHomeLocation";
-import { SHOP_FILTERS, THEMES, applyShopFilter, useShopExtras, type ShopFilter } from "@/lib/shopTheme";
+import { SHOP_FILTERS, THEMES, applyShopFilter, themeFromShopCategory, useShopExtras, type ShopFilter } from "@/lib/shopTheme";
 import { haptic } from "@/lib/telegram";
-import { LocationSheet, ShopCard, ShopCardSkeleton, ShopCover, type ShopCardData } from "@/components/shop";
+import { CategoryChips, LocationSheet, ShopCard, ShopCardSkeleton, ShopCover, type ShopCardData } from "@/components/shop";
+import { useShopCategories } from "@/lib/useShopCategories";
 import { Icon } from "@/components/shop/Icon";
 
 const ShopsMap = dynamic(() => import("@/components/map/ShopsMap"), {
@@ -46,6 +47,8 @@ export default function NearbyPage() {
   const [error, setError] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [filter, setFilter] = useState<ShopFilter>("All");
+  const [shopCategoryId, setShopCategoryId] = useState<number | null>(null);
+  const { categories: shopCats } = useShopCategories();
   const [sort, setSort] = useState<Sort>("Nearest");
   const [selected, setSelected] = useState<number | null>(null);
   const rail = useRef<HTMLDivElement>(null);
@@ -55,11 +58,11 @@ export default function NearbyPage() {
     if (!location) return;
     let cancelled = false;
     setRows(null); setError(false);
-    fetchNearbyShops(location.lat, location.lng, 0, 50)
+    fetchNearbyShops(location.lat, location.lng, 0, 50, shopCategoryId)
       .then((r) => { if (!cancelled) setRows(r); })
       .catch(() => { if (!cancelled) { setRows([]); setError(true); } });
     return () => { cancelled = true; };
-  }, [location?.lat, location?.lng]);
+  }, [location?.lat, location?.lng, shopCategoryId]);
 
   useEffect(() => { if (resolved && !location) setSheetOpen(true); }, [resolved, location]);
 
@@ -68,13 +71,15 @@ export default function NearbyPage() {
     .filter((s) => s.latitude != null && s.longitude != null)
     .map((s) => ({
       id: s.id, name: s.name, tagline: s.tagline, logo_url: s.logo_url, icon_emoji: s.icon_emoji,
+      shop_category_id: s.shop_category_id, shop_subcategory_id: s.shop_subcategory_id,
+      shop_category: s.shop_category, shop_subcategory: s.shop_subcategory,
       distance_km: s.distance_km, can_deliver: s.can_deliver, delivery_fee: s.delivery_fee,
       eta_minutes: s.eta_minutes, eta_max_minutes: s.eta_max_minutes, is_open: s.is_open,
       lat: Number(s.latitude), lng: Number(s.longitude),
     })), [rows]);
   const extras = useShopExtras(base);
   const shops = useMemo(
-    () => sortShops(applyShopFilter(base, filter), sort).map((s) => ({ ...s, theme: extras[s.id]?.theme, rating: extras[s.id]?.rating ?? null })),
+    () => sortShops(applyShopFilter(base, filter), sort).map((s) => ({ ...s, theme: themeFromShopCategory(s.shop_category) ?? extras[s.id]?.theme, rating: extras[s.id]?.rating ?? null })),
     [base, filter, sort, extras],
   );
   const pins = useMemo(() => shops.map((s) => ({ id: s.id, name: s.name, lat: s.lat, lng: s.lng, logo_url: s.logo_url, distance_km: s.distance_km })), [shops]);
@@ -138,7 +143,7 @@ export default function NearbyPage() {
         <div className="flex items-end justify-between gap-3 px-4 pt-6">
           <div className="min-w-0">
             <h1 className="truncate text-[22px] font-extrabold leading-7 tracking-[-0.01em] text-ink-900">
-              {rows == null ? "Finding shops…" : delivering > 0 ? `${delivering} ${delivering === 1 ? "shop delivers" : "shops deliver"} here` : "No shops deliver here yet"}
+              {rows == null ? "Finding shops…" : delivering > 0 ? `${delivering} ${delivering === 1 ? "shop delivers" : "shops deliver"} here` : shopCategoryId != null ? "No shops of this type deliver here yet" : "No shops deliver here yet"}
             </h1>
             <p className="truncate text-[13px] font-semibold text-ink-500">
               {error ? "Couldn't load shops. Check your connection." : "Distance, time and fee from your pin"}
@@ -150,6 +155,10 @@ export default function NearbyPage() {
             {sort}<Icon name="down" size={14} strokeWidth={2.4} />
           </button>
         </div>
+
+        {shopCats.length > 0 && (
+          <div className="mt-3 px-4"><CategoryChips items={shopCats} value={shopCategoryId} onChange={setShopCategoryId} allLabel="All types" /></div>
+        )}
 
         <div className="fos-no-scrollbar mt-3 flex gap-2 overflow-x-auto px-4" role="radiogroup" aria-label="Filter shops">
           {SHOP_FILTERS.map((f) => (

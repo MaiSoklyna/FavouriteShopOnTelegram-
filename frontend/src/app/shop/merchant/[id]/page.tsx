@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { CategoryIcon, EmptyState, Pill, ProductCard, RatingPill, ShopCover, Skeleton } from "@/components/shop";
@@ -175,6 +176,13 @@ export default function MerchantDetailPage() {
         <p className="mt-3 text-[11px] font-extrabold uppercase tracking-wide text-tone-mango">Shop</p>
         <h1 className="text-[24px] font-extrabold leading-7 text-ink-900">{merchant.name}</h1>
         {merchant.tagline && <p className="mt-1 text-[13px] text-ink-500">{merchant.tagline}</p>}
+        {merchant.shop_category && merchant.shop_category_id != null && (
+          <Link href={`/shop/shops/${merchant.shop_category_id}${merchant.shop_subcategory_id != null ? `?sub=${merchant.shop_subcategory_id}` : ""}`}
+            className="fos-press mt-2 inline-flex h-7 items-center gap-1 rounded-full bg-tint-neutral px-2.5 text-[12px] font-bold text-navy-700">
+            {merchant.shop_category}{merchant.shop_subcategory ? ` › ${merchant.shop_subcategory}` : ""}
+            <Icon name="chevron" size={12} />
+          </Link>
+        )}
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {rating != null ? <RatingPill rating={rating} /> : <Pill variant="neutral"><Icon name="star" size={12} />New shop</Pill>}

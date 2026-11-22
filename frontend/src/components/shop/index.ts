@@ -23,3 +23,4 @@ export { TabBar } from "./TabBar";
 export { HomeTopBar, SearchBar } from "./HomeTopBar";
 export { LocationSheet } from "./LocationSheet";
 export { PromotionCard, PromotionCardSkeleton } from "./PromotionCard";
+export { ShopCategoryTiles, CategoryChips } from "./ShopCategoryTiles";

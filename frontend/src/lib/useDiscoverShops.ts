@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
-import { useShopExtras, type ShopTheme } from "@/lib/shopTheme";
+import { themeFromShopCategory, useShopExtras, type ShopTheme } from "@/lib/shopTheme";
 import type { ShopCardData } from "@/components/shop";
 import type { HomeLocation } from "@/lib/useHomeLocation";
 
@@ -18,6 +18,8 @@ export interface DiscoverShop extends ShopCardData {
 interface MerchantRow {
   id: number; name: string; tagline?: string | null; logo_url?: string | null; icon_emoji?: string | null;
   is_featured?: boolean; created_at?: string; opening_hours?: DiscoverShop["opening_hours"];
+  shop_category_id?: number | null; shop_subcategory_id?: number | null;
+  shop_category?: string | null; shop_subcategory?: string | null;
 }
 interface NearbyRow {
   id: number; distance_km: number; can_deliver: boolean; delivery_fee: string | null;
@@ -49,14 +51,20 @@ export type CollectionKey = (typeof COLLECTIONS)[number]["key"];
  * Every active shop, merged with what the backend says about delivering to
  * `location` (distance, fee, ETA, open), plus rating/theme and hero-photo covers.
  */
-export function useDiscoverShops(location: HomeLocation | null) {
+export function useDiscoverShops(location: HomeLocation | null, shopCategoryId?: number | null) {
   const [rows, setRows] = useState<MerchantRow[] | null>(null);
   const [near, setNear] = useState<Record<number, NearbyRow>>({});
   const [covers, setCovers] = useState<Record<number, string>>({});
 
+  // `shopCategoryId` asks the backend for just that kind of shop (GET /merchants?shop_category_id=)
   useEffect(() => {
-    api.get<MerchantRow[]>("/merchants").then(setRows).catch(() => setRows([]));
-  }, []);
+    let live = true;
+    setRows(null);
+    api.get<MerchantRow[]>("/merchants", { params: shopCategoryId != null ? { shop_category_id: shopCategoryId } : undefined })
+      .then((r) => { if (live) setRows(r); })
+      .catch(() => { if (live) setRows([]); });
+    return () => { live = false; };
+  }, [shopCategoryId]);
 
   useEffect(() => {
     if (!location) { setNear({}); return; }
@@ -86,7 +94,11 @@ export function useDiscoverShops(location: HomeLocation | null) {
       id: m.id, name: m.name, tagline: m.tagline, logo_url: m.logo_url, icon_emoji: m.icon_emoji,
       is_featured: m.is_featured, created_at: m.created_at, opening_hours: m.opening_hours,
       cover_url: covers[m.id] ?? null,
-      rating: x?.rating ?? null, reviews: x?.reviews ?? 0, theme: x?.theme,
+      rating: x?.rating ?? null, reviews: x?.reviews ?? 0,
+      // A categorised shop's cover comes from its real category; the keyword guess is only the fallback
+      theme: themeFromShopCategory(m.shop_category) ?? x?.theme,
+      shop_category_id: m.shop_category_id, shop_subcategory_id: m.shop_subcategory_id,
+      shop_category: m.shop_category, shop_subcategory: m.shop_subcategory,
       ...(n ? {
         distance_km: n.distance_km, can_deliver: n.can_deliver, delivery_fee: n.delivery_fee,
         eta_minutes: n.eta_minutes ?? undefined, eta_max_minutes: n.eta_max_minutes ?? undefined, is_open: n.is_open,

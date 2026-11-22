@@ -33,6 +33,10 @@ export interface NearbyShop {
   icon_emoji?: string;
   logo_url?: string;
   address?: string;
+  shop_category_id?: number | null;
+  shop_subcategory_id?: number | null;
+  shop_category?: string | null;
+  shop_subcategory?: string | null;
   /** All computed by the server — the client never derives distance, fee, time or availability. */
   distance_km: number;
   distance_m: number;
@@ -48,6 +52,9 @@ export interface NearbyShop {
   review_count?: number;
 }
 
-export function fetchNearbyShops(lat: number, lng: number, offset = 0, limit = 20): Promise<NearbyShop[]> {
-  return api.get<NearbyShop[]>("/merchants/nearby", { params: { lat, lng, offset, limit } });
+/** `shopCategoryId` narrows the list to one kind of shop (the backend does the filtering). */
+export function fetchNearbyShops(lat: number, lng: number, offset = 0, limit = 20, shopCategoryId?: number | null): Promise<NearbyShop[]> {
+  return api.get<NearbyShop[]>("/merchants/nearby", {
+    params: { lat, lng, offset, limit, ...(shopCategoryId != null ? { shop_category_id: shopCategoryId } : {}) },
+  });
 }

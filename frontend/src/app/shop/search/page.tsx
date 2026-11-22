@@ -5,7 +5,9 @@ import { isOutOfStock, OutOfStockOverlay } from "@/components/shop/OutOfStock";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useCart } from "@/providers/CartProvider";
-import type { Product, Category } from "@/types";
+import { ShopRow } from "@/components/shop/ShopRow";
+import { themeFromShopCategory } from "@/lib/shopTheme";
+import type { Product, Category, Merchant } from "@/types";
 
 export default function SearchPage() {
   return <Suspense><SearchContent /></Suspense>;
@@ -26,6 +28,16 @@ function SearchContent() {
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  // Shops are searched too: by name, tagline, or the kind of shop ("fashion", "cake shop")
+  const [shops, setShops] = useState<Merchant[]>([]);
+  const needle = query.trim().toLowerCase();
+  const shopMatches = needle
+    ? shops.filter((s) => [s.name, s.tagline, s.shop_category, s.shop_subcategory].some((v) => v?.toLowerCase().includes(needle))).slice(0, 5)
+    : [];
+
+  useEffect(() => {
+    api.get<Merchant[]>("/merchants").then(setShops).catch(() => {});
+  }, []);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -253,6 +265,26 @@ function SearchContent() {
           </div>
         )}
 
+        {/* Shops matching the search */}
+        {shopMatches.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <h3 style={{
+              fontSize: 16, fontWeight: 500, color: "var(--shop-text)", marginBottom: 12,
+              fontFamily: "'Kantumruy Pro', sans-serif",
+            }}>Shops</h3>
+            <div className="flex flex-col gap-2.5">
+              {shopMatches.map((s) => (
+                <ShopRow key={s.id} shop={{
+                  id: s.id, name: s.name, tagline: s.tagline, logo_url: s.logo_url, icon_emoji: s.icon_emoji,
+                  theme: themeFromShopCategory(s.shop_category),
+                  shop_category_id: s.shop_category_id, shop_subcategory_id: s.shop_subcategory_id,
+                  shop_category: s.shop_category, shop_subcategory: s.shop_subcategory,
+                }} />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Results */}
         {!searching && hasSearched && results.length > 0 && (
           <div>
@@ -270,7 +302,7 @@ function SearchContent() {
         )}
 
         {/* No results */}
-        {!searching && hasSearched && results.length === 0 && (
+        {!searching && hasSearched && results.length === 0 && shopMatches.length === 0 && (
           <div style={{ textAlign: "center", padding: "60px 0" }}>
             <div style={{
               width: 64, height: 64, borderRadius: "50%", background: "var(--shop-surface)",

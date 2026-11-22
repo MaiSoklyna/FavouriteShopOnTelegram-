@@ -8,7 +8,8 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useHomeLocation } from "@/lib/useHomeLocation";
 import { COLLECTIONS, isNewShop, useDiscoverShops, type DiscoverShop } from "@/lib/useDiscoverShops";
 import { classifyShop, THEMES, type ShopTheme } from "@/lib/shopTheme";
-import { HeroCarousel, LocationSheet, ShopCard, ShopCardSkeleton, ShopCover, Skeleton, type HeroSlide } from "@/components/shop";
+import { CategoryChips, HeroCarousel, LocationSheet, ShopCard, ShopCardSkeleton, ShopCategoryTiles, ShopCover, Skeleton, type HeroSlide } from "@/components/shop";
+import { useShopCategories } from "@/lib/useShopCategories";
 import { ShopRow } from "@/components/shop/ShopRow";
 import { Icon } from "@/components/shop/Icon";
 import type { Category } from "@/types";
@@ -26,6 +27,9 @@ export default function DiscoverPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // What kind of shop each one is (set by the admin): tiles up top, chips over "All shops"
+  const { categories: shopCats } = useShopCategories();
+  const [catFilter, setCatFilter] = useState<number | null>(null);
 
   useEffect(() => {
     api.get<Category[]>("/categories").then(setCategories).catch(() => {});
@@ -34,6 +38,8 @@ export default function DiscoverPage() {
   }, []);
 
   const all = shops ?? [];
+  // "All shops" narrowed by the chip; shops with no category only show under "All"
+  const listed = catFilter == null ? all : all.filter((s) => s.shop_category_id === catFilter);
   const byNearest = (a: DiscoverShop, b: DiscoverShop) =>
     Number(b.is_open ?? false) - Number(a.is_open ?? false) || (a.distance_km ?? 1e9) - (b.distance_km ?? 1e9);
 
@@ -112,6 +118,14 @@ export default function DiscoverPage() {
         {/* Promotions */}
         {loading ? <Skeleton className="h-[180px] rounded-hero" /> : slides.length > 0 && <HeroCarousel slides={slides} />}
 
+        {/* Shop by category */}
+        {shopCats.length > 0 && (
+          <section>
+            <Header title="Shop by category" />
+            <div className="mt-3"><ShopCategoryTiles categories={shopCats} /></div>
+          </section>
+        )}
+
         {/* Shop rails */}
         {loading ? (
           <section>
@@ -149,7 +163,7 @@ export default function DiscoverPage() {
         {/* Categories */}
         {groups.length > 0 && (
           <section>
-            <Header title="Browse categories" action={{ label: "All", href: "/shop/categories" }} />
+            <Header title="Shop by product" action={{ label: "All", href: "/shop/categories" }} />
             <div className="mt-3 grid grid-cols-2 gap-3">
               {groups.slice(0, 6).map((g) => (
                 <Link key={g.theme} href={g.cats.length === 1 ? `/shop/category/${g.cats[0].id}` : `/shop/categories?group=${g.theme}`}
@@ -170,9 +184,12 @@ export default function DiscoverPage() {
         {/* All shops */}
         {!loading && all.length > 0 && (
           <section id="all-shops" className="scroll-mt-20">
-            <Header title={`All shops · ${all.length}`} />
+            <Header title={catFilter == null ? `All shops · ${all.length}` : `${shopCats.find((c) => c.id === catFilter)?.name ?? "Shops"} · ${listed.length}`} />
+            {shopCats.length > 0 && (
+              <div className="mt-3"><CategoryChips items={shopCats} value={catFilter} onChange={setCatFilter} total={all.length} /></div>
+            )}
             <div className="mt-3 flex flex-col gap-2.5">
-              {[...all].sort((a, b) => (location ? byNearest(a, b) : a.name.localeCompare(b.name))).map((s) => (
+              {[...listed].sort((a, b) => (location ? byNearest(a, b) : a.name.localeCompare(b.name))).map((s) => (
                 <ShopRow key={s.id} shop={s} ribbon={isNewShop(s) ? "New" : undefined} />
               ))}
             </div>

@@ -98,3 +98,23 @@ export function applyShopFilter<T extends { delivery_fee?: string | null; can_de
   if (f === "Under 2 km") return shops.filter((s) => s.distance_km != null && s.distance_km < 2);
   return shops;
 }
+
+/**
+ * How each shop category looks on a tile and as cover art. Shops carry a real category now
+ * (what the admin chose), so this replaces guessing a theme from a shop's name and products.
+ */
+const SHOP_CATEGORY_LOOK: Record<string, { theme: ShopTheme; icon: IconName }> = {
+  "Food & Beverage": { theme: "food", icon: "cake" },
+  "Fashion": { theme: "fashion", icon: "shirt" },
+  "Electronics": { theme: "electronics", icon: "laptop" },
+  "Health & Beauty": { theme: "beauty", icon: "lipstick" },
+  "Home & Living": { theme: "general", icon: "home" },
+};
+
+export function shopCategoryLook(name?: string | null): { theme: ShopTheme; icon: IconName } {
+  return (name && SHOP_CATEGORY_LOOK[name]) || { theme: "general", icon: "store" };
+}
+
+/** The cover theme for a categorised shop; undefined = not categorised, fall back to the guess. */
+export const themeFromShopCategory = (name?: string | null): ShopTheme | undefined =>
+  name && SHOP_CATEGORY_LOOK[name] ? SHOP_CATEGORY_LOOK[name].theme : undefined;

@@ -24,7 +24,9 @@ export function ShopRow({ shop, ribbon }: { shop: ShopCardData; ribbon?: "New" |
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[15px] font-extrabold text-ink-900">{shop.name}</span>
-        <span className="block truncate text-caption text-ink-500">{shop.tagline || THEMES[theme].label}</span>
+        <span className="block truncate text-caption text-ink-500">
+          {[shop.shop_subcategory || shop.shop_category, shop.tagline].filter(Boolean).join(" · ") || THEMES[theme].label}
+        </span>
         <span className="mt-1.5 flex flex-wrap gap-1">
           {shop.is_open != null && (
             <span className={`inline-flex h-5 items-center rounded-full px-2 text-[10.5px] font-bold ${shop.is_open ? "bg-tint-positive text-tone-positive" : "bg-tint-caution text-caution-500"}`}>{shop.is_open ? "Open" : "Closed"}</span>
