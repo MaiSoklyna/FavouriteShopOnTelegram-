@@ -6,6 +6,8 @@ Admin: CRUD operations (super_admin for all, merchant_admin for own).
 
 from __future__ import annotations
 
+import asyncio
+
 import math
 import time
 from datetime import datetime, timedelta, timezone
@@ -29,7 +31,7 @@ DELIVERY_SETTING_FIELDS = ("opening_hours", "delivery_base_fee", "delivery_per_k
 NEARBY_PUBLIC_FIELDS = (
     "id", "name", "slug", "tagline", "icon_emoji", "accent_color", "logo_url",
     "is_featured", "address", "latitude", "longitude", "delivery_radius_km",
-    "min_order_amount", "rating",
+    "min_order_amount", "rating", "shop_category_id", "shop_subcategory_id",
 )
 # Fields any visitor may see on a shop. The rest of the row (owner_name, email,
 # telegram_token, telegram_group_id, plan, logo_update_history) is admin-only.
@@ -38,6 +40,7 @@ PUBLIC_FIELDS = (
     "id", "name", "slug", "tagline", "description", "icon_emoji", "accent_color", "logo_url",
     "is_featured", "status", "phone", "fb_page", "instagram", "deep_link_code", "created_at",
     "address", "latitude", "longitude", "delivery_radius_km", "rating",
+    "shop_category_id", "shop_subcategory_id",
     *DELIVERY_SETTING_FIELDS,
 )
 # ~1° of latitude in km; used to turn the search radius into a bounding box
@@ -46,6 +49,22 @@ KM_PER_DEGREE = 111.0
 
 def public_view(merchant: dict) -> dict:
     return {k: merchant[k] for k in PUBLIC_FIELDS if k in merchant}
+
+
+async def shop_category_names(db) -> tuple[dict[int, str], dict[int, str]]:
+    """id -> name for shop categories and subcategories (two tiny tables, read once per request)."""
+    cats, subs = await asyncio.gather(
+        db.from_("shop_categories").select("id,name"),
+        db.from_("shop_subcategories").select("id,name"),
+    )
+    return {c["id"]: c["name"] for c in cats}, {s["id"]: s["name"] for s in subs}
+
+
+def with_category_names(shop: dict, cats: dict[int, str], subs: dict[int, str]) -> dict:
+    """Add the readable `shop_category` / `shop_subcategory` next to the ids (null = not categorised yet)."""
+    shop["shop_category"] = cats.get(shop.get("shop_category_id"))
+    shop["shop_subcategory"] = subs.get(shop.get("shop_subcategory_id"))
+    return shop
 
 
 async def validate_shop_category(db, category_id: int | None, subcategory_id: int | None) -> None:
@@ -84,9 +103,14 @@ ALLOWED_HERO_MIME = ALLOWED_LOGO_MIME
 async def list_merchants(
     status: str | None = None,
     search: str | None = None,
+    shop_category_id: int | None = None,
+    shop_subcategory_id: int | None = None,
     user: TokenClaims | None = Depends(get_optional_user),
 ):
-    """List merchants. Public for active merchants, admin sees all."""
+    """List merchants. Public for active merchants, admin sees all.
+
+    `shop_category_id` / `shop_subcategory_id` narrow the list to one kind of shop.
+    """
     async with SupabaseClient.service_role() as db:
         q = db.from_("merchants").order("created_at", desc=True)
 
@@ -98,19 +122,34 @@ async def list_merchants(
 
         if search:
             q = q.ilike("name", f"*{search}*")
+        if shop_category_id is not None:
+            q = q.eq("shop_category_id", shop_category_id)
+        if shop_subcategory_id is not None:
+            q = q.eq("shop_subcategory_id", shop_subcategory_id)
 
         merchants = await q.select()
 
-        # Enrich with counts
-        for m in merchants:
-            products = await db.from_("products").eq("merchant_id", m["id"]).eq("is_active", True).select("id")
-            m["product_count"] = len(products)
-            orders = await db.from_("orders").eq("merchant_id", m["id"]).select("id")
-            m["order_count"] = len(orders)
+        async def counts(merchant_id: int) -> tuple[int, int]:
+            products, orders = await asyncio.gather(
+                db.from_("products").eq("merchant_id", merchant_id).eq("is_active", True).select("id"),
+                db.from_("orders").eq("merchant_id", merchant_id).select("id"),
+            )
+            return len(products), len(orders)
+
+        # One wave of requests instead of two sequential round trips per shop
+        (cats, subs), per_shop = await asyncio.gather(
+            shop_category_names(db),
+            asyncio.gather(*(counts(m["id"]) for m in merchants)),
+        )
+        for m, (product_count, order_count) in zip(merchants, per_shop):
+            m["product_count"], m["order_count"] = product_count, order_count
 
     return [
-        m if sees_private_fields(user, m["id"])
-        else {**public_view(m), "product_count": m["product_count"], "order_count": m["order_count"]}
+        with_category_names(
+            m if sees_private_fields(user, m["id"])
+            else {**public_view(m), "product_count": m["product_count"], "order_count": m["order_count"]},
+            cats, subs,
+        )
         for m in merchants
     ]
 
@@ -122,6 +161,8 @@ async def nearby_merchants(
     radius_km: float = 10,
     limit: int = 20,
     offset: int = 0,
+    shop_category_id: int | None = None,
+    shop_subcategory_id: int | None = None,
 ):
     """Active shops with a map location near (lat, lng), best first.
 
@@ -141,12 +182,17 @@ async def nearby_merchants(
     dlat = radius_km / KM_PER_DEGREE
     dlng = radius_km / (KM_PER_DEGREE * max(math.cos(math.radians(lat)), 0.01))
     async with SupabaseClient.service_role() as db:
-        rows = await (
+        query = (
             db.from_("merchants").eq("status", "active")
             .gte("latitude", lat - dlat).lte("latitude", lat + dlat)
             .gte("longitude", lng - dlng).lte("longitude", lng + dlng)
-            .select()
         )
+        if shop_category_id is not None:
+            query = query.eq("shop_category_id", shop_category_id)
+        if shop_subcategory_id is not None:
+            query = query.eq("shop_subcategory_id", shop_subcategory_id)
+        rows = await query.select()
+        cats, subs = await shop_category_names(db)
 
     now = datetime.now(SHOP_TZ)
     shops = []
@@ -154,7 +200,7 @@ async def nearby_merchants(
         q = quote_delivery(m, (lat, lng))
         if q is None or float(q.distance_km) > radius_km:
             continue
-        shop = {k: m.get(k) for k in NEARBY_PUBLIC_FIELDS if k in m}
+        shop = with_category_names({k: m.get(k) for k in NEARBY_PUBLIC_FIELDS if k in m}, cats, subs)
         shop.update({
             "distance_km": float(q.distance_km),
             "distance_m": q.distance_m,
@@ -180,6 +226,7 @@ async def get_merchant(merchant_id: int, user: TokenClaims | None = Depends(get_
             raise NotFoundError("Merchant", merchant_id)
         if not sees_private_fields(user, merchant_id):
             merchant = public_view(merchant)
+        with_category_names(merchant, *await shop_category_names(db))
         products = await db.from_("products").eq("merchant_id", merchant_id).eq("is_active", True).select("id")
         merchant["product_count"] = len(products)
         orders = await db.from_("orders").eq("merchant_id", merchant_id).select("id")
