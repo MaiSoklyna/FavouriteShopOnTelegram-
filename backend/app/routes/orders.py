@@ -24,7 +24,7 @@ from app.core.dependencies import require_any_admin, require_role
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.services import settlement
+from app.services import inventory, settlement
 from app.services import promo_schedule
 from app.services.delivery import is_open, quote_delivery, valid_point
 
@@ -135,55 +135,58 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
             order_data["merchant_discount_amount"] = float(merchant_discount)
             order_data["platform_discount_amount"] = float(platform_discount)
 
-        rows = await db.from_("orders").insert(order_data)
-        order = rows[0]
-        order_id = order["id"]
+        # ── Take the stock first, atomically, before anything else exists ──
+        # One database call takes every line or none: the last unit can only go to one
+        # buyer, and a sold-out item stops the order here instead of after it is created.
+        await inventory.reserve_stock(db, items)
+        order_id = None
+        try:
+            rows = await db.from_("orders").insert(order_data)
+            order = rows[0]
+            order_id = order["id"]
 
-        # Cash on delivery: the shop collects the customer's money, so the platform
-        # owes it the platform-funded part of the discount (QR orders get this when paid).
-        if platform_discount > 0 and order_data["payment_method"] not in settlement.PLATFORM_COLLECTED_METHODS:
-            try:
-                await settlement.record_order_earning(
-                    db, {**order, "platform_discount_amount": str(platform_discount)},
-                    actor_type="system", actor_id=None,
+            # Cash on delivery: the shop collects the customer's money, so the platform
+            # owes it the platform-funded part of the discount (QR orders get this when paid).
+            if platform_discount > 0 and order_data["payment_method"] not in settlement.PLATFORM_COLLECTED_METHODS:
+                try:
+                    await settlement.record_order_earning(
+                        db, {**order, "platform_discount_amount": str(platform_discount)},
+                        actor_type="system", actor_id=None,
+                    )
+                except Exception:
+                    # The order stands; /settlements/admin/backfill records it later.
+                    logger.exception("Subsidy earning not recorded for COD order %s", order_id)
+
+            # ── Create order items (stock was already taken above) ──
+            for item in items:
+                product = await db.from_("products").eq("id", item["product_id"]).select_one(
+                    "id,name,sku,base_price"
                 )
-            except Exception:
-                # The order stands; /settlements/admin/backfill records it later.
-                logger.exception("Subsidy earning not recorded for COD order %s", order_id)
-
-        # ── Create order items + decrement stock ────────────────
-        for item in items:
-            product = await db.from_("products").eq("id", item["product_id"]).select_one(
-                "id,name,sku,base_price,stock"
-            )
-            if not product:
-                continue
-
-            await db.from_("order_items").insert({
-                "order_id": order_id,
-                "product_id": item["product_id"],
-                "product_name": product.get("name", "Unknown"),
-                "product_sku": product.get("sku"),
-                "selected_variants": item.get("selected_variants"),
-                "quantity": item["quantity"],
-                "unit_price": item.get("unit_price", product["base_price"]),
-                "subtotal": round(item.get("unit_price", product["base_price"]) * item["quantity"], 2),
-            })
-
-            # Decrement product-level stock (prevent negative)
-            new_stock = max(product.get("stock", 0) - item["quantity"], 0)
-            await db.from_("products").eq("id", item["product_id"]).update({"stock": new_stock})
-
-            # Decrement per-variant stock as well
-            for sv in (item.get("selected_variants") or []):
-                opt_id = sv.get("option_id") if isinstance(sv, dict) else None
-                if not opt_id:
+                if not product:
                     continue
-                opt = await db.from_("product_variant_options").eq("id", opt_id).select_one("stock_adjust")
-                if not opt:
-                    continue
-                new_opt_stock = max((opt.get("stock_adjust") or 0) - item["quantity"], 0)
-                await db.from_("product_variant_options").eq("id", opt_id).update({"stock_adjust": new_opt_stock})
+
+                await db.from_("order_items").insert({
+                    "order_id": order_id,
+                    "product_id": item["product_id"],
+                    "product_name": product.get("name", "Unknown"),
+                    "product_sku": product.get("sku"),
+                    "selected_variants": item.get("selected_variants"),
+                    "quantity": item["quantity"],
+                    "unit_price": item.get("unit_price", product["base_price"]),
+                    "subtotal": round(item.get("unit_price", product["base_price"]) * item["quantity"], 2),
+                })
+
+        except Exception:
+            # Nothing may keep stock for an order that does not exist
+            await inventory.release_stock(db, items)
+            if order_id is not None:
+                try:
+                    await db.from_("orders").eq("id", order_id).update(
+                        {"status": "cancelled", "admin_note": "System: order could not be completed"}
+                    )
+                except Exception:
+                    logger.exception("Could not cancel half-created order %s", order_id)
+            raise
 
         # ── Record promo usage ──────────────────────────────────
         if promo:
@@ -392,28 +395,19 @@ async def cancel_order(order_id: int, user: TokenClaims = require_role(Role.USER
         if order["status"] != "pending":
             raise BadRequestError("Only pending orders can be cancelled")
 
-        # Restore stock (product-level + variant options)
-        items = await db.from_("order_items").eq("order_id", order_id).select("product_id,quantity,selected_variants")
-        for item in items:
-            product = await db.from_("products").eq("id", item["product_id"]).select_one("stock")
-            if product:
-                new_stock = (product.get("stock", 0)) + item["quantity"]
-                await db.from_("products").eq("id", item["product_id"]).update({"stock": new_stock})
-
-            for sv in (item.get("selected_variants") or []):
-                opt_id = sv.get("option_id") if isinstance(sv, dict) else None
-                if not opt_id:
-                    continue
-                opt = await db.from_("product_variant_options").eq("id", opt_id).select_one("stock_adjust")
-                if opt:
-                    restored = (opt.get("stock_adjust") or 0) + item["quantity"]
-                    await db.from_("product_variant_options").eq("id", opt_id).update({"stock_adjust": restored})
-
+        # Reverse first: it refuses if the earning sits in an open payout, and that must stop
+        # the cancellation too.
         await settlement.on_order_status_changed(
             db, order_id, "cancelled", actor_type="user", actor_id=str(db_user["id"]),
             reason="Cancelled by customer",
         )
-        await db.from_("orders").eq("id", order_id).update({"status": "cancelled"})
+        # Claim the cancellation: only one request can flip pending -> cancelled, so the stock
+        # is given back exactly once even if the button is tapped twice.
+        claimed = await db.from_("orders").eq("id", order_id).eq("status", "pending").update({"status": "cancelled"})
+        if not claimed:
+            raise BadRequestError("Only pending orders can be cancelled")
+        items = await db.from_("order_items").eq("order_id", order_id).select("product_id,quantity,selected_variants")
+        await inventory.release_stock(db, items)
     return {"success": True, "message": "Order cancelled"}
 
 
@@ -489,7 +483,16 @@ async def update_order_status(
                 db, order_id, new_status, reason=body.get("admin_note"), **actor,
             )
 
-        await db.from_("orders").eq("id", order_id).update(update_data)
+        # Only apply the change if the order is still in the status we validated against, so two
+        # people (or two taps) cannot both make the same transition.
+        changed = await db.from_("orders").eq("id", order_id).eq("status", order["status"]).update(update_data)
+        if not changed:
+            raise ConflictError("This order was just updated by someone else. Refresh and try again.")
+
+        if new_status == "cancelled":
+            # A cancelled order no longer holds stock (this used to be lost for admin cancellations)
+            items = await db.from_("order_items").eq("order_id", order_id).select("product_id,quantity,selected_variants")
+            await inventory.release_stock(db, items)
 
         if new_status == "delivered":
             await settlement.on_order_status_changed(db, order_id, new_status, **actor)
