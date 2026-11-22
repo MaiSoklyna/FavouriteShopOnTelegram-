@@ -20,6 +20,8 @@ const PROVINCES = [
   "Takeo", "Tboung Khmum",
 ];
 
+interface ShopCategory { id: number; name: string; subcategories: { id: number; name: string }[] }
+
 const STEPS = ["Seller type", "Registration", "Store setup", "Location", "Review"];
 
 interface FormState {
@@ -35,6 +37,8 @@ interface FormState {
   store_name: string;
   store_description: string;
   logo_url: string;
+  shop_category_id: string;
+  shop_subcategory_id: string;
   province: string;
   district: string;
   commune: string;
@@ -47,7 +51,7 @@ const EMPTY: FormState = {
   seller_type: "individual",
   full_name: "", email: "", phone: "", gender: "", date_of_birth: "", company_name: "",
   password: "", confirm_password: "",
-  store_name: "", store_description: "", logo_url: "",
+  store_name: "", store_description: "", logo_url: "", shop_category_id: "", shop_subcategory_id: "",
   province: "", district: "", commune: "", address_line1: "", address_line2: "",
   agree_terms: false,
 };
@@ -77,6 +81,7 @@ function SellContent() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [categories, setCategories] = useState<ShopCategory[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -95,6 +100,9 @@ function SellContent() {
     finally { setChecking(false); }
   }, []);
   useEffect(() => { loadExisting(); }, [loadExisting]);
+  useEffect(() => {
+    api.get<{ data: ShopCategory[] }>("/shop-categories").then((r) => setCategories(r.data || [])).catch(() => {});
+  }, []);
 
   function validateStep(): string {
     if (step === 1) {
@@ -106,6 +114,8 @@ function SellContent() {
     }
     if (step === 2) {
       if (form.store_name.trim().length < 2) return "Enter your store name";
+      if (!form.shop_category_id) return "Choose a shop category";
+      if (!form.shop_subcategory_id) return "Choose a shop subcategory";
     }
     if (step === 3) {
       if (!form.province) return "Select your province";
@@ -143,6 +153,8 @@ function SellContent() {
         store_name: form.store_name.trim(),
         store_description: form.store_description || null,
         logo_url: form.logo_url || null,
+        shop_category_id: Number(form.shop_category_id),
+        shop_subcategory_id: Number(form.shop_subcategory_id),
         province: form.province || null,
         district: form.district || null,
         commune: form.commune || null,
@@ -227,9 +239,9 @@ function SellContent() {
 
         {step === 0 && <StepSellerType value={form.seller_type} onChange={(v) => set("seller_type", v)} />}
         {step === 1 && <StepKyc form={form} set={set} />}
-        {step === 2 && <StepStore form={form} set={set} logoPreview={logoPreview} uploadingLogo={uploadingLogo} fileRef={fileRef} onLogoPick={onLogoPick} />}
+        {step === 2 && <StepStore categories={categories} form={form} set={set} logoPreview={logoPreview} uploadingLogo={uploadingLogo} fileRef={fileRef} onLogoPick={onLogoPick} />}
         {step === 3 && <StepLocation form={form} set={set} />}
-        {step === 4 && <StepReview form={form} set={set} />}
+        {step === 4 && <StepReview categories={categories} form={form} set={set} />}
 
         {error && (
           <p style={{ color: "var(--fos-warning)", fontSize: 13, marginTop: 12, fontWeight: 500 }}>{error}</p>
@@ -320,8 +332,8 @@ function StepKyc({ form, set }: { form: FormState; set: <K extends keyof FormSta
   );
 }
 
-function StepStore({ form, set, logoPreview, uploadingLogo, fileRef, onLogoPick }: {
-  form: FormState; set: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
+function StepStore({ categories, form, set, logoPreview, uploadingLogo, fileRef, onLogoPick }: {
+  categories: ShopCategory[]; form: FormState; set: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
   logoPreview: string; uploadingLogo: boolean;
   fileRef: React.RefObject<HTMLInputElement>; onLogoPick: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
@@ -360,6 +372,16 @@ function StepStore({ form, set, logoPreview, uploadingLogo, fileRef, onLogoPick 
       )}
       <style>{`.sp-spin{animation:spin .6s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       <Field label="Store name"><Input value={form.store_name} onChange={(v) => set("store_name", v)} placeholder="Your store name" /></Field>
+      <Field label="Shop category">
+        <Select value={form.shop_category_id} placeholder="Select category"
+          onChange={(v) => { set("shop_category_id", v); set("shop_subcategory_id", ""); }}
+          options={categories.map((c) => ({ value: String(c.id), label: c.name }))} />
+      </Field>
+      <Field label="Shop type">
+        <Select value={form.shop_subcategory_id} placeholder={form.shop_category_id ? "Select type" : "Choose a category first"}
+          onChange={(v) => set("shop_subcategory_id", v)}
+          options={(categories.find((c) => String(c.id) === form.shop_category_id)?.subcategories || []).map((s) => ({ value: String(s.id), label: s.name }))} />
+      </Field>
       <Field label="Store description (optional)">
         <textarea value={form.store_description} onChange={(e) => set("store_description", e.target.value)} rows={4}
           placeholder="Tell customers what makes your store special..."
@@ -384,7 +406,7 @@ function StepLocation({ form, set }: { form: FormState; set: <K extends keyof Fo
   );
 }
 
-function StepReview({ form, set }: { form: FormState; set: <K extends keyof FormState>(k: K, v: FormState[K]) => void }) {
+function StepReview({ categories, form, set }: { categories: ShopCategory[]; form: FormState; set: <K extends keyof FormState>(k: K, v: FormState[K]) => void }) {
   const rows: [string, string][] = [
     ["Seller type", form.seller_type === "company" ? "Registered Business" : "Individual Seller"],
     ["Full name", form.full_name],
@@ -392,6 +414,7 @@ function StepReview({ form, set }: { form: FormState; set: <K extends keyof Form
     ["Email", form.email],
     ["Phone", form.phone || "—"],
     ["Store name", form.store_name],
+    ["Category", (() => { const c = categories.find((x) => String(x.id) === form.shop_category_id); const s = c?.subcategories.find((x) => String(x.id) === form.shop_subcategory_id); return c && s ? `${c.name} › ${s.name}` : "—"; })()],
     ["Location", [form.address_line1, form.commune, form.district, form.province].filter(Boolean).join(", ") || "—"],
   ];
   return (
@@ -618,12 +641,15 @@ function Input({ value, onChange, placeholder, type = "text" }: { value: string;
   );
 }
 
-function Select({ value, onChange, placeholder, options }: { value: string; onChange: (v: string) => void; placeholder: string; options: string[] }) {
+function Select({ value, onChange, placeholder, options }: { value: string; onChange: (v: string) => void; placeholder: string; options: (string | { value: string; label: string })[] }) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)}
       style={{ ...inputStyle, color: value ? "var(--shop-black)" : "var(--shop-muted)", appearance: "none" as const }}>
       <option value="">{placeholder}</option>
-      {options.map((o) => <option key={o} value={o} style={{ color: "#000" }}>{o}</option>)}
+      {options.map((o) => {
+        const v = typeof o === "string" ? o : o.value;
+        return <option key={v} value={v} style={{ color: "#000" }}>{typeof o === "string" ? o : o.label}</option>;
+      })}
     </select>
   );
 }

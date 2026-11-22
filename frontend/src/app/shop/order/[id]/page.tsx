@@ -8,6 +8,7 @@ import { LoginGate } from "@/components/shop/LoginGate";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { Order } from "@/types";
 import { KhqrPayPanel } from "@/components/shop/KhqrPayPanel";
+import { StripePayScreen } from "@/components/shop/StripePayScreen";
 import { Icon } from "@/components/shop/Icon";
 import { EmptyState, OrderStatusHero, OrderTimeline, Pill, Skeleton } from "@/components/shop";
 import { awaitingPayment, isPickup, statusLabel } from "@/lib/orderStatus";
@@ -43,6 +44,7 @@ function OrderDetailContent() {
   const { user, loading: authLoading } = useAuth();
 
   const [order, setOrder] = useState<Order | null>(null);
+  const [cardOpen, setCardOpen] = useState(false);
   const [shop, setShop] = useState<ShopInfo | null>(null);
   const [images, setImages] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
@@ -150,6 +152,10 @@ function OrderDetailContent() {
   const pickup = isPickup(order);
   const cancelled = order.status === "cancelled";
   const unpaid = awaitingPayment(order);
+
+  if (cardOpen) {
+    return <StripePayScreen orderId={order.id} onPaid={() => { setCardOpen(false); fetchOrder(); }} onLater={() => setCardOpen(false)} />;
+  }
   const you: LatLng | null = order.delivery_latitude != null && order.delivery_longitude != null
     ? { lat: Number(order.delivery_latitude), lng: Number(order.delivery_longitude) } : null;
   const shopPoint: LatLng | null = shop?.latitude != null && shop?.longitude != null ? { lat: shop.latitude, lng: shop.longitude } : null;
@@ -176,7 +182,13 @@ function OrderDetailContent() {
           </div>
         )}
 
-        {unpaid && <KhqrPayPanel orderId={order.id} total={Number(order.total)} onPaid={fetchOrder} />}
+        {unpaid && order.payment_method === "stripe" && (
+          <button type="button" onClick={() => setCardOpen(true)}
+            className="fos-press mb-3 h-[52px] w-full rounded-thumb bg-grad-cta text-[16px] font-extrabold text-white shadow-fos-cta">
+            Pay by card · {money(order.total)}
+          </button>
+        )}
+        {unpaid && order.payment_method !== "stripe" && <KhqrPayPanel orderId={order.id} total={Number(order.total)} onPaid={fetchOrder} />}
 
         <OrderStatusHero order={track} />
 
@@ -237,11 +249,13 @@ function OrderDetailContent() {
           <div className="mt-3 flex items-center gap-2.5 rounded-thumb bg-surface p-2.5">
             {order.payment_method === "khqr"
               ? <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-[#E1232E] text-[8px] font-black text-white">KHQR</span>
+              : order.payment_method === "stripe"
+              ? <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-[#635BFF] text-[8px] font-black text-white">CARD</span>
               : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-positive-500 text-[14px] font-black text-white">$</span>}
             <span className="min-w-0 flex-1 text-[13px] font-bold text-ink-900">
-              {order.payment_method === "khqr" ? "ABA KHQR" : pickup ? "Cash at the shop" : "Cash on delivery"}
+              {order.payment_method === "khqr" ? "ABA KHQR" : order.payment_method === "stripe" ? "Card (Stripe test mode)" : pickup ? "Cash at the shop" : "Cash on delivery"}
             </span>
-            {order.payment_method === "khqr" && (
+            {(order.payment_method === "khqr" || order.payment_method === "stripe") && (
               order.payment_status === "paid" ? <Pill variant="positive">Paid</Pill> : !cancelled && <Pill variant="mango">Unpaid</Pill>
             )}
           </div>

@@ -7,6 +7,9 @@ import type { Order } from "@/types";
 import { BrandLoader } from "@/components/ui/Spinner";
 
 const TABS = ["all", "pending", "confirmed", "processing", "shipped", "delivered", "cancelled"];
+// Database values stay as-is; these are the names shown to merchants.
+const LABEL: Record<string, string> = { all: "All", pending: "Pending", confirmed: "Accepted", processing: "Preparing", shipped: "Out for Delivery", delivered: "Delivered", cancelled: "Cancelled" };
+const label = (s: string) => LABEL[s] || s;
 const NEXT: Record<string, string[]> = { pending: ["confirmed", "cancelled"], confirmed: ["processing", "cancelled"], processing: ["shipped", "cancelled"], shipped: ["delivered"] };
 const STATUS_COLORS: Record<string, string> = { pending: "badge-pending", confirmed: "badge-confirmed", processing: "badge-processing", shipped: "badge-shipped", delivered: "badge-delivered", cancelled: "badge-cancelled" };
 
@@ -51,7 +54,7 @@ export default function OrdersPage() {
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 16 }}>
         {TABS.map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 500, textTransform: "capitalize", background: tab === t ? "var(--accent)" : "var(--bg-secondary)", color: tab === t ? "var(--bg)" : "var(--text-secondary)", border: "none", cursor: "pointer" }}>{t}</button>
+          <button key={t} onClick={() => setTab(t)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 500, background: tab === t ? "var(--accent)" : "var(--bg-secondary)", color: tab === t ? "var(--bg)" : "var(--text-secondary)", border: "none", cursor: "pointer" }}>{label(t)}</button>
         ))}
       </div>
 
@@ -68,7 +71,7 @@ export default function OrdersPage() {
                   <td style={{ fontWeight: 600 }}>{o.order_code || `#${o.id}`}</td>
                   <td><p>{o.customer_name || "—"}</p>{o.customer_phone && <p style={{ fontSize: 10, color: "var(--text-muted)" }}>{o.customer_phone}</p>}</td>
                   <td style={{ fontWeight: 600, fontFamily: "monospace" }}>${Number(o.total).toFixed(2)}</td>
-                  <td><span className={`badge ${STATUS_COLORS[o.status] || ""}`}>{o.status}</span></td>
+                  <td><span className={`badge ${STATUS_COLORS[o.status] || ""}`}>{label(o.status)}</span></td>
                   <td style={{ color: "var(--text-muted)", fontSize: 12 }}>{o.created_at ? new Date(o.created_at).toLocaleDateString() : "—"}</td>
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -82,7 +85,7 @@ export default function OrdersPage() {
                           <option value="">Change status...</option>
                           {NEXT[o.status].map(s => (
                             <option key={s} value={s} style={{ textTransform: "capitalize" }}>
-                              {s === "cancelled" ? "Cancel order" : `Mark ${s}`}
+                              {s === "cancelled" ? "Cancel order" : s === "confirmed" ? "Accept order" : `Mark ${label(s)}`}
                             </option>
                           ))}
                         </select>
@@ -102,7 +105,7 @@ export default function OrdersPage() {
           <div className="modal-content" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
               <div><h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text)" }}>{detail.order_code}</h2>{detail.merchant_name && <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{detail.merchant_name}</p>}</div>
-              <span className={`badge ${STATUS_COLORS[detail.status] || ""}`}>{detail.status}</span>
+              <span className={`badge ${STATUS_COLORS[detail.status] || ""}`}>{label(detail.status)}</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 12, marginBottom: 16 }}>
               <div><span style={{ color: "var(--text-muted)" }}>Customer: </span>{detail.customer_name || "—"}</div>
@@ -129,7 +132,7 @@ export default function OrdersPage() {
               <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
                 {NEXT[detail.status].map(s => (
                   <button key={s} onClick={() => updateStatus(detail.id, s)} className={s === "cancelled" ? "btn-danger" : "btn-primary"} style={{ textTransform: "capitalize" }}>
-                    {s === "cancelled" ? "Cancel Order" : `Mark ${s}`}
+                    {s === "cancelled" ? "Cancel Order" : s === "confirmed" ? "Accept order" : `Mark ${label(s)}`}
                   </button>
                 ))}
               </div>

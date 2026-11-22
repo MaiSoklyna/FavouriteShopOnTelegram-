@@ -180,6 +180,12 @@ export const adminSettlements = {
     unwrap(api.get<Envelope<AuditEntry[]>>("/settlements/admin/audit", { params })),
   report: (date_from: string, date_to: string) =>
     unwrap(api.get<Envelope<SettlementReport>>("/settlements/admin/report", { params: { date_from, date_to } })),
+  monthlySettlement: (month: string, currency = "USD") =>
+    unwrap(api.post<Envelope<{
+      month: string;
+      created: { merchant_id: number; name?: string | null; payout: Payout }[];
+      skipped: { merchant_id: number; name?: string | null; reason: string }[];
+    }>>("/settlements/admin/monthly-settlement", { month, currency })),
   backfill: () =>
     unwrap(api.post<Envelope<{ scanned: number; created: number[]; skipped: number[] }>>("/settlements/admin/backfill")),
 };

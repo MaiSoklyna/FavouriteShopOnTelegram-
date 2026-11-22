@@ -5,14 +5,17 @@ import { downloadCsv, formatDate, formatMoney, isNonZero, type MerchantBalance }
 import { BTN, Panel, StatusPill, Table, INPUT, type Column } from "../ui";
 import { ExportIcon } from "@/components/brand/Icons";
 
-export function BalancesTab({ balances, loading, onPay, onManage, onBackfill, backfilling }: {
+export function BalancesTab({ balances, loading, onPay, onManage, onBackfill, backfilling, onMonthly, settling }: {
   balances: MerchantBalance[];
   loading: boolean;
   onPay: (m: MerchantBalance) => void;
   onManage: (m: MerchantBalance) => void;
   onBackfill: () => void;
   backfilling: boolean;
+  onMonthly: (month: string) => void;
+  settling: boolean;
 }) {
+  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [activeOnly, setActiveOnly] = useState(true);
   const [search, setSearch] = useState("");
 
@@ -104,6 +107,15 @@ export function BalancesTab({ balances, loading, onPay, onManage, onBackfill, ba
             <input type="checkbox" checked={activeOnly} onChange={(e) => setActiveOnly(e.target.checked)} /> With sales only
           </label>
           <button className={BTN.outlineSm} onClick={exportCsv} disabled={rows.length === 0}><ExportIcon size={16} />Export CSV</button>
+          <input type="month" className={`${INPUT} w-36 py-1.5 text-xs`} value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Settlement month" />
+          <button
+            className={BTN.primarySm}
+            onClick={() => onMonthly(month)}
+            disabled={settling || !month}
+            title="Create a pending payout per verified merchant for orders delivered in the selected month only"
+          >
+            {settling ? "Settling…" : "Run monthly settlement"}
+          </button>
           <button
             className={BTN.outlineSm}
             onClick={onBackfill}

@@ -11,7 +11,7 @@ import { Icon } from "@/components/shop/Icon";
 const FAQ = [
   { q: "How do I track my order?", a: "Go to 'My Orders', then select your order to view its current status." },
   { q: "Can I cancel my order?", a: "You can cancel orders in 'pending' status. Once confirmed, contact support." },
-  { q: "What payment methods are accepted?", a: "KHQR (all Cambodian banks), Cash on Delivery (COD)." },
+  { q: "What payment methods are accepted?", a: "Card (Stripe test mode demo) and Cash on Delivery (COD)." },
   { q: "How long does delivery take?", a: "Typically 3-5 business days depending on location." },
 ];
 

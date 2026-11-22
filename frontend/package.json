@@ -12,6 +12,8 @@
     "pages:deploy": "npm run pages:build && wrangler pages deploy .vercel/output/static"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^2.9.0",
+    "@stripe/stripe-js": "^4.10.0",
     "mapbox-gl": "^3.9.4",
     "next": "^15.0.0",
     "react": "^18.3.1",

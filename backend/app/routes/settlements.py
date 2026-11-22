@@ -22,6 +22,7 @@ from app.db.client import SupabaseClient
 from app.models.settlement import (
     EarningStatus,
     PayoutAccountUpdate,
+    MonthlySettlement,
     PayoutCreate,
     PayoutComplete,
     PayoutFail,
@@ -272,6 +273,62 @@ async def admin_create_payout(
             "p_actor_id": user.sub,
         })
     return {"data": payout}
+
+
+@router.post("/admin/monthly-settlement")
+async def admin_monthly_settlement(
+    body: MonthlySettlement,
+    user: TokenClaims = require_super_admin(),
+):
+    """Create one pending payout for every merchant with money available.
+
+    Merchants whose payout account is not verified, or with nothing available,
+    are skipped and reported. Each payout still has to be sent and then marked
+    complete, exactly like a single manual payout.
+
+    Strict cutoff: only earnings delivered inside the month (Cambodia time,
+    [first day 00:00, first day of next month 00:00)) are included. Later
+    months stay untouched, and an earning already in a payout is never
+    picked up again, so running the same month twice creates nothing new.
+    """
+    if body.month > settlement.current_month():
+        raise BadRequestError("Cannot settle a month that has not started yet")
+    period_start, period_end = settlement.month_bounds(body.month)
+
+    created: list[dict] = []
+    skipped: list[dict] = []
+    async with SupabaseClient.service_role() as db:
+        balances = await db.from_("merchant_balances").eq("currency", body.currency).select()
+        accounts = {
+            m["id"]: m for m in await db.from_("merchants").select("id,payout_verification_status")
+        }
+        for b in balances:
+            mid = b["merchant_id"]
+            if float(b.get("available_amount") or 0) <= 0:
+                continue
+            if accounts.get(mid, {}).get("payout_verification_status") != VerificationStatus.VERIFIED.value:
+                skipped.append({"merchant_id": mid, "name": b.get("merchant_name"), "reason": "Payout account not verified"})
+                continue
+            try:
+                payout = await settlement.rpc(db, "create_merchant_payout", {
+                    "p_merchant_id": mid,
+                    "p_currency": body.currency,
+                    "p_method": PayoutMethod.MANUAL_TRANSFER.value,
+                    "p_note": f"Monthly settlement {body.month}",
+                    "p_actor_type": str(user.role),
+                    "p_actor_id": user.sub,
+                    "p_period_start": period_start.isoformat(),
+                    "p_period_end": period_end.isoformat(),
+                })
+                created.append({"merchant_id": mid, "name": b.get("merchant_name"), "payout": payout})
+            except BadRequestError as exc:
+                # Nothing delivered in this month (or already settled): not an error.
+                if "Nothing to pay out" not in str(exc):
+                    skipped.append({"merchant_id": mid, "name": b.get("merchant_name"), "reason": str(exc)[:200]})
+            except Exception as exc:
+                logger.exception("Monthly settlement failed for merchant %s", mid)
+                skipped.append({"merchant_id": mid, "name": b.get("merchant_name"), "reason": str(exc)[:200]})
+    return {"data": {"month": body.month, "created": created, "skipped": skipped}}
 
 
 @router.get("/admin/payouts")

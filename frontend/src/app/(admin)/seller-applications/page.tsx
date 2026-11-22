@@ -22,6 +22,8 @@ export default function SellerApplicationsPage() {
   const [apps, setApps] = useState<SellerApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("pending");
+  const [cats, setCats] = useState<Record<number, string>>({});
+  const [subs, setSubs] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState<number | null>(null);
   const [toast, setToast] = useState({ show: false, msg: "", ok: true });
 
@@ -43,6 +45,13 @@ export default function SellerApplicationsPage() {
   }, [tab]);
 
   useEffect(() => { setLoading(true); load(); }, [tab, load]);
+  useEffect(() => {
+    api.get<{ data: { id: number; name: string; subcategories: { id: number; name: string }[] }[] }>("/shop-categories").then((r) => {
+      const c: Record<number, string> = {}, s: Record<number, string> = {};
+      (r.data || []).forEach((x) => { c[x.id] = x.name; x.subcategories.forEach((y) => { s[y.id] = y.name; }); });
+      setCats(c); setSubs(s);
+    }).catch(() => {});
+  }, []);
 
   async function approve(id: number) {
     if (!confirm("Approve this seller? This creates their shop and login.")) return;
@@ -151,6 +160,7 @@ export default function SellerApplicationsPage() {
                   {a.company_name && <Row k="Company" v={a.company_name} />}
                   <Row k="Email" v={a.email} />
                   <Row k="Phone" v={a.phone || "—"} />
+                  <Row k="Category" v={a.shop_category_id ? `${cats[a.shop_category_id] || "—"}${a.shop_subcategory_id ? ` › ${subs[a.shop_subcategory_id] || "—"}` : ""}` : "—"} />
                   <Row k="Location" v={[a.address_line1, a.commune, a.district, a.province].filter(Boolean).join(", ") || "—"} />
                   {a.store_description && <Row k="About" v={a.store_description} />}
                   {a.review_note && <Row k="Note" v={a.review_note} />}

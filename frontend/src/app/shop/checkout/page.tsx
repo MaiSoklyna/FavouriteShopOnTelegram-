@@ -8,6 +8,8 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
 import { EmptyState, KhqrCard, PaidSuccess, Pill, Skeleton } from "@/components/shop";
 import type { KhqrData } from "@/components/shop/Khqr";
+import { StripePayScreen } from "@/components/shop/StripePayScreen";
+import { ENABLED_ONLINE, STRIPE_DEMO_NOTE, isEnabled, type PaymentMethod } from "@/lib/paymentProviders";
 import { fetchQuote, money, savePromo, savedPromoFor, type CartQuote, type DeliveryChoice } from "@/lib/quote";
 import { deleteAddress, listAddresses, saveAddress, type SavedAddress } from "@/lib/addresses";
 import { distanceKm, staticMapUrl, formatEta, formatKm, getCurrentPosition, type LatLng } from "@/lib/mapbox";
@@ -73,7 +75,7 @@ function CheckoutContent() {
   const [paid, setPaid] = useState(false); // every QR order paid: the success moment before the order page
   const [paidSummary, setPaidSummary] = useState<{ amount: number | null; eta: string | null }>({ amount: null, eta: null });
   const [form, setForm] = useState({ name: "", phone: "", address: "", note: "" });
-  const [payment, setPayment] = useState<"cod" | "khqr">("cod");
+  const [payment, setPayment] = useState<PaymentMethod>(ENABLED_ONLINE[0] ?? "cod");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [placing, setPlacing] = useState(false);
   const [orderError, setOrderError] = useState("");
@@ -371,7 +373,7 @@ function CheckoutContent() {
       const oid = res?.data?.order_id;
 
       haptic("success");
-      if (payment === "khqr" && oid) {
+      if ((payment === "khqr" || payment === "stripe") && oid) {
         setQrOrderIds([oid]);
         setQrIndex(0);
         const one = quote?.orders[0] ?? null;
@@ -381,7 +383,7 @@ function CheckoutContent() {
         });
         setPaying(true);
         window.scrollTo({ top: 0 });
-        loadQr(oid);
+        if (payment === "khqr") loadQr(oid);
       } else {
         router.replace(oid ? `/shop/order/${oid}?placed=true` : "/shop/orders");
       }
@@ -396,7 +398,7 @@ function CheckoutContent() {
 
   const qt = quote?.totals;
   const grand = qt ? Number(qt.total) : itemsTotal;
-  const ctaLabel = placing ? "Placing order…" : payment === "khqr" ? `Pay ${money(grand)}` : `Place order · ${money(grand)}`;
+  const ctaLabel = placing ? "Placing order…" : payment !== "cod" ? `Pay ${money(grand)}` : `Place order · ${money(grand)}`;
   const ctaDisabled = placing || !quote || blockers.length > 0;
   const inTelegram = useMainButton({
     text: ctaLabel,
@@ -412,6 +414,10 @@ function CheckoutContent() {
         note={qrOrderIds.length > 1 ? `${qrOrderIds.length} orders paid` : undefined}
         onDone={() => router.replace(`/shop/order/${qrOrderIds[0]}?placed=true`)} />
     );
+  }
+
+  if (paying && payment === "stripe" && orderId) {
+    return <StripePayScreen orderId={orderId} onPaid={handlePaid} onLater={() => router.push("/shop/orders")} />;
   }
 
   if (paying) {
@@ -629,9 +635,16 @@ function CheckoutContent() {
 
         {/* Payment */}
         <div role="radiogroup" aria-label="Payment" className="mt-3 flex flex-col gap-2">
-          <PayOption on={payment === "khqr"} onPick={() => { haptic("select"); setPayment("khqr"); }}
-            logo={<span className="grid h-10 w-10 place-items-center rounded-md bg-[#E1232E] text-[9px] font-extrabold tracking-tight text-white">KHQR</span>}
-            title="ABA KHQR" sub="Any bank app" />
+          {isEnabled("stripe") && (
+            <PayOption on={payment === "stripe"} onPick={() => { haptic("select"); setPayment("stripe"); }}
+              logo={<span className="grid h-10 w-10 place-items-center rounded-md bg-[#635BFF] text-[9px] font-extrabold tracking-tight text-white">CARD</span>}
+              title="Credit / debit card" sub={STRIPE_DEMO_NOTE} />
+          )}
+          {isEnabled("khqr") && (
+            <PayOption on={payment === "khqr"} onPick={() => { haptic("select"); setPayment("khqr"); }}
+              logo={<span className="grid h-10 w-10 place-items-center rounded-md bg-[#E1232E] text-[9px] font-extrabold tracking-tight text-white">KHQR</span>}
+              title="ABA KHQR" sub="Any bank app" />
+          )}
           <PayOption on={payment === "cod"} onPick={() => { haptic("select"); setPayment("cod"); }}
             logo={<span className="grid h-10 w-10 place-items-center rounded-md bg-positive-500 text-[18px] font-extrabold text-white">$</span>}
             title="Cash on delivery" sub={deliveryType === "pickup" ? "Pay at the shop" : "Pay the rider"} />
@@ -682,7 +695,7 @@ function CheckoutContent() {
         <div className="fixed inset-x-0 bottom-0 z-[90] border-t border-line bg-card/95 backdrop-blur" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
           <div className="mx-auto max-w-[640px] px-gutter py-[21px]">
             <button type="button" onClick={handlePlaceOrder} disabled={ctaDisabled}
-              className={`fos-press h-[52px] w-full rounded-thumb text-[16px] font-extrabold text-white disabled:opacity-50 ${payment === "khqr" ? "bg-grad-promo shadow-[0_10px_24px_rgba(184,134,43,.35)]" : "bg-grad-cta shadow-fos-cta"}`}>
+              className={`fos-press h-[52px] w-full rounded-thumb text-[16px] font-extrabold text-white disabled:opacity-50 ${payment !== "cod" ? "bg-grad-promo shadow-[0_10px_24px_rgba(184,134,43,.35)]" : "bg-grad-cta shadow-fos-cta"}`}>
               {ctaLabel}
             </button>
           </div>

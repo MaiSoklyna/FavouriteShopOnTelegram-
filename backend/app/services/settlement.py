@@ -26,8 +26,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -39,7 +41,27 @@ logger = logging.getLogger(__name__)
 CENT = Decimal("0.01")
 
 # Orders where the platform receives the customer's money
-PLATFORM_COLLECTED_METHODS = frozenset({"khqr"})
+PLATFORM_COLLECTED_METHODS = frozenset({"khqr", "stripe"})
+
+
+SETTLEMENT_TZ = ZoneInfo("Asia/Phnom_Penh")
+
+
+def month_bounds(month: str) -> tuple[datetime, datetime]:
+    """UTC [start, end) of a calendar month in Cambodia time.
+
+    "2026-11" -> 2026-11-01 00:00 to 2026-12-01 00:00 Phnom Penh (UTC+7), so an
+    order delivered at 2026-11-30 23:59:59 is in November and one at
+    2026-12-01 00:00:00 is not.
+    """
+    year, mon = (int(x) for x in month.split("-"))
+    start = datetime(year, mon, 1, tzinfo=SETTLEMENT_TZ)
+    end = datetime(year + (mon == 12), mon % 12 + 1, 1, tzinfo=SETTLEMENT_TZ)
+    return start.astimezone(timezone.utc), end.astimezone(timezone.utc)
+
+
+def current_month() -> str:
+    return datetime.now(SETTLEMENT_TZ).strftime("%Y-%m")
 
 
 def money(value: Any) -> Decimal:

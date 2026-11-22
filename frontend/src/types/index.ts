@@ -318,6 +318,8 @@ export interface SellerApplication {
   commune?: string | null;
   address_line1?: string | null;
   address_line2?: string | null;
+  shop_category_id?: number | null;
+  shop_subcategory_id?: number | null;
   status: SellerApplicationStatus;
   review_note?: string | null;
   merchant_id?: number | null;

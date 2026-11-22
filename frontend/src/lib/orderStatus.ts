@@ -33,7 +33,7 @@ export const ACTIVE_STATUSES = FLOW.slice(0, 4);
 export const isPickup = (o: TrackOrder) => o.delivery_type === "pickup";
 /** A KHQR order waits for its payment before the shop sees it. */
 export const awaitingPayment = (o: TrackOrder) =>
-  o.payment_method === "khqr" && o.payment_status !== "paid" && o.status === "pending";
+  (o.payment_method === "khqr" || o.payment_method === "stripe") && o.payment_status !== "paid" && o.status === "pending";
 
 export function trackSteps(o: TrackOrder): TrackStep[] {
   const shop = o.merchant_name || "The shop";
@@ -41,8 +41,9 @@ export function trackSteps(o: TrackOrder): TrackStep[] {
   const steps: Omit<TrackStep, "state">[] = [
     { key: "pending", label: "Order placed", detail: "We sent your order to the shop", icon: "list", at: o.created_at },
   ];
-  if (o.payment_method === "khqr") {
-    steps.push({ key: "paid", label: "Paid with KHQR", detail: "Payment received", waiting: "Scan the KHQR above to pay", icon: "check", at: o.paid_at });
+  if (o.payment_method === "khqr" || o.payment_method === "stripe") {
+    const card = o.payment_method === "stripe";
+    steps.push({ key: "paid", label: card ? "Paid by card" : "Paid with KHQR", detail: "Payment received", waiting: card ? "Complete the card payment" : "Scan the KHQR above to pay", icon: "check", at: o.paid_at });
   }
   steps.push(
     { key: "confirmed", label: "Confirmed", detail: `${shop} accepted your order`, waiting: `Waiting for ${shop} to accept`, icon: "store" },

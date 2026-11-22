@@ -241,7 +241,7 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
 
             # A QR order reaches the shop only once it is paid
             # (sent from payments._settle); COD orders go now.
-            if merchant_group_id and order_data["payment_method"] != "khqr":
+            if merchant_group_id and order_data["payment_method"] not in ("khqr", "stripe"):
                 await send_order_placed_to_merchant_group(
                     merchant_group_id,
                     order_id=order_id,

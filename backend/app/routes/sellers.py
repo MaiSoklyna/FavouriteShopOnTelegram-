@@ -40,7 +40,8 @@ _ACTIVE_STATUSES = ("pending", "under_review")
 _PUBLIC_COLS = (
     "id,seller_type,full_name,email,phone,gender,date_of_birth,company_name,"
     "store_name,store_description,logo_url,province,district,commune,"
-    "address_line1,address_line2,status,review_note,merchant_id,"
+    "address_line1,address_line2,shop_category_id,shop_subcategory_id,"
+    "status,review_note,merchant_id,"
     "created_at,reviewed_at"
 )
 
@@ -75,6 +76,11 @@ async def submit_application(body: SellerApplicationCreate, user: TokenClaims = 
         raise BadRequestError("Company name is required for a registered business")
 
     async with SupabaseClient.service_role() as db:
+        # The subcategory must belong to the chosen category.
+        sub = await db.from_("shop_subcategories").eq("id", body.shop_subcategory_id).select_one("id,category_id")
+        if not sub or sub["category_id"] != body.shop_category_id:
+            raise BadRequestError("Please choose a valid shop category and subcategory")
+
         db_user = None
         if user.telegram_id:
             db_user = await db.from_("users").eq("telegram_id", user.telegram_id).select_one("id")
@@ -109,6 +115,8 @@ async def submit_application(body: SellerApplicationCreate, user: TokenClaims = 
             "commune": body.commune,
             "address_line1": body.address_line1,
             "address_line2": body.address_line2,
+            "shop_category_id": body.shop_category_id,
+            "shop_subcategory_id": body.shop_subcategory_id,
             "status": "pending",
         }
         rows = await db.from_("seller_applications").insert(data)
@@ -229,6 +237,8 @@ async def approve_application(
             "phone": app.get("phone"),
             "description": app.get("store_description"),
             "logo_url": app.get("logo_url"),
+            "shop_category_id": app.get("shop_category_id"),
+            "shop_subcategory_id": app.get("shop_subcategory_id"),
             "status": "active",
         }
         merchant_rows = await db.from_("merchants").insert(merchant_data)

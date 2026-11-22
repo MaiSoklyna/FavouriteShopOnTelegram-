@@ -34,7 +34,7 @@ def _format_items(items: Iterable[dict]) -> str:
     return "\n".join(lines) if lines else "  (no items)"
 
 
-_PAYMENT_LABELS = {"khqr": "ABA KHQR", "cod": "Cash on delivery"}
+_PAYMENT_LABELS = {"khqr": "ABA KHQR", "stripe": "Card (Stripe test)", "cod": "Cash on delivery"}
 
 
 def _payment_label(payment_method: str) -> str:
@@ -43,7 +43,7 @@ def _payment_label(payment_method: str) -> str:
 
 def _awaiting_online_payment(payment_method: str, payment_status: str | None) -> bool:
     """QR orders are not real orders until PayWay confirms the money."""
-    return payment_method == "khqr" and payment_status != "paid"
+    return payment_method in ("khqr", "stripe") and payment_status != "paid"
 
 
 async def send_order_placed_to_customer(

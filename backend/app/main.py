@@ -30,12 +30,14 @@ from app.routes import (
     notifications,
     orders,
     payments,
+    payments_stripe,
     products,
     promos,
     promotions,
     reviews,
     sellers,
     settlements,
+    shop_categories,
     support,
     telegram_webhook,
     users,
@@ -114,6 +116,9 @@ app.include_router(addresses.router, prefix="/api")
 # ABA PayWay QR payments
 app.include_router(payments.router, prefix="/api")
 
+# Stripe test-mode card payments (demo)
+app.include_router(payments_stripe.router, prefix="/api")
+
 # Merchant settlement (earnings, payouts, payout accounts)
 app.include_router(settlements.router, prefix="/api")
 
@@ -125,6 +130,9 @@ app.include_router(reviews.router, prefix="/api")
 
 # Seller onboarding applications (mini-app submit + super-admin approval)
 app.include_router(sellers.router, prefix="/api")
+
+# Shop categories / subcategories (registration pickers)
+app.include_router(shop_categories.router, prefix="/api")
 
 # Support tickets
 app.include_router(support.router, prefix="/api")
