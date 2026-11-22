@@ -26,6 +26,7 @@ from app.routes import (
     cart,
     coupons,
     deliveries,
+    favorites,
     featured_categories,
     loyalty,
     merchants,
@@ -124,6 +125,9 @@ app.include_router(shop_reviews.router, prefix="/api")
 
 # Promotion Center: public / private coupons, wallet, checkout eligibility
 app.include_router(coupons.router, prefix="/api")
+
+# Favorites: saved products and shops
+app.include_router(favorites.router, prefix="/api")
 
 # ABA PayWay QR payments
 app.include_router(payments.router, prefix="/api")

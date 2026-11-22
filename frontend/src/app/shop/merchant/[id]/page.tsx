@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { CategoryIcon, EmptyState, Pill, ProductCard, RatingPill, ShopCover, ShopReviews, Skeleton } from "@/components/shop";
 import { useCart } from "@/providers/CartProvider";
 import { useAuth } from "@/providers/AuthProvider";
+import { useFavorites } from "@/lib/useFavorites";
 import { useHomeLocation } from "@/lib/useHomeLocation";
 import { classifyShop } from "@/lib/shopTheme";
 import { formatEta, formatKm } from "@/lib/mapbox";
@@ -32,6 +33,7 @@ export default function MerchantDetailPage() {
   const router = useRouter();
   const { addToCart } = useCart();
   const { user } = useAuth();
+  const fav = useFavorites();
   const { location } = useHomeLocation(!!user);
 
   const [merchant, setMerchant] = useState<Merchant | null>(null);
@@ -146,6 +148,13 @@ export default function MerchantDetailPage() {
         <button type="button" onClick={() => router.back()} aria-label="Back"
           className="fos-press absolute left-gutter top-[max(14px,env(safe-area-inset-top))] grid h-10 w-10 place-items-center rounded-full bg-black/35 text-white backdrop-blur">
           <Icon name="back" size={20} strokeWidth={2} />
+        </button>
+        <button type="button" onClick={() => void fav.toggleShop(merchant.id)} aria-pressed={fav.hasShop(merchant.id)}
+          aria-label={fav.hasShop(merchant.id) ? "Remove shop from favorites" : "Save shop to favorites"}
+          className="fos-press absolute right-gutter top-[max(14px,env(safe-area-inset-top))] grid h-10 w-10 place-items-center rounded-full bg-black/35 backdrop-blur">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill={fav.hasShop(merchant.id) ? "#FF5A6E" : "none"} stroke={fav.hasShop(merchant.id) ? "#FF5A6E" : "#fff"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z" />
+          </svg>
         </button>
         {heroImages.length > 1 && (
           <div className="absolute bottom-16 left-1/2 flex -translate-x-1/2 gap-1.5">

@@ -10,7 +10,7 @@ import { EmptyState, Pill, ProductCard, Skeleton } from "@/components/shop";
 import { formatKhr, formatUsd } from "@/lib/currency";
 import { lightHaptic } from "@/lib/haptics";
 import { useHomeLocation } from "@/lib/useHomeLocation";
-import { useWishlist } from "@/lib/useWishlist";
+import { useFavorites } from "@/lib/useFavorites";
 import { distanceKm, formatEta, formatKm } from "@/lib/mapbox";
 import type { Merchant, Product, VariantGroup } from "@/types";
 import { Icon } from "@/components/shop/Icon";
@@ -29,7 +29,7 @@ export default function ProductDetailPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { addToCart, count } = useCart();
-  const wish = useWishlist();
+  const wish = useFavorites();
   const { location } = useHomeLocation(!!user);
 
   const [product, setProduct] = useState<Product | null>(null);
@@ -101,7 +101,7 @@ export default function ProductDetailPage() {
     ? Math.min(...variantGroups.map((g) => g.options.find((o) => o.id === selectedOptions[g.id])?.stock_adjust ?? Infinity))
     : Number(product.stock);
   const inStock = stock > 0;
-  const hearted = wish.has(product.id);
+  const hearted = wish.hasProduct(product.id);
 
   // Distance from the customer's location to the shop pin (straight line, like the backend)
   const shopPin = shop?.latitude != null && shop?.longitude != null ? { lat: Number(shop.latitude), lng: Number(shop.longitude) } : null;
@@ -188,7 +188,7 @@ export default function ProductDetailPage() {
             <svg width="20" height="20" viewBox="0 0 24 24" {...ICON} strokeWidth={2} aria-hidden><path d="M15 18l-6-6 6-6" /></svg>
           </GlassButton>
           <div className="flex gap-2">
-            <GlassButton label={hearted ? "Remove from wishlist" : "Add to wishlist"} onClick={() => { lightHaptic(); wish.toggle(product.id); setPopKey((k) => k + 1); }}>
+            <GlassButton label={hearted ? "Remove from wishlist" : "Add to wishlist"} onClick={() => { lightHaptic(); void wish.toggleProduct(product.id); setPopKey((k) => k + 1); }}>
               <svg key={popKey} className={popKey ? "fos-pop" : ""} width="18" height="18" viewBox="0 0 24 24" fill={hearted ? "var(--fos-accent)" : "none"} stroke={hearted ? "var(--fos-accent)" : "currentColor"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z" />
               </svg>

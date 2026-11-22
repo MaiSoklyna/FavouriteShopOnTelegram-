@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Product } from "@/types";
 import { lightHaptic } from "@/lib/haptics";
-import { useWishlist } from "@/lib/useWishlist";
+import { useFavorites } from "@/lib/useFavorites";
 import { isOutOfStock, OutOfStockOverlay } from "./OutOfStock";
 import { PriceTag } from "./PriceTag";
 import { RatingPill } from "./Pill";
@@ -21,7 +21,7 @@ interface ProductCardProps {
  */
 export function ProductCard({ product, onAddToCart }: ProductCardProps) {
   const router = useRouter();
-  const wish = useWishlist();
+  const wish = useFavorites();
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
   const [popKey, setPopKey] = useState(0);
@@ -30,7 +30,7 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
     ? Math.round((1 - product.base_price / product.compare_price) * 100)
     : 0;
   const outOfStock = isOutOfStock(product);
-  const hearted = wish.has(product.id);
+  const hearted = wish.hasProduct(product.id);
   const open = () => router.push(`/shop/product/${product.id}`);
 
   async function handleAdd(e: React.MouseEvent) {
@@ -51,7 +51,7 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
 
   function handleHeart(e: React.MouseEvent) {
     e.stopPropagation();
-    wish.toggle(product.id);
+    void wish.toggleProduct(product.id);
     setPopKey((k) => k + 1);
     lightHaptic();
   }
