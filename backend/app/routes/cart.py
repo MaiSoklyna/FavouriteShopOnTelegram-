@@ -12,6 +12,7 @@ from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.models.cart import CartItemAdd, CartItemUpdate
+from app.services import activity
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cart", tags=["Cart"])
@@ -143,6 +144,8 @@ async def add_to_cart(body: CartItemAdd, user: TokenClaims = require_role(Role.U
                 "unit_price": unit_price,
                 "selected_variants": variants_json or None,
             })
+
+        await activity.record(db, "add_to_cart", user_id=db_user["id"], product_id=body.product_id, merchant_id=product["merchant_id"])
 
     return {"success": True}
 

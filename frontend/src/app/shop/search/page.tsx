@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import { isOutOfStock, OutOfStockOverlay } from "@/components/shop/OutOfStock";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
+import { trackActivity } from "@/lib/activity";
 import { useCart } from "@/providers/CartProvider";
 import { ShopRow } from "@/components/shop/ShopRow";
 import { themeFromShopCategory } from "@/lib/shopTheme";
@@ -57,6 +58,16 @@ function SearchContent() {
   }, [query, categoryId, merchantId]);
 
   const isEmptyFilters = !query.trim() && !categoryId && !merchantId;
+
+  // Count a search once the customer has stopped typing and results (products or shops) are on screen.
+  // A search that found nothing is the most useful kind to see, so the result count goes with it.
+  const found = results.length + shopMatches.length;
+  useEffect(() => {
+    const q = query.trim();
+    if (!hasSearched || searching || q.length < 2) return;
+    const t = setTimeout(() => trackActivity({ type: "search", query: q, result_count: found }), 1500);
+    return () => clearTimeout(t);
+  }, [hasSearched, searching, query, found]);
 
   async function performSearch() {
     try {

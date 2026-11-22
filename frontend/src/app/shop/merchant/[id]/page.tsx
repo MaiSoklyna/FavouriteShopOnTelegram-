@@ -8,6 +8,7 @@ import { CategoryIcon, EmptyState, Pill, ProductCard, RatingPill, ShopCover, Sho
 import { useCart } from "@/providers/CartProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { useFavorites } from "@/lib/useFavorites";
+import { trackActivity } from "@/lib/activity";
 import { useHomeLocation } from "@/lib/useHomeLocation";
 import { classifyShop } from "@/lib/shopTheme";
 import { formatEta, formatKm } from "@/lib/mapbox";
@@ -37,6 +38,7 @@ export default function MerchantDetailPage() {
   const { location } = useHomeLocation(!!user);
 
   const [merchant, setMerchant] = useState<Merchant | null>(null);
+  useEffect(() => { if (merchant?.id) trackActivity({ type: "shop_view", merchant_id: merchant.id }); }, [merchant?.id]);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCategory, setActiveCategory] = useState<number | "all">("all");

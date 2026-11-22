@@ -24,7 +24,7 @@ from app.core.dependencies import require_any_admin, require_role
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.services import coupons, deliveries, inventory, notify, order_status, settlement, shop_reviews
+from app.services import activity, coupons, deliveries, inventory, notify, order_status, settlement, shop_reviews
 from app.services import promo_schedule
 from app.services.delivery import is_open, quote_delivery, valid_point
 
@@ -202,6 +202,8 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
         # ── Clean up cart ───────────────────────────────────────
         await db.from_("cart_items").eq("cart_id", cart["id"]).delete()
         await db.from_("cart").eq("id", cart["id"]).delete()
+
+        await activity.record(db, "order_placed", user_id=user_id, merchant_id=merchant_id, order_id=order_id)
 
         # ── Telegram notifications (best-effort) ────────────────
         try:

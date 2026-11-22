@@ -18,6 +18,7 @@ from app.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.rate_limit import limiter, rate_limit_handler
 from app.routes import (
+    activity,
     addresses,
     ai,
     analytics,
@@ -128,6 +129,9 @@ app.include_router(coupons.router, prefix="/api")
 
 # Favorites: saved products and shops
 app.include_router(favorites.router, prefix="/api")
+
+# Activity tracking: views, searches and the shop/platform summary
+app.include_router(activity.router, prefix="/api")
 
 # ABA PayWay QR payments
 app.include_router(payments.router, prefix="/api")

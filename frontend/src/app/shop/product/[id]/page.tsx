@@ -11,6 +11,7 @@ import { formatKhr, formatUsd } from "@/lib/currency";
 import { lightHaptic } from "@/lib/haptics";
 import { useHomeLocation } from "@/lib/useHomeLocation";
 import { useFavorites } from "@/lib/useFavorites";
+import { trackActivity } from "@/lib/activity";
 import { distanceKm, formatEta, formatKm } from "@/lib/mapbox";
 import type { Merchant, Product, VariantGroup } from "@/types";
 import { Icon } from "@/components/shop/Icon";
@@ -33,6 +34,8 @@ export default function ProductDetailPage() {
   const { location } = useHomeLocation(!!user);
 
   const [product, setProduct] = useState<Product | null>(null);
+  // Tell the shop someone looked at this product (once per visit; never blocks the page)
+  useEffect(() => { if (product?.id) trackActivity({ type: "product_view", product_id: product.id }); }, [product?.id]);
   const [shop, setShop] = useState<Merchant | null>(null);
   const [more, setMore] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);

@@ -6,6 +6,8 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { api } from "@/lib/api";
+import { useAuth } from "@/providers/AuthProvider";
+import { ActivityPanel } from "@/components/admin/ActivityPanel";
 import type { DashboardStats } from "@/types";
 
 interface DailyPoint {
@@ -42,6 +44,7 @@ export default function AnalyticsPage() {
   const [orderData, setOrderData] = useState<OrderAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<RangeKey>("30");
+  const { isSuperAdmin } = useAuth();
 
   useEffect(() => {
     setLoading(true);
@@ -159,6 +162,8 @@ export default function AnalyticsPage() {
         <SummaryCard label={`Orders · ${range}d`} value={totals.orders.toLocaleString()} />
         <SummaryCard label="Avg order value" value={fmtMoney(totals.aov)} />
       </div>
+
+      <ActivityPanel days={RANGE_OPTIONS.find(r => r.key === range)!.days} showSearches={isSuperAdmin} />
 
       {/* Status breakdown */}
       {orderData?.statusBreakdown && Object.keys(orderData.statusBreakdown).length > 0 && (
