@@ -25,6 +25,7 @@ from app.routes import (
     auth,
     banners,
     cart,
+    collections,
     coupons,
     deliveries,
     favorites,
@@ -113,6 +114,7 @@ app.include_router(merchant_staff.router, prefix="/api")
 app.include_router(products.router, prefix="/api")
 app.include_router(banners.router, prefix="/api")
 app.include_router(promotions.router, prefix="/api")
+app.include_router(collections.router, prefix="/api")
 app.include_router(featured_categories.router, prefix="/api")
 
 # Cart

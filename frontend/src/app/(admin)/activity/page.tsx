@@ -21,6 +21,7 @@ const FILTERS: { value: string; label: string }[] = [
   { value: "driver", label: "Drivers" },
   { value: "promotion", label: "Promotions" },
   { value: "coupon", label: "Coupons" },
+  { value: "collection", label: "Collections" },
   { value: "shop", label: "Shop settings" },
   { value: "payout", label: "Payout account" },
   { value: "staff", label: "Staff accounts" },
@@ -212,6 +213,10 @@ function sentence(e: ActivityEntry): string {
     case "promotion.updated": return `${who} edited promotion ${what}`;
     case "promotion.disabled": return `${who} turned off promotion ${what}`;
     case "promotion.deleted": return `${who} deleted promotion ${what}`;
+    case "collection.created": return `${who} created collection ${what}`;
+    case "collection.updated": return `${who} edited collection ${what}`;
+    case "collection.products_changed": return `${who} changed the products in collection ${what}`;
+    case "collection.deleted": return `${who} deleted collection ${what}`;
     case "coupon.created": return `${who} created coupon ${what}`;
     case "coupon.updated": return `${who} edited coupon ${what}`;
     case "coupon.disabled": return `${who} turned off coupon ${what}`;
@@ -238,7 +243,7 @@ const LABELS: Record<string, string> = {
   payout_verification_status: "Verification", payout_enabled: "Payouts", payout_rejection_reason: "Reason",
   code: "Code", type: "Type", value: "Value", discount_type: "Discount type", discount_value: "Discount",
   min_order: "Minimum order", max_uses: "Max uses", expires_at: "Expires", title: "Title", starts_at: "Starts", ends_at: "Ends",
-  customers: "Customers", variants: "Options", image: "Photo", hero_image: "Hero image", logo_url: "Logo",
+  customers: "Customers", variants: "Options", products: "Products", sort_order: "Position", cover_url: "Cover", image: "Photo", hero_image: "Hero image", logo_url: "Logo",
   opening_hours: "Opening hours", delivery_base_fee: "Delivery fee", delivery_per_km_fee: "Fee per km",
   delivery_radius_km: "Delivery radius (km)", tagline: "Tagline", address: "Address",
 };
@@ -250,6 +255,7 @@ function show(field: string, v: unknown): string {
   if (field === "status" && typeof v === "string") return STATUS[v] || v;
   if (MONEY.has(field) && !isNaN(Number(v))) return `$${Number(v).toFixed(2)}`;
   if (typeof v === "boolean") return v ? "Yes" : "No";
+  if ((field === "starts_at" || field === "ends_at") && typeof v === "string") return new Date(v).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
   if (field === "variants" && Array.isArray(v)) return v.map((g: any) => `${g.group}: ${(g.options || []).join(", ")}`).join(" · ") || "none";
   if (Array.isArray(v)) return v.join(", ") || "—";
   if (typeof v === "object") return JSON.stringify(v);

@@ -29,6 +29,36 @@ export interface ShopAccount {
   is_you: boolean;
 }
 
+/** A shop's curated, ordered product list. Only "manual" exists today; "smart" is reserved. */
+export interface ShopCollection {
+  id: number;
+  merchant_id: number;
+  type: "manual" | "smart";
+  title: string;
+  description: string | null;
+  cover_url: string | null;
+  sort_order: number;
+  is_active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+}
+
+/** A collection as customers get it: only visible ones, with their active products. */
+export interface PublicCollection extends ShopCollection {
+  product_count: number;
+  products: Product[];
+  merchant?: { id: number; name: string; logo_url?: string | null; icon_emoji?: string | null };
+}
+
+/** A collection in the dashboard: every one, with its state. */
+export interface AdminCollection extends ShopCollection {
+  product_ids: number[];
+  visible_product_count: number;
+  /** draft = not shown (switched off, or no active product yet); live = customers see it */
+  status: "draft" | "live" | "scheduled" | "ended";
+  draft_reason: "off" | "no_products" | null;
+}
+
 /** One entry in a shop's activity log. */
 export interface ActivityEntry {
   id: number;

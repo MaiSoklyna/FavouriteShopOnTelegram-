@@ -34,6 +34,7 @@ ACTION_GROUPS: dict[str, tuple[str, ...]] = {
               "order.driver_assigned", "order.driver_unassigned"),
     "driver": ("driver.added", "driver.updated", "driver.activated", "driver.deactivated"),
     "promotion": ("promotion.created", "promotion.updated", "promotion.disabled", "promotion.deleted"),
+    "collection": ("collection.created", "collection.updated", "collection.products_changed", "collection.deleted"),
     "coupon": ("coupon.created", "coupon.updated", "coupon.disabled", "coupon.deleted", "coupon.granted"),
     "shop": ("shop.profile_updated", "shop.settings_updated"),
     "payout": ("payout.account_updated", "payout.verification_changed"),

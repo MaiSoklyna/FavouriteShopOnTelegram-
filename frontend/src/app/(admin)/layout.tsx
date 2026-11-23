@@ -29,6 +29,7 @@ const MENU: MenuItem[] = [
   { href: "/categories", label: "Categories", icon: CategoryIcon },
   { href: "/featured-categories", label: "Home Categories", icon: HomeIcon, superOnly: true },
   { href: "/promotions", label: "Promotions", icon: PromoIcon },
+  { href: "/collections", label: "Collections", icon: CategoryIcon },
   { href: "/analytics", label: "Analytics", icon: ReportsIcon },
   { href: "/earnings", label: "Earnings", icon: PayoutIcon, shopOwnerOnly: true },
   { href: "/settlements", label: "Settlements", icon: PayoutIcon, superOnly: true },

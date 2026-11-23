@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { CategoryIcon, EmptyState, Pill, ProductCard, RatingPill, ShopCover, ShopReviews, Skeleton } from "@/components/shop";
+import { CategoryIcon, CollectionRows, EmptyState, Pill, ProductCard, RatingPill, ShopCover, ShopReviews, Skeleton } from "@/components/shop";
 import { useCart } from "@/providers/CartProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { useFavorites } from "@/lib/useFavorites";
@@ -226,6 +226,9 @@ export default function MerchantDetailPage() {
       </section>
 
       <ShopOffers merchantId={merchant.id} />
+
+      {/* The shop's own curated lists (Collections) */}
+      <CollectionRows merchantId={merchant.id} onAddToCart={addToCart} />
 
       {/* This shop's products */}
       <div ref={productsRef} className="sticky top-0 z-10 mt-5 bg-surface/95 pb-2 pt-3 backdrop-blur">

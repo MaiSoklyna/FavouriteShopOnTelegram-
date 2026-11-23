@@ -26,6 +26,7 @@ export { PromotionCard, PromotionCardSkeleton } from "./PromotionCard";
 export { ShopCategoryTiles, CategoryChips } from "./ShopCategoryTiles";
 export { Stars, StarInput } from "./Stars";
 export { ShopReviews } from "./ShopReviews";
+export { CollectionRows } from "./CollectionRows";
 export { ShopReviewCard } from "./ShopReviewCard";
 export { CouponCard } from "./CouponCard";
 export { CouponSheet } from "./CouponSheet";
