@@ -11,7 +11,7 @@ from app.core.constants import LoyaltyTier
 
 class LoyaltySettingsUpdate(BaseModel):
     is_enabled: bool = False
-    points_per_dollar: float = Field(10.0, ge=0)
+    points_per_dollar: float = Field(1.0, ge=0)
     points_value_cents: int = Field(1, ge=1)
     min_redeem_points: int = Field(100, ge=1)
     bronze_threshold: int = Field(0, ge=0)

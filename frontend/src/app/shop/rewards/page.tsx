@@ -115,7 +115,7 @@ export default function RewardsPage() {
   // Thresholds & multipliers from settings (with fallbacks if /loyalty/settings is unavailable)
   const silverAt = settings?.silver_threshold ?? 500;
   const goldAt = settings?.gold_threshold ?? 2000;
-  const pointsPerDollar = settings?.points_per_dollar ?? 10;
+  const pointsPerDollar = settings?.points_per_dollar ?? 1;
   const pointValueCents = settings?.points_value_cents ?? 1;
   const minRedeem = settings?.min_redeem_points ?? 100;
   const silverMult = settings?.silver_multiplier ?? 1.5;
