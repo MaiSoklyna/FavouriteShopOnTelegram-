@@ -26,6 +26,7 @@ from app.core.constants import (
     SHOP_LOGIN_SESSION_PREFIX,
     USER_TOKEN_EXPIRY,
     Role,
+    shop_role,
 )
 from app.core.dependencies import get_current_user, require_any_admin, require_role
 from app.core.exceptions import (
@@ -236,6 +237,7 @@ async def _login_super_admin(db, body: AdminLoginRequest) -> AdminLoginResponse:
         sub=str(admin["id"]),
         role=Role.SUPER_ADMIN,
         email=admin["email"],
+        name=admin.get("full_name"),
     )
 
     return AdminLoginResponse(
@@ -279,6 +281,8 @@ async def _login_merchant_admin(db, body: AdminLoginRequest) -> AdminLoginRespon
         role=Role.MERCHANT_ADMIN,
         merchant_id=admin["merchant_id"],
         email=admin["email"],
+        name=admin.get("full_name"),
+        merchant_role=shop_role(admin.get("role")),
     )
 
     return AdminLoginResponse(
@@ -291,6 +295,7 @@ async def _login_merchant_admin(db, body: AdminLoginRequest) -> AdminLoginRespon
             role="merchant",
             merchant_id=admin["merchant_id"],
             merchant_name=merchant_name,
+            merchant_role=shop_role(admin.get("role")),
         ),
     )
 
@@ -401,6 +406,7 @@ async def _resolve_admin_user(db, session_row: dict) -> Optional[dict]:
             "role": "merchant",
             "merchant_id": admin["merchant_id"],
             "merchant_name": merchant_name,
+            "merchant_role": shop_role(admin.get("role")),
         }
 
     if minted_role == Role.SUPER_ADMIN:
@@ -439,6 +445,7 @@ async def _resolve_admin_user(db, session_row: dict) -> Optional[dict]:
             "role": "merchant",
             "merchant_id": admin["merchant_id"],
             "merchant_name": merchant_name,
+            "merchant_role": shop_role(admin.get("role")),
         }
     return None
 
@@ -457,6 +464,8 @@ async def refresh_token(user: TokenClaims = Depends(get_current_user)):
         email=user.email,
         merchant_id=user.merchant_id,
         telegram_id=user.telegram_id,
+        name=user.name,
+        merchant_role=user.merchant_role,
     )
     expiry = ADMIN_TOKEN_EXPIRY if user.is_admin else USER_TOKEN_EXPIRY
     return TokenResponse(access_token=token, expires_in=expiry)
@@ -495,6 +504,7 @@ async def get_current_profile(user: TokenClaims = Depends(get_current_user)):
                 "id": row["id"], "email": row["email"], "name": row["full_name"],
                 "role": "merchant", "merchant_id": row["merchant_id"],
                 "merchant_name": merchant_name,
+                "merchant_role": shop_role(row.get("role")),
             }
 
         # Regular user
@@ -561,7 +571,7 @@ async def create_merchant_admin(
             "password_hash": hash_password(body.password),
             "full_name": body.full_name,
             "merchant_id": body.merchant_id,
-            "role": body.role,
+            "role": shop_role(body.role),
         }
         if body.telegram_id:
             row["telegram_id"] = body.telegram_id

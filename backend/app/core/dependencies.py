@@ -20,10 +20,11 @@ Usage in routes:
 from __future__ import annotations
 
 import logging
+import time
 
 from fastapi import Depends, Request
 
-from app.core.constants import Role
+from app.core.constants import Role, ShopRole, shop_role
 from app.core.exceptions import AuthenticationError, ForbiddenError
 from app.core.security import (
     InvalidTokenError,
@@ -76,11 +77,52 @@ async def get_current_user(request: Request) -> TokenClaims:
     """
     token = _extract_token(request)
     try:
-        return verify_jwt(token)
+        claims = verify_jwt(token)
     except TokenExpiredError:
         raise AuthenticationError("Token expired")
     except InvalidTokenError as exc:
         raise AuthenticationError(exc.reason)
+    if claims.is_shop_staff and not await staff_account_active(claims):
+        # Deactivated or removed staff lose access at once, not when their token runs out
+        raise AuthenticationError("This staff account is no longer active. Ask the shop owner.")
+    return claims
+
+
+# ── Staff accounts: checked live ────────────────────────────────
+# A staff token is only as good as the account behind it. Owners are not re-checked (their role
+# never changes and suspension is handled at login), which also keeps older tokens working.
+
+STAFF_CHECK_TTL = 30  # seconds a positive or negative answer is reused
+_staff_checks: dict[str, tuple[float, bool]] = {}
+
+
+async def staff_account_active(claims: TokenClaims) -> bool:
+    key = f"{claims.sub}:{claims.merchant_id}"
+    hit = _staff_checks.get(key)
+    now = time.monotonic()
+    if hit and now - hit[0] < STAFF_CHECK_TTL:
+        return hit[1]
+    from app.db.client import SupabaseClient  # late import: the db layer imports core
+    try:
+        async with SupabaseClient.service_role() as db:
+            row = await db.from_("merchant_admins").eq("id", int(claims.sub)).select_one(
+                "id,merchant_id,role,is_active")
+    except Exception:
+        logger.exception("Could not check staff account %s", claims.sub)
+        return False
+    ok = bool(
+        row and row.get("is_active")
+        and row.get("merchant_id") == claims.merchant_id
+        and shop_role(row.get("role")) == ShopRole.STAFF
+    )
+    _staff_checks[key] = (now, ok)
+    return ok
+
+
+def forget_staff_check(admin_id: int | str) -> None:
+    """Drop cached answers for a staff account (after the owner changes it)."""
+    for key in [k for k in _staff_checks if k.split(":", 1)[0] == str(admin_id)]:
+        _staff_checks.pop(key, None)
 
 
 # ── Optional user (for public-with-optional-auth routes) ────────
@@ -142,6 +184,36 @@ def require_any_admin():
 def require_super_admin():
     """Allow super_admin only."""
     return require_role(Role.SUPER_ADMIN)
+
+
+def require_shop_owner():
+    """Super admin, or a shop's owner. Shop staff are refused.
+
+    For staff management, the activity log, payout account, earnings and settlement views,
+    loyalty participation, AI settings and the shop's profile and settings.
+    """
+
+    async def _guard(current_user: TokenClaims = Depends(get_current_user)) -> TokenClaims:
+        if current_user.role not in (Role.MERCHANT_ADMIN, Role.SUPER_ADMIN):
+            raise ForbiddenError("This action requires one of: merchant_admin, super_admin")
+        if current_user.is_shop_staff:
+            raise ForbiddenError("Only the shop owner can do this")
+        return current_user
+
+    return Depends(_guard)
+
+
+def require_shop_owner_only():
+    """A shop's owner (not super admin, not staff): for routes that act on "my shop"."""
+
+    async def _guard(current_user: TokenClaims = Depends(get_current_user)) -> TokenClaims:
+        if current_user.role != Role.MERCHANT_ADMIN:
+            raise ForbiddenError("This action requires one of: merchant_admin")
+        if current_user.is_shop_staff:
+            raise ForbiddenError("Only the shop owner can do this")
+        return current_user
+
+    return Depends(_guard)
 
 
 def require_authenticated():

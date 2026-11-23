@@ -71,6 +71,7 @@ class AdminUser(BaseModel):
     role: str
     merchant_id: int | None = None
     merchant_name: str | None = None
+    merchant_role: str | None = None  # shop accounts: "owner" or "staff"
 
 
 class AdminLoginResponse(BaseModel):
@@ -130,7 +131,7 @@ class CreateMerchantAdminRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=128)
     full_name: str = Field(..., min_length=1, max_length=200)
     merchant_id: int
-    role: str = "admin"
+    role: str = Field("owner", pattern=r"^(owner|staff|admin)$")  # "admin" = legacy name for owner
     telegram_id: int | None = None
 
 

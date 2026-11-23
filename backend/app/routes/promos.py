@@ -12,6 +12,7 @@ from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.models.order import PromoValidateRequest
+from app.services import audit
 
 router = APIRouter(prefix="/promos", tags=["Promos"])
 
@@ -136,11 +137,17 @@ async def create_promo(body: dict, user: TokenClaims = require_any_admin()):
             raise BadRequestError("merchant_id is required")
         data["merchant_id"] = target_merchant_id
         rows = await db.from_("promo_codes").insert(data)
-    return rows[0] if rows else data
+        created = rows[0] if rows else data
+        await audit.record(
+            db, user, merchant_id=target_merchant_id, action="coupon.created", target_type="coupon",
+            target_id=created.get("id"), target_label=created.get("code"),
+            new={k: data[k] for k in _PROMO_WRITABLE_FIELDS if k in data},
+        )
+    return created
 
 
 async def _load_own_promo(db, promo_id: int, user: TokenClaims) -> dict:
-    promo = await db.from_("promo_codes").eq("id", promo_id).select_one("id,merchant_id")
+    promo = await db.from_("promo_codes").eq("id", promo_id).select_one()
     if not promo:
         raise NotFoundError("Promo code", promo_id)
     if user.role == Role.MERCHANT_ADMIN and promo.get("merchant_id") != user.merchant_id:
@@ -152,10 +159,18 @@ async def _load_own_promo(db, promo_id: int, user: TokenClaims) -> dict:
 async def update_promo(promo_id: int, body: dict, user: TokenClaims = require_any_admin()):
     """Update a promo code (admin only). Merchant admins can only touch their own shop's codes."""
     async with SupabaseClient.service_role() as db:
-        await _load_own_promo(db, promo_id, user)
+        promo = await _load_own_promo(db, promo_id, user)
         data = {k: body[k] for k in body if k in _PROMO_WRITABLE_FIELDS}
         if data:
             await db.from_("promo_codes").eq("id", promo_id).update(data)
+            old, new = audit.diff(promo, data)
+            if new:
+                disabled = new.get("is_active") is False and len(new) == 1
+                await audit.record(
+                    db, user, merchant_id=promo.get("merchant_id"),
+                    action="coupon.disabled" if disabled else "coupon.updated", target_type="coupon",
+                    target_id=promo_id, target_label=data.get("code") or promo.get("code"), old=old, new=new,
+                )
     return {"success": True}
 
 
@@ -163,6 +178,11 @@ async def update_promo(promo_id: int, body: dict, user: TokenClaims = require_an
 async def delete_promo(promo_id: int, user: TokenClaims = require_any_admin()):
     """Delete a promo code (admin only). Merchant admins can only touch their own shop's codes."""
     async with SupabaseClient.service_role() as db:
-        await _load_own_promo(db, promo_id, user)
+        promo = await _load_own_promo(db, promo_id, user)
         await db.from_("promo_codes").eq("id", promo_id).delete()
+        await audit.record(
+            db, user, merchant_id=promo.get("merchant_id"), action="coupon.deleted", target_type="coupon",
+            target_id=promo_id, target_label=promo.get("code"),
+            old={k: promo.get(k) for k in _PROMO_WRITABLE_FIELDS},
+        )
     return {"success": True}

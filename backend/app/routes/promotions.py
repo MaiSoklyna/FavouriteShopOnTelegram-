@@ -24,7 +24,7 @@ from app.core.dependencies import require_any_admin
 from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import StorageClient, SupabaseClient
-from app.services import promo_schedule
+from app.services import audit, promo_schedule
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/promotions", tags=["Promotions"])
@@ -421,9 +421,16 @@ async def admin_create(body: PromotionIn, user: TokenClaims = require_any_admin(
         merchant_id = _own_shop(user, body.merchant_id, body.scope)
         product_ids = await _check_targets(db, body, merchant_id)
         code_id = await _sync_code(db, body, merchant_id, None, None)
-        p = (await db.from_("promotions").insert(_promotion_row(body, merchant_id, code_id, funded_by_for(body, merchant_id, user))))[0]
+        row = _promotion_row(body, merchant_id, code_id, funded_by_for(body, merchant_id, user))
+        p = (await db.from_("promotions").insert(row))[0]
         if product_ids:
             await db.from_("promotion_products").insert([{"promotion_id": p["id"], "product_id": i} for i in product_ids])
+        await audit.record(
+            db, user, merchant_id=merchant_id, action="promotion.created", target_type="promotion",
+            target_id=p.get("id"), target_label=row.get("title"),
+            new={k: row.get(k) for k in PROMOTION_LOG_FIELDS if row.get(k) not in (None, [], "")}
+                | {k: v for k, v in _offer_in(body).items() if v is not None},
+        )
         return p
 
 
@@ -435,6 +442,7 @@ async def admin_update(promotion_id: int, body: PromotionIn, user: TokenClaims =
         if user.role == Role.MERCHANT_ADMIN and body.scope == "platform":
             raise ForbiddenError("Only a super admin can create platform-wide promotions")
         product_ids = await _check_targets(db, body, merchant_id)
+        old_offer = await _offer_of(db, current.get("promo_code_id"))
         code_id = await _sync_code(db, body, merchant_id, promotion_id, current.get("promo_code_id") if merchant_id == current.get("merchant_id") else None)
         # A merchant admin's edit keeps whatever the super admin decided about funding
         funded_by = funded_by_for(body, merchant_id, user) if user.role == Role.SUPER_ADMIN else (current.get("funded_by") or "shop")
@@ -443,6 +451,16 @@ async def admin_update(promotion_id: int, body: PromotionIn, user: TokenClaims =
         await db.from_("promotion_products").eq("promotion_id", promotion_id).delete()
         if product_ids:
             await db.from_("promotion_products").insert([{"promotion_id": promotion_id, "product_id": i} for i in product_ids])
+        old, new = audit.diff(current, row, PROMOTION_LOG_FIELDS)
+        o2, n2 = audit.diff(old_offer, _offer_in(body))  # the discount itself lives on the code
+        old, new = old | o2, new | n2
+        if new:
+            disabled = new.get("is_active") is False and len(new) == 1
+            await audit.record(
+                db, user, merchant_id=merchant_id, action="promotion.disabled" if disabled else "promotion.updated",
+                target_type="promotion", target_id=promotion_id, target_label=row.get("title") or current.get("title"),
+                old=old, new=new,
+            )
         return p
 
 
@@ -454,7 +472,39 @@ async def admin_delete(promotion_id: int, user: TokenClaims = require_any_admin(
         if p.get("promo_code_id"):
             await db.from_("promo_codes").eq("id", p["promo_code_id"]).update({"is_active": False})
         await db.from_("promotions").eq("id", promotion_id).delete()
+        await audit.record(
+            db, user, merchant_id=p.get("merchant_id"), action="promotion.deleted", target_type="promotion",
+            target_id=promotion_id, target_label=p.get("title"),
+            old={k: p.get(k) for k in PROMOTION_LOG_FIELDS if p.get(k) not in (None, [], "")},
+        )
         return {"deleted": promotion_id}
+
+
+# What the activity log shows about a promotion
+PROMOTION_LOG_FIELDS = (
+    "title", "subtitle", "scope", "category_id", "starts_at", "ends_at", "is_active", "display_locations",
+    "schedule_type", "weekdays", "month_days", "yearly_ranges", "auto_apply", "funded_by",
+)
+
+
+def _offer_in(body: PromotionIn) -> dict:
+    return {
+        "code": body.code.strip().upper() if body.code else None,
+        "discount_type": body.discount_type, "discount_value": body.discount_value,
+        "min_order": body.min_order if body.code else None, "max_uses": body.max_uses,
+    }
+
+
+async def _offer_of(db, code_id: int | None) -> dict:
+    """The promotion's current offer, in the same shape as _offer_in. Never raises."""
+    if not code_id:
+        return {k: None for k in ("code", "discount_type", "discount_value", "min_order", "max_uses")}
+    try:
+        c = await db.from_("promo_codes").eq("id", code_id).select_one("code,type,value,min_order,max_uses") or {}
+    except Exception:
+        c = {}
+    return {"code": c.get("code"), "discount_type": c.get("type"), "discount_value": c.get("value"),
+            "min_order": c.get("min_order"), "max_uses": c.get("max_uses")}
 
 
 @router.post("/admin/{promotion_id}/image")

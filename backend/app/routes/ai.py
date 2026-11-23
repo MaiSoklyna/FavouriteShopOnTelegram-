@@ -11,7 +11,7 @@ import logging
 from fastapi import APIRouter
 
 from app.core.constants import Role
-from app.core.dependencies import require_any_admin, require_role
+from app.core.dependencies import require_any_admin, require_role, require_shop_owner
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
@@ -197,7 +197,7 @@ async def get_ai_settings_admin(user: TokenClaims = require_any_admin()):
 
 
 @router.put("/admin/settings")
-async def update_ai_settings(body: dict, user: TokenClaims = require_any_admin()):
+async def update_ai_settings(body: dict, user: TokenClaims = require_shop_owner()):
     """Update AI settings (admin)."""
     async with SupabaseClient.service_role() as db:
         data = {k: body[k] for k in (

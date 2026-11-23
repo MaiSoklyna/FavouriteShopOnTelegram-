@@ -17,6 +17,17 @@ class Role(StrEnum):
 
 # Admin roles are a convenience set for permission checks
 ADMIN_ROLES = frozenset({Role.MERCHANT_ADMIN, Role.SUPER_ADMIN})
+
+
+# Shop accounts (merchant_admins.role). "admin" is the legacy name for an owner.
+class ShopRole(StrEnum):
+    OWNER = "owner"
+    STAFF = "staff"
+
+
+def shop_role(value: str | None) -> str:
+    """Normalise a merchant_admins.role value: anything that is not staff is the owner."""
+    return ShopRole.STAFF.value if (value or "").strip().lower() == "staff" else ShopRole.OWNER.value
 ALL_ROLES = frozenset({Role.USER, Role.MERCHANT_ADMIN, Role.SUPER_ADMIN})
 
 

@@ -9,7 +9,20 @@ import { HiOutlineMenu, HiOutlineX, HiOutlineChatAlt2 } from "react-icons/hi";
 import { ApproveIcon, BellIcon, CategoryIcon, CustomersIcon, DashboardIcon, HomeIcon, LogoutIcon, OrdersIcon, PayoutIcon, ProductsIcon, PromoIcon, ReportsIcon, RewardsIcon, SettingsIcon, StoreIcon, SupportIcon } from "@/components/brand/Icons";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 
-const MENU = [
+type MenuItem = {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  superOnly?: boolean;      // platform admin only
+  merchantOnly?: boolean;   // any shop account
+  shopOwnerOnly?: boolean;  // a shop's owner, not staff, not the platform
+  ownerOnly?: boolean;      // a shop's owner or the platform, not staff
+};
+
+// Pages a shop's staff cannot open (the API refuses them too)
+const OWNER_PATHS = ["/staff", "/activity", "/earnings"];
+
+const MENU: MenuItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: DashboardIcon },
   { href: "/products", label: "Products", icon: ProductsIcon },
   { href: "/orders", label: "Orders", icon: OrdersIcon },
@@ -17,7 +30,7 @@ const MENU = [
   { href: "/featured-categories", label: "Home Categories", icon: HomeIcon, superOnly: true },
   { href: "/promotions", label: "Promotions", icon: PromoIcon },
   { href: "/analytics", label: "Analytics", icon: ReportsIcon },
-  { href: "/earnings", label: "Earnings", icon: PayoutIcon, merchantOnly: true },
+  { href: "/earnings", label: "Earnings", icon: PayoutIcon, shopOwnerOnly: true },
   { href: "/settlements", label: "Settlements", icon: PayoutIcon, superOnly: true },
   { href: "/reviews", label: "Reviews", icon: HiOutlineChatAlt2 },
   { href: "/drivers", label: "Drivers", icon: CustomersIcon },
@@ -28,13 +41,15 @@ const MENU = [
   { href: "/merchants", label: "Merchants", icon: StoreIcon, superOnly: true },
   { href: "/seller-applications", label: "Seller Applications", icon: ApproveIcon, superOnly: true },
   { href: "/users", label: "Users", icon: CustomersIcon, superOnly: true },
+  { href: "/staff", label: "Staff", icon: CustomersIcon, shopOwnerOnly: true },
+  { href: "/activity", label: "Activity Log", icon: ReportsIcon, ownerOnly: true },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, loading, isAdmin, isSuperAdmin, logout } = useAuth();
+  const { user, loading, isAdmin, isSuperAdmin, isShopStaff, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [inboxUnread, setInboxUnread] = useState(0);
@@ -64,10 +79,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const adminUser = user as AdminUser;
   const visibleMenu = MENU.filter((m) =>
-    "superOnly" in m && m.superOnly ? isSuperAdmin
-      : "merchantOnly" in m && m.merchantOnly ? !isSuperAdmin
+    m.superOnly ? isSuperAdmin
+      : m.shopOwnerOnly ? !isSuperAdmin && !isShopStaff
+      : m.merchantOnly ? !isSuperAdmin
+      : m.ownerOnly ? !isShopStaff
       : true,
   );
+  const ownerPage = OWNER_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 
   function handleLogout() {
     logout();
@@ -179,7 +197,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 color: "#D6BA80", fontSize: 11,
                 fontFamily: "'Kantumruy Pro', sans-serif",
               }}>
-                {adminUser.role === "super_admin" ? "Super Admin" : adminUser.merchant_name || "Admin"}
+                {adminUser.role === "super_admin"
+                  ? "Super Admin"
+                  : `${adminUser.merchant_name || "Shop"} · ${isShopStaff ? "Staff" : "Owner"}`}
               </div>
             </div>
           )}
@@ -276,7 +296,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             Byme24
           </span>
         </div>
-        {children}
+        {isShopStaff && ownerPage ? (
+          <div className="admin-card" style={{ maxWidth: 520, margin: "40px auto", textAlign: "center", padding: 32 }} data-testid="owner-only">
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>Only the shop owner can open this page</h1>
+            <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+              Staff accounts manage products, orders, drivers and promotions. Ask the owner if you need something changed here.
+            </p>
+          </div>
+        ) : children}
       </main>
 
       <style>{`

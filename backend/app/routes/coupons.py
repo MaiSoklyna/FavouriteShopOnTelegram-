@@ -14,7 +14,7 @@ from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.models.coupon import GrantRequest
 from app.routes.orders import _discount, _eligible_base
-from app.services import coupons, notify, promo_schedule
+from app.services import audit, coupons, notify, promo_schedule
 
 router = APIRouter(prefix="/coupons", tags=["Coupons"])
 
@@ -249,4 +249,10 @@ async def grant_coupon(code_id: int, body: GrantRequest, user: TokenClaims = req
         for p in new:
             await notify.notify_user(db, p["id"], "promo", "You got a coupon", f"{title}: {coupons.discount_text(code)}. Find it in My Coupons.",
                                      link="/shop/coupons", ref_id=code_id, dedupe_key=f"coupon:{code_id}:{p['id']}")
+        if new:
+            await audit.record(
+                db, user, merchant_id=code.get("merchant_id"), action="coupon.granted", target_type="coupon",
+                target_id=code_id, target_label=code.get("code"),
+                new={"customers": len(new), "user_ids": [p["id"] for p in new]},
+            )
     return {"success": True, "granted": len(new), "already_had": len(people) - len(new), "not_found": not_found}

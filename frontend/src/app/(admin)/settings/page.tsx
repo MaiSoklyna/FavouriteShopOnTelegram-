@@ -18,7 +18,8 @@ export default function SettingsPage() {
   const [rewards, setRewards] = useState<boolean | null>(null);
   const [savingRewards, setSavingRewards] = useState(false);
   useEffect(() => {
-    if (admin?.role !== "merchant") return;
+    // Owners only: staff cannot change the shop's rewards participation
+    if (admin?.role !== "merchant" || admin?.merchant_role === "staff") return;
     api.get<{ enabled: boolean }>("/loyalty/shop").then((r) => setRewards(r.enabled)).catch(() => setRewards(null));
   }, [admin?.role]);
 

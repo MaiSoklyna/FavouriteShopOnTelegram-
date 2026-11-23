@@ -15,11 +15,12 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, File, UploadFile
 
 from app.core.constants import Role
-from app.core.dependencies import get_optional_user, require_any_admin, require_role
+from app.core.dependencies import get_optional_user, require_any_admin, require_role, require_shop_owner
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError, RateLimitError
 from app.core.security import TokenClaims
 from app.db.client import StorageClient, SupabaseClient
 from app.models.merchant import MerchantCreate, MerchantUpdate
+from app.services import audit
 from app.services.delivery import SHOP_TZ, is_open, quote_delivery, valid_point
 
 router = APIRouter(prefix="/merchants", tags=["Merchants"])
@@ -258,13 +259,11 @@ async def create_merchant(body: MerchantCreate, user: TokenClaims = require_role
 async def update_merchant(
     merchant_id: int,
     body: MerchantUpdate,
-    user: TokenClaims = require_any_admin(),
+    user: TokenClaims = require_shop_owner(),
 ):
-    """Update a merchant."""
+    """Update a merchant (super admin, or the shop's owner: staff cannot change shop settings)."""
     async with SupabaseClient.service_role() as db:
-        existing = await db.from_("merchants").eq("id", merchant_id).select_one(
-            "id,shop_category_id,shop_subcategory_id"
-        )
+        existing = await db.from_("merchants").eq("id", merchant_id).select_one()
         if not existing:
             raise NotFoundError("Merchant", merchant_id)
 
@@ -297,7 +296,34 @@ async def update_merchant(
             data.pop("is_featured", None)  # super-admin-only flag
         if data:
             await db.from_("merchants").eq("id", merchant_id).update(data)
+            await _log_shop_change(db, user, existing, data)
     return {"success": True}
+
+
+SECRET_SHOP_FIELDS = {"telegram_token"}
+
+# Which shop fields count as the public profile; everything else is a setting
+SHOP_PROFILE_FIELDS = (
+    "name", "owner_name", "email", "phone", "tagline", "description", "icon_emoji",
+    "fb_page", "instagram", "logo_url", "address",
+)
+
+
+async def _log_shop_change(db, user: TokenClaims, before: dict, data: dict) -> None:
+    old, new = audit.diff(before, data)
+    if not new:
+        return
+    for secret in SECRET_SHOP_FIELDS & set(new):  # record that it changed, never the value
+        old[secret], new[secret] = "(hidden)", "(changed)"
+    label = (data.get("name") or before.get("name") or "").strip()
+    profile = {k for k in new if k in SHOP_PROFILE_FIELDS}
+    for action, keys in (("shop.profile_updated", profile), ("shop.settings_updated", set(new) - profile)):
+        if keys:
+            await audit.record(
+                db, user, merchant_id=before["id"], action=action, target_type="shop",
+                target_id=before["id"], target_label=label,
+                old={k: old[k] for k in keys}, new={k: new[k] for k in keys},
+            )
 
 
 @router.delete("/{merchant_id}")
@@ -317,7 +343,7 @@ async def delete_merchant(merchant_id: int, user: TokenClaims = require_role(Rol
 async def upload_merchant_logo(
     merchant_id: int,
     file: UploadFile = File(...),
-    user: TokenClaims = require_any_admin(),
+    user: TokenClaims = require_shop_owner(),
 ):
     """Upload a merchant logo.
 
@@ -341,7 +367,7 @@ async def upload_merchant_logo(
         merchant = await (
             db.from_("merchants")
             .eq("id", merchant_id)
-            .select_one("id,logo_update_history")
+            .select_one("id,name,logo_url,logo_update_history")
         )
         if not merchant:
             raise NotFoundError("Merchant", merchant_id)
@@ -385,6 +411,11 @@ async def upload_merchant_logo(
             "logo_url": public_url,
             "logo_update_history": new_history,
         })
+        await audit.record(
+            db, user, merchant_id=merchant_id, action="shop.profile_updated", target_type="shop",
+            target_id=merchant_id, target_label=merchant.get("name"),
+            old={"logo_url": merchant.get("logo_url")}, new={"logo_url": public_url},
+        )
 
     return {"logo_url": public_url}
 
@@ -435,7 +466,7 @@ async def list_all_hero_images(
 async def upload_hero_image(
     merchant_id: int,
     file: UploadFile = File(...),
-    user: TokenClaims = require_any_admin(),
+    user: TokenClaims = require_shop_owner(),
 ):
     """Upload a new hero image. Caps at MAX_HERO_IMAGES_ACTIVE active images."""
     _check_hero_access(user, merchant_id)
@@ -495,6 +526,10 @@ async def upload_hero_image(
             "sort_order": next_order,
             "is_active": True,
         })
+        await audit.record(
+            db, user, merchant_id=merchant_id, action="shop.settings_updated", target_type="shop",
+            target_id=merchant_id, target_label="Hero image added", new={"hero_image": public_url},
+        )
 
     return rows[0] if rows else {"url": public_url}
 
@@ -504,7 +539,7 @@ async def update_hero_image(
     merchant_id: int,
     image_id: int,
     body: dict,
-    user: TokenClaims = require_any_admin(),
+    user: TokenClaims = require_shop_owner(),
 ):
     """Update sort_order or is_active for a hero image."""
     _check_hero_access(user, merchant_id)
@@ -523,7 +558,7 @@ async def update_hero_image(
             db.from_("merchant_hero_images")
             .eq("id", image_id)
             .eq("merchant_id", merchant_id)
-            .select_one("id")
+            .select_one("id,url,sort_order,is_active")
         )
         if not existing:
             raise NotFoundError("Hero image", image_id)
@@ -543,6 +578,13 @@ async def update_hero_image(
                 )
 
         await db.from_("merchant_hero_images").eq("id", image_id).update(data)
+        old, new = audit.diff(existing, data)
+        if new:
+            await audit.record(
+                db, user, merchant_id=merchant_id, action="shop.settings_updated", target_type="shop",
+                target_id=merchant_id, target_label="Hero image changed",
+                old={"hero_image": existing.get("url"), **old}, new={"hero_image": existing.get("url"), **new},
+            )
     return {"success": True}
 
 
@@ -550,7 +592,7 @@ async def update_hero_image(
 async def delete_hero_image(
     merchant_id: int,
     image_id: int,
-    user: TokenClaims = require_any_admin(),
+    user: TokenClaims = require_shop_owner(),
 ):
     """Permanently delete a hero image row (storage object stays for now)."""
     _check_hero_access(user, merchant_id)
@@ -559,9 +601,13 @@ async def delete_hero_image(
             db.from_("merchant_hero_images")
             .eq("id", image_id)
             .eq("merchant_id", merchant_id)
-            .select_one("id")
+            .select_one("id,url")
         )
         if not existing:
             raise NotFoundError("Hero image", image_id)
         await db.from_("merchant_hero_images").eq("id", image_id).delete()
+        await audit.record(
+            db, user, merchant_id=merchant_id, action="shop.settings_updated", target_type="shop",
+            target_id=merchant_id, target_label="Hero image removed", old={"hero_image": existing.get("url")},
+        )
     return {"success": True}

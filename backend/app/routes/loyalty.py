@@ -12,7 +12,7 @@ import httpx
 from fastapi import APIRouter
 
 from app.core.constants import Role
-from app.core.dependencies import require_any_admin, require_role, require_super_admin
+from app.core.dependencies import require_any_admin, require_role, require_shop_owner_only, require_super_admin
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
@@ -266,14 +266,14 @@ async def loyalty_sustainability(user: TokenClaims = require_super_admin()):
 
 
 @router.get("/shop")
-async def my_shop_participation(user: TokenClaims = require_role(Role.MERCHANT_ADMIN)):
+async def my_shop_participation(user: TokenClaims = require_shop_owner_only()):
     """Does the signed-in shop take part in the rewards program?"""
     async with SupabaseClient.service_role() as db:
         return {"enabled": await loyalty.shop_takes_part(db, user.merchant_id)}
 
 
 @router.put("/shop")
-async def set_my_shop_participation(body: ShopParticipationRequest, user: TokenClaims = require_role(Role.MERCHANT_ADMIN)):
+async def set_my_shop_participation(body: ShopParticipationRequest, user: TokenClaims = require_shop_owner_only()):
     """A shop switches rewards on or off for its own orders (points already earned are kept)."""
     async with SupabaseClient.service_role() as db:
         try:

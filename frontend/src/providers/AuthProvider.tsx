@@ -14,6 +14,8 @@ interface AuthContextValue {
   loginPending: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  /** A shop's staff member (not the owner): no staff, activity, earnings or shop settings. */
+  isShopStaff: boolean;
   isShopUser: boolean;
   adminLogin: (email: string, password: string) => Promise<void>;
   startTgSession: () => Promise<string>;
@@ -44,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Resolve user type helpers
   const isAdmin = !!user && "email" in user;
   const isSuperAdmin = isAdmin && (user as AdminUser).role === "super_admin";
+  const isShopStaff = isAdmin && (user as AdminUser).role === "merchant" && (user as AdminUser).merchant_role === "staff";
   const isShopUser = !!user && "telegram_id" in user;
 
   // ── Init: restore the session for this area (on mount and on area switch) ──
@@ -201,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
-        user, loading, loginPending, isAdmin, isSuperAdmin, isShopUser,
+        user, loading, loginPending, isAdmin, isSuperAdmin, isShopStaff, isShopUser,
         adminLogin, startTgSession, pollSession, stopPolling, logout,
       }}
     >

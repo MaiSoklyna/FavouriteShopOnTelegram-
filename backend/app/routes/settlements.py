@@ -15,7 +15,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Query
 
 from app.core.constants import Role
-from app.core.dependencies import require_role, require_super_admin
+from app.core.dependencies import require_role, require_shop_owner_only, require_super_admin
 from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
@@ -32,7 +32,7 @@ from app.models.settlement import (
     PayoutStatus,
     VerificationStatus,
 )
-from app.services import notify, settlement
+from app.services import audit, notify, settlement
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settlements", tags=["Settlements"])
@@ -49,7 +49,7 @@ _ACCOUNT_COLUMNS = (
 
 
 @router.get("/merchant/balance")
-async def merchant_balance(user: TokenClaims = require_role(Role.MERCHANT_ADMIN)):
+async def merchant_balance(user: TokenClaims = require_shop_owner_only()):
     """What the platform owes this shop, per currency."""
     merchant_id = _own_merchant_id(user)
     async with SupabaseClient.service_role() as db:
@@ -62,7 +62,7 @@ async def merchant_earnings(
     status: EarningStatus | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
-    user: TokenClaims = require_role(Role.MERCHANT_ADMIN),
+    user: TokenClaims = require_shop_owner_only(),
 ):
     merchant_id = _own_merchant_id(user)
     async with SupabaseClient.service_role() as db:
@@ -73,7 +73,7 @@ async def merchant_earnings(
 async def merchant_payouts(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
-    user: TokenClaims = require_role(Role.MERCHANT_ADMIN),
+    user: TokenClaims = require_shop_owner_only(),
 ):
     merchant_id = _own_merchant_id(user)
     async with SupabaseClient.service_role() as db:
@@ -86,7 +86,7 @@ async def merchant_payouts(
 
 
 @router.get("/merchant/payout-account")
-async def get_payout_account(user: TokenClaims = require_role(Role.MERCHANT_ADMIN)):
+async def get_payout_account(user: TokenClaims = require_shop_owner_only()):
     merchant_id = _own_merchant_id(user)
     async with SupabaseClient.service_role() as db:
         merchant = await _get_merchant(db, merchant_id)
@@ -96,7 +96,7 @@ async def get_payout_account(user: TokenClaims = require_role(Role.MERCHANT_ADMI
 @router.put("/merchant/payout-account")
 async def update_payout_account(
     body: PayoutAccountUpdate,
-    user: TokenClaims = require_role(Role.MERCHANT_ADMIN),
+    user: TokenClaims = require_shop_owner_only(),
 ):
     """Set the ABA account to be paid into.
 
@@ -135,6 +135,17 @@ async def update_payout_account(
                 "aba_account_name": changes["aba_account_name"],
                 "payout_verification_status": changes["payout_verification_status"],
             },
+        )
+        # The owner's activity log shows the change with the account masked
+        await audit.record(
+            db, user, merchant_id=merchant_id, action="payout.account_updated", target_type="payout",
+            target_id=merchant_id, target_label=changes["aba_account_name"],
+            old={"aba_account": settlement.mask_account(merchant.get("aba_account")),
+                 "aba_account_name": merchant.get("aba_account_name"),
+                 "payout_verification_status": merchant.get("payout_verification_status")},
+            new={"aba_account": settlement.mask_account(account),
+                 "aba_account_name": changes["aba_account_name"],
+                 "payout_verification_status": changes["payout_verification_status"]},
         )
         merchant.update(changes)
     return {"data": _account_view(merchant)}
@@ -228,6 +239,13 @@ async def admin_update_payout_settings(
             new_value={k: _jsonable(v) for k, v in changes.items()},
             note=body.payout_rejection_reason,
         )
+        if "payout_verification_status" in changes or "payout_enabled" in changes:
+            keys = [k for k in ("payout_verification_status", "payout_enabled", "payout_rejection_reason") if k in changes]
+            await audit.record(
+                db, user, merchant_id=merchant_id, action="payout.verification_changed", target_type="payout",
+                target_id=merchant_id, target_label=merchant.get("aba_account_name"),
+                old={k: merchant.get(k) for k in keys}, new={k: changes[k] for k in keys},
+            )
         merchant.update(changes)
     return {"data": _account_view(merchant)}
 

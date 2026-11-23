@@ -10,6 +10,38 @@ export interface AdminUser {
   role: AdminDisplayRole;
   merchant_id?: number | null;
   merchant_name?: string;
+  /** Shop accounts only: the owner runs the shop, staff do the daily work. */
+  merchant_role?: ShopRole;
+}
+
+export type ShopRole = "owner" | "staff";
+
+/** Someone who can sign in to a shop (Staff page). */
+export interface ShopAccount {
+  id: number;
+  full_name: string;
+  email: string;
+  role: ShopRole;
+  is_active: boolean;
+  telegram_id: number | null;
+  last_login: string | null;
+  created_at: string;
+  is_you: boolean;
+}
+
+/** One entry in a shop's activity log. */
+export interface ActivityEntry {
+  id: number;
+  actor_type: "owner" | "staff" | "super_admin" | "system" | "user";
+  actor_id: string | null;
+  actor_name: string | null;
+  action: string;
+  target_type: string;
+  target_id: number | null;
+  target_label: string | null;
+  old_value: Record<string, unknown> | null;
+  new_value: Record<string, unknown> | null;
+  created_at: string;
 }
 
 export interface TelegramUser {

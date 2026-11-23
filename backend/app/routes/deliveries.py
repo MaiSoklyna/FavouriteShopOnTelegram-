@@ -11,7 +11,7 @@ from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, 
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.models.delivery import AssignRequest, AvailabilityUpdate, DriverCreate, DriverUpdate, FailRequest
-from app.services import deliveries
+from app.services import audit, deliveries
 from app.services.notify import _error_code
 
 router = APIRouter(prefix="/deliveries", tags=["Deliveries"])
@@ -109,7 +109,15 @@ async def drivers_for_order(order_id: int, user: TokenClaims = require_any_admin
 async def assign_driver(order_id: int, body: AssignRequest, user: TokenClaims = require_any_admin()):
     async with SupabaseClient.service_role() as db:
         order = await _shop_order(db, order_id, user)
+        before = await _current_driver(db, order_id)
         delivery = await _needs_setup(deliveries.assign(db, order, body.driver_id, by=_assigned_by(user)))
+        driver = await db.from_("drivers").eq("id", body.driver_id).select_one("id,full_name")
+        await audit.record(
+            db, user, merchant_id=order.get("merchant_id"), action="order.driver_assigned", target_type="order",
+            target_id=order_id, target_label=order.get("order_code") or f"#{order_id}",
+            old={"driver": before} if before else None,
+            new={"driver": (driver or {}).get("full_name") or f"#{body.driver_id}", "driver_id": body.driver_id},
+        )
     return {"success": True, "data": {"status": delivery["status"]}}
 
 
@@ -117,8 +125,26 @@ async def assign_driver(order_id: int, body: AssignRequest, user: TokenClaims = 
 async def unassign_driver(order_id: int, user: TokenClaims = require_any_admin()):
     async with SupabaseClient.service_role() as db:
         order = await _shop_order(db, order_id, user)
+        before = await _current_driver(db, order_id)
         await _needs_setup(deliveries.unassign(db, order))
+        await audit.record(
+            db, user, merchant_id=order.get("merchant_id"), action="order.driver_unassigned", target_type="order",
+            target_id=order_id, target_label=order.get("order_code") or f"#{order_id}",
+            old={"driver": before} if before else None,
+        )
     return {"success": True}
+
+
+async def _current_driver(db, order_id: int) -> str | None:
+    """Name of the driver who has the order now (for the activity log). Never raises."""
+    try:
+        d = await db.from_("deliveries").eq("order_id", order_id).select_one("driver_id,status")
+        if not d or d.get("status") in ("cancelled", "declined", "failed") or not d.get("driver_id"):
+            return None
+        row = await db.from_("drivers").eq("id", d["driver_id"]).select_one("full_name")
+        return (row or {}).get("full_name")
+    except Exception:
+        return None
 
 
 # ── Driver management ───────────────────────────────────────────
@@ -178,13 +204,20 @@ async def create_driver(body: DriverCreate, user: TokenClaims = require_any_admi
             if _error_code(exc) == "23505":
                 raise ConflictError("That person is already a driver")
             raise
+        d = rows[0]
+        await audit.record(
+            db, user, merchant_id=merchant_id, action="driver.added", target_type="driver",
+            target_id=d.get("id"), target_label=d.get("full_name"),
+            new={k: d.get(k) for k in ("full_name", "phone", "vehicle")} | {"telegram_id": body.telegram_id},
+        )
     return {"success": True, "data": rows[0]}
 
 
 @router.patch("/admin/drivers/{driver_id}")
 async def update_driver(driver_id: int, body: DriverUpdate, user: TokenClaims = require_any_admin()):
     async with SupabaseClient.service_role() as db:
-        driver = await _needs_setup(db.from_("drivers").eq("id", driver_id).select_one("id,merchant_id"))
+        driver = await _needs_setup(db.from_("drivers").eq("id", driver_id).select_one(
+            "id,merchant_id,full_name,phone,vehicle,is_active"))
         if not driver:
             raise NotFoundError("Driver", driver_id)
         if user.role == Role.MERCHANT_ADMIN and driver["merchant_id"] != user.merchant_id:
@@ -195,4 +228,14 @@ async def update_driver(driver_id: int, body: DriverUpdate, user: TokenClaims = 
             changes["vehicle"] = None
         if changes:
             await db.from_("drivers").eq("id", driver_id).update(changes)
+            old, new = audit.diff(driver, changes)
+            if new:
+                active = new.get("is_active")
+                action = ("driver.updated" if active is None or len(new) > 1
+                          else "driver.activated" if active else "driver.deactivated")
+                await audit.record(
+                    db, user, merchant_id=driver.get("merchant_id"), action=action, target_type="driver",
+                    target_id=driver_id, target_label=changes.get("full_name") or driver.get("full_name"),
+                    old=old, new=new,
+                )
     return {"success": True}

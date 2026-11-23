@@ -24,7 +24,7 @@ from app.core.dependencies import require_any_admin, require_role
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.services import activity, coupons, deliveries, inventory, notify, order_status, settlement, shop_reviews
+from app.services import activity, audit, coupons, deliveries, inventory, notify, order_status, settlement, shop_reviews
 from app.services import promo_schedule
 from app.services.delivery import is_open, quote_delivery, valid_point
 
@@ -455,7 +455,7 @@ async def update_order_status(
         raise BadRequestError("status is required")
 
     async with SupabaseClient.service_role() as db:
-        order = await db.from_("orders").eq("id", order_id).select_one("id,status,merchant_id")
+        order = await db.from_("orders").eq("id", order_id).select_one("id,status,merchant_id,order_code")
         if not order:
             raise NotFoundError("Order", order_id)
 
@@ -463,10 +463,21 @@ async def update_order_status(
         if user.role == Role.MERCHANT_ADMIN and order.get("merchant_id") != user.merchant_id:
             raise ForbiddenError("You can only manage your merchant's orders")
 
+        old_status = order["status"]
         await order_status.change_status(
             db, order, new_status,
             actor_type=str(user.role), actor_id=user.sub,
             admin_note=body.get("admin_note"), payment_status=body.get("payment_status"),
+        )
+        new = {"status": new_status}
+        if body.get("admin_note"):
+            new["note"] = body["admin_note"]
+        if body.get("payment_status"):
+            new["payment_status"] = body["payment_status"]
+        await audit.record(
+            db, user, merchant_id=order.get("merchant_id"), action=audit.order_action(old_status, new_status),
+            target_type="order", target_id=order_id, target_label=order.get("order_code") or f"#{order_id}",
+            old={"status": old_status}, new=new,
         )
     return {"success": True}
 

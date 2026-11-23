@@ -31,6 +31,8 @@ from app.models.product import (
 )
 from pydantic import BaseModel
 
+from app.services import audit
+
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Products"])
 
@@ -226,6 +228,14 @@ async def create_product(
                             **opt.model_dump(),
                         })
 
+        new = {k: data.get(k) for k in PRODUCT_LOG_FIELDS if data.get(k) is not None}
+        if body.variants:
+            new["variants"] = _variant_summary(body.variants)
+        await audit.record(
+            db, user, merchant_id=merchant_id, action="product.created", target_type="product",
+            target_id=product.get("id"), target_label=product.get("name") or body.name, new=new,
+        )
+
     return product
 
 
@@ -237,9 +247,7 @@ async def update_product(
 ):
     """Update a product (admin only). Only super_admin can move it to another shop."""
     async with SupabaseClient.service_role() as db:
-        existing = await db.from_("products").eq("id", product_id).select_one(
-            "id,merchant_id,category_id"
-        )
+        existing = await db.from_("products").eq("id", product_id).select_one()
         if not existing:
             raise NotFoundError("Product", product_id)
         _check_merchant_ownership(user, existing["merchant_id"])
@@ -269,8 +277,41 @@ async def update_product(
 
         if data:
             await db.from_("products").eq("id", product_id).update(data)
+            await _log_product_update(db, user, existing, data)
 
     return {"success": True}
+
+
+# Prices get their own entry so an owner can see every price change at a glance
+PRICE_FIELDS = ("base_price", "compare_price")
+PRODUCT_LOG_FIELDS = (
+    "name", "description", "base_price", "compare_price", "stock", "sku", "category_id",
+    "is_active", "is_featured", "icon_emoji", "primary_image",
+)
+
+
+async def _log_product_update(db, user: TokenClaims, before: dict, data: dict) -> None:
+    old, new = audit.diff(before, data)
+    if not new:
+        return
+    common = dict(merchant_id=before["merchant_id"], target_type="product", target_id=before["id"],
+                  target_label=data.get("name") or before.get("name"))
+    price = [k for k in PRICE_FIELDS if k in new]
+    rest = [k for k in new if k not in PRICE_FIELDS]
+    if price:
+        await audit.record(db, user, action="product.price_changed",
+                           old={k: old[k] for k in price}, new={k: new[k] for k in price}, **common)
+    if rest:
+        await audit.record(db, user, action="product.updated",
+                           old={k: old[k] for k in rest}, new={k: new[k] for k in rest}, **common)
+
+
+def _variant_summary(groups) -> list[dict]:
+    """Variants as an owner reads them: [{"group": "Size", "options": ["S", "M"]}]."""
+    out = []
+    for g in groups:
+        out.append({"group": g.group_name, "options": [o.label for o in g.options]})
+    return out
 
 
 @router.delete("/products/{product_id}")
@@ -280,12 +321,17 @@ async def delete_product(
 ):
     """Soft-delete a product by setting is_active=False."""
     async with SupabaseClient.service_role() as db:
-        existing = await db.from_("products").eq("id", product_id).select_one("id,merchant_id")
+        existing = await db.from_("products").eq("id", product_id).select_one("id,merchant_id,name,base_price,stock,is_active")
         if not existing:
             raise NotFoundError("Product", product_id)
         _check_merchant_ownership(user, existing["merchant_id"])
 
         await db.from_("products").eq("id", product_id).update({"is_active": False})
+        await audit.record(
+            db, user, merchant_id=existing["merchant_id"], action="product.deleted", target_type="product",
+            target_id=product_id, target_label=existing.get("name"),
+            old={k: existing.get(k) for k in ("name", "base_price", "stock", "is_active")}, new={"is_active": False},
+        )
     return {"success": True}
 
 
@@ -306,7 +352,7 @@ async def replace_product_variants(
     clear all variants.
     """
     async with SupabaseClient.service_role() as db:
-        existing = await db.from_("products").eq("id", product_id).select_one("id,merchant_id")
+        existing = await db.from_("products").eq("id", product_id).select_one("id,merchant_id,name")
         if not existing:
             raise NotFoundError("Product", product_id)
         _check_merchant_ownership(user, existing["merchant_id"])
@@ -314,8 +360,12 @@ async def replace_product_variants(
         # Delete existing variants and their options. Options have a FK on
         # variant_id, so delete them first by looking up the variant ids.
         old_variants = await (
-            db.from_("product_variants").eq("product_id", product_id).select("id")
+            db.from_("product_variants").eq("product_id", product_id).order("sort_order").select("id,group_name")
         )
+        old_summary = []
+        for v in old_variants:
+            opts = await db.from_("product_variant_options").eq("variant_id", v["id"]).order("sort_order").select("label")
+            old_summary.append({"group": v.get("group_name"), "options": [o.get("label") for o in opts]})
         for v in old_variants:
             await db.from_("product_variant_options").eq("variant_id", v["id"]).delete()
         await db.from_("product_variants").eq("product_id", product_id).delete()
@@ -336,6 +386,14 @@ async def replace_product_variants(
                         **opt.model_dump(),
                     })
 
+        new_summary = _variant_summary(body.variants)
+        if old_summary != new_summary:
+            await audit.record(
+                db, user, merchant_id=existing["merchant_id"], action="product.variants_changed",
+                target_type="product", target_id=product_id, target_label=existing.get("name"),
+                old={"variants": old_summary}, new={"variants": new_summary},
+            )
+
     return {"success": True, "groups": len(body.variants)}
 
 
@@ -353,7 +411,7 @@ async def upload_product_image(
 ):
     """Upload a product image to Supabase Storage."""
     async with SupabaseClient.service_role() as db:
-        existing = await db.from_("products").eq("id", product_id).select_one("id,merchant_id")
+        existing = await db.from_("products").eq("id", product_id).select_one("id,merchant_id,name")
         if not existing:
             raise NotFoundError("Product", product_id)
         _check_merchant_ownership(user, existing["merchant_id"])
@@ -389,6 +447,11 @@ async def upload_product_image(
         if is_primary:
             await db.from_("products").eq("id", product_id).update({"primary_image": public_url})
 
+        await audit.record(
+            db, user, merchant_id=existing["merchant_id"], action="product.image_added", target_type="product",
+            target_id=product_id, target_label=existing.get("name"), new={"image": public_url, "primary": is_primary},
+        )
+
     return {"url": public_url}
 
 
@@ -400,12 +463,20 @@ async def delete_product_image(
 ):
     """Delete a product image."""
     async with SupabaseClient.service_role() as db:
-        existing = await db.from_("products").eq("id", product_id).select_one("id,merchant_id")
+        existing = await db.from_("products").eq("id", product_id).select_one("id,merchant_id,name")
         if not existing:
             raise NotFoundError("Product", product_id)
         _check_merchant_ownership(user, existing["merchant_id"])
 
-        await db.from_("product_images").eq("id", image_id).delete()
+        # Only an image of this product: the shop check above was for this product
+        image = await db.from_("product_images").eq("id", image_id).eq("product_id", product_id).select_one("id,url")
+        if not image:
+            raise NotFoundError("Image", image_id)
+        await db.from_("product_images").eq("id", image_id).eq("product_id", product_id).delete()
+        await audit.record(
+            db, user, merchant_id=existing["merchant_id"], action="product.image_removed", target_type="product",
+            target_id=product_id, target_label=existing.get("name"), old={"image": image.get("url")},
+        )
     return {"success": True}
 
 

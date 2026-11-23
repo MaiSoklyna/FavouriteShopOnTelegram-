@@ -9,7 +9,7 @@ import { RatingSummary } from "@/components/admin/ShopReviewsPanel";
 import { HiOutlineShoppingBag, HiOutlineClipboardList, HiOutlineCurrencyDollar, HiOutlineClock, HiOutlineUsers, HiOutlineTrendingUp } from "react-icons/hi";
 
 export default function DashboardPage() {
-  const { user, isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin, isShopStaff } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -56,6 +56,8 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      {!isSuperAdmin && <WorkQueue staff={isShopStaff} />}
+
       {loading ? (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
           {[...Array(6)].map((_, i) => (
@@ -93,6 +95,62 @@ export default function DashboardPage() {
       <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
     </div>
   );
+}
+
+type QueueOrder = { id: number; order_code: string; customer_name?: string | null; total: number; created_at: string; delivery_type?: string };
+
+/** The shop's work right now: new orders to accept and accepted orders to prepare. Staff see this first. */
+function WorkQueue({ staff }: { staff: boolean }) {
+  const [lists, setLists] = useState<{ pending: QueueOrder[]; confirmed: QueueOrder[] } | null>(null);
+  const load = async () => {
+    try {
+      const [pending, confirmed] = await Promise.all([
+        api.get<QueueOrder[]>("/orders/admin/list?status=pending&page_size=10"),
+        api.get<QueueOrder[]>("/orders/admin/list?status=confirmed&page_size=10"),
+      ]);
+      setLists({ pending, confirmed });
+    } catch { /* offline: keep what we have */ }
+  };
+  useEffect(() => { load(); }, []);
+  useAutoRefresh(load, { interval: 30000 });
+  if (!lists) return null;
+
+  const column = (title: string, hint: string, rows: QueueOrder[], testid: string) => (
+    <div data-testid={testid} style={{ flex: "1 1 280px", minWidth: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text)" }}>{title} <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>({rows.length})</span></span>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{hint}</span>
+      </div>
+      {rows.length === 0 ? (
+        <p style={{ fontSize: 13, color: "var(--text-muted)", padding: "8px 0" }}>Nothing here.</p>
+      ) : rows.map((o) => (
+        <a key={o.id} href="/orders" style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "8px 0", borderTop: "1px solid var(--border)", fontSize: 13, color: "var(--text)", textDecoration: "none" }}>
+          <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <strong>{o.order_code}</strong> · {o.customer_name || "Customer"}{o.delivery_type === "pickup" ? " · pickup" : ""}
+          </span>
+          <span style={{ whiteSpace: "nowrap", color: "var(--text-muted)" }}>${Number(o.total).toFixed(2)} · {timeAgo(o.created_at)}</span>
+        </a>
+      ))}
+    </div>
+  );
+
+  return (
+    <div data-testid="work-queue" style={{ marginBottom: 24, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20, boxShadow: "var(--shadow-sm)" }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginBottom: 12 }}>{staff ? "Your tasks" : "Orders waiting for the shop"}</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 24 }}>
+        {column("New orders", "accept or reject", lists.pending, "queue-pending")}
+        {column("To prepare", "accepted, not sent yet", lists.confirmed, "queue-confirmed")}
+      </div>
+    </div>
+  );
+}
+
+function timeAgo(iso: string): string {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 48) return `${hours} h ago`;
+  return `${Math.round(hours / 24)} days ago`;
 }
 
 /** The shop's rating, the spread of stars and its latest reviews. */
