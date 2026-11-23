@@ -11,7 +11,7 @@ import logging
 from fastapi import APIRouter
 
 from app.core.constants import Role
-from app.core.dependencies import require_any_admin, require_role, require_shop_owner
+from app.core.dependencies import require_any_admin, require_role, require_super_admin
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
@@ -190,15 +190,15 @@ async def get_ai_settings_public():
 
 
 @router.get("/admin/settings")
-async def get_ai_settings_admin(user: TokenClaims = require_any_admin()):
-    """Get full AI settings (admin)."""
+async def get_ai_settings_admin(user: TokenClaims = require_super_admin()):
+    """Get full AI settings (platform-wide: super admin only)."""
     async with SupabaseClient.service_role() as db:
         return await db.from_("ai_settings").select_one()
 
 
 @router.put("/admin/settings")
-async def update_ai_settings(body: dict, user: TokenClaims = require_shop_owner()):
-    """Update AI settings (admin)."""
+async def update_ai_settings(body: dict, user: TokenClaims = require_super_admin()):
+    """Update AI settings (platform-wide: super admin only)."""
     async with SupabaseClient.service_role() as db:
         data = {k: body[k] for k in (
             "is_enabled", "system_prompt", "welcome_message",

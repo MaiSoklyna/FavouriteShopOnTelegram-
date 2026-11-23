@@ -213,8 +213,18 @@ OWNER_ONLY = [
     ("put", "/api/settlements/merchant/payout-account", {"aba_account": "999888777", "aba_account_name": "SARA"}),
     ("get", "/api/loyalty/shop", None),
     ("put", "/api/loyalty/shop", {"enabled": False}),
-    ("put", "/api/ai/admin/settings", {"is_enabled": False}),
 ]
+
+
+@pytest.mark.parametrize("method,body", [("get", None), ("put", {"is_enabled": False})])
+def test_ai_settings_are_platform_only(client, db, method, body):
+    """The AI assistant's settings are one row for the whole platform: no shop account may read or change them."""
+    db.t["ai_settings"] = [{"id": 1, "is_enabled": True, "system_prompt": "Be nice"}]
+    kw = {"json": body} if body is not None else {}
+    for who in (STAFF, OWNER, OLD_OWNER):
+        assert getattr(client, method)("/api/ai/admin/settings", headers=who, **kw).status_code == 403
+    assert db.t["ai_settings"][0]["is_enabled"] is True
+    assert getattr(client, method)("/api/ai/admin/settings", headers=SUPER, **kw).status_code == 200
 
 
 @pytest.mark.parametrize("method,path,body", OWNER_ONLY)
