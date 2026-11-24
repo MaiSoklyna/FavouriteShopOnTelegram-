@@ -55,7 +55,7 @@ class TokenClaims:
     merchant_id: int | None = None
     email: str | None = None
     name: str | None = None
-    # Shop accounts only: "owner" or "staff". Missing on older tokens, which all belong to owners.
+    # Shop accounts only: "owner", "manager" or "staff". Missing on older tokens, which all belong to owners.
     merchant_role: str | None = None
     exp: int = 0
     iat: int = 0
@@ -73,9 +73,21 @@ class TokenClaims:
         return self.role == Role.USER
 
     @property
+    def shop_role(self) -> str | None:
+        """owner / manager / staff for shop accounts (older tokens without a role are owners); None otherwise."""
+        if self.role != Role.MERCHANT_ADMIN:
+            return None
+        v = (self.merchant_role or "").strip().lower()
+        return v if v in ("manager", "staff") else "owner"
+
+    @property
     def is_shop_staff(self) -> bool:
-        """A shop staff member (not the owner): no staff management, payout, earnings or shop settings."""
-        return self.role == Role.MERCHANT_ADMIN and self.merchant_role == "staff"
+        """Any shop account that is not the owner (manager or staff).
+
+        Owner-only areas (staff management, payouts, earnings, shop settings) refuse these
+        accounts; finer rules per role are in app/core/permissions.py.
+        """
+        return self.shop_role in ("manager", "staff")
 
 
 # ── JWT minting ─────────────────────────────────────────────────

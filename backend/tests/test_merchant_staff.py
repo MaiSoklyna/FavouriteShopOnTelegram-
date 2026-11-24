@@ -136,6 +136,8 @@ class FakeDb:
                  "is_active": True, "password_hash": "x", "telegram_id": 111, "created_at": "2026-01-01"},
                 {"id": 11, "merchant_id": 1, "full_name": "Sara", "email": "sara@cake.test", "role": "staff",
                  "is_active": True, "password_hash": "x", "telegram_id": None, "created_at": "2026-02-01"},
+                {"id": 12, "merchant_id": 1, "full_name": "Kosal", "email": "kosal@cake.test", "role": "manager",
+                 "is_active": True, "password_hash": "x", "telegram_id": None, "created_at": "2026-03-01"},
                 {"id": 20, "merchant_id": 2, "full_name": "Other Owner", "email": "o@other.test", "role": "owner",
                  "is_active": True, "password_hash": "x", "telegram_id": 222, "created_at": "2026-01-01"},
                 {"id": 21, "merchant_id": 2, "full_name": "Other Staff", "email": "s@other.test", "role": "staff",
@@ -196,6 +198,7 @@ def bearer(sub, *, role=Role.MERCHANT_ADMIN, merchant_id=1, merchant_role=None, 
 OWNER = bearer(10, merchant_role="owner", name="Lyna")
 OLD_OWNER = bearer(10)  # a token from before staff accounts existed: no shop role in it
 STAFF = bearer(11, merchant_role="staff", name="Sara")
+MANAGER = bearer(12, merchant_role="manager", name="Kosal")
 SUPER = bearer(1, role=Role.SUPER_ADMIN, merchant_id=None, name="Platform")
 
 
@@ -242,17 +245,18 @@ def test_staff_can_do_operational_work(client, db, monkeypatch):
 
     assert client.patch("/api/products/5", json={"stock": 4}, headers=STAFF).status_code == 200
     assert client.patch("/api/orders/admin/100/status", json={"status": "confirmed"}, headers=STAFF).status_code == 200
-    assert client.post("/api/promos", json={"code": "STAFF10", "type": "percent", "value": 10}, headers=STAFF).status_code == 200
-    assert client.patch("/api/promos/1", json={"is_active": False}, headers=STAFF).status_code == 200
+    # Promotions, coupons and drivers are a manager's job
+    assert client.post("/api/promos", json={"code": "STAFF10", "type": "percent", "value": 10}, headers=MANAGER).status_code == 200
+    assert client.patch("/api/promos/1", json={"is_active": False}, headers=MANAGER).status_code == 200
     assert [e["action"] for e in db.log()][-2:] == ["coupon.created", "coupon.disabled"]
-    assert client.patch("/api/deliveries/admin/drivers/7", json={"is_active": False}, headers=STAFF).status_code == 200
+    assert client.patch("/api/deliveries/admin/drivers/7", json={"is_active": False}, headers=MANAGER).status_code == 200
 
 
 def test_older_owner_tokens_still_count_as_owner(client):
     r = client.get("/api/merchant-staff", headers=OLD_OWNER)
     assert r.status_code == 200
     names = [p["full_name"] for p in r.json()["data"]]
-    assert names == ["Lyna", "Sara"]  # owner first; never another shop's people
+    assert names == ["Lyna", "Kosal", "Sara"]  # owner first; never another shop's people
     assert r.json()["data"][0]["role"] == "owner" and r.json()["data"][0]["is_you"]
 
 
@@ -325,20 +329,21 @@ def test_staff_actions_are_logged_without_secrets(client, db):
 
 
 def test_price_change_is_its_own_entry_with_old_and_new(client, db):
-    r = client.patch("/api/products/5", json={"base_price": 12, "stock": 10, "name": "Matcha Cake"}, headers=STAFF)
+    r = client.patch("/api/products/5", json={"base_price": 12, "stock": 10, "name": "Matcha Cake"}, headers=MANAGER)
     assert r.status_code == 200
     assert [e["action"] for e in db.log()] == ["product.price_changed"]  # unchanged stock/name are not news
     e = db.log("product.price_changed")[0]
     assert e["old_value"] == {"base_price": 15.0} and e["new_value"] == {"base_price": 12.0}
-    assert (e["actor_type"], e["actor_id"], e["actor_name"], e["target_label"], e["merchant_id"]) == ("staff", "11", "Sara", "Matcha Cake", 1)
+    assert (e["actor_type"], e["actor_id"], e["actor_name"], e["target_label"], e["merchant_id"]) == ("manager", "12", "Kosal", "Matcha Cake", 1)
 
+    # Staff may still edit the product; sending the unchanged price along is fine
     client.patch("/api/products/5", json={"base_price": 12, "description": "Very green"}, headers=STAFF)
     assert db.log()[-1]["action"] == "product.updated"
     assert db.log()[-1]["new_value"] == {"description": "Very green"}
 
 
 def test_product_delete_is_logged(client, db):
-    assert client.delete("/api/products/5", headers=STAFF).status_code == 200
+    assert client.delete("/api/products/5", headers=MANAGER).status_code == 200
     e = db.log("product.deleted")[0]
     assert e["target_label"] == "Matcha Cake" and e["old_value"]["base_price"] == 15.0
 
@@ -378,7 +383,7 @@ def test_payout_account_change_is_logged_masked(client, db, monkeypatch):
 
 def test_a_failing_log_never_blocks_the_change(client, db):
     db.broken_log = True
-    assert client.patch("/api/products/5", json={"base_price": 9}, headers=STAFF).status_code == 200
+    assert client.patch("/api/products/5", json={"base_price": 9}, headers=MANAGER).status_code == 200
     assert db.t["products"][0]["base_price"] == 9
 
 
@@ -392,9 +397,9 @@ def test_platform_admin_edits_are_named(client, db):
 
 
 def _seed(client):
-    client.patch("/api/products/5", json={"base_price": 12}, headers=STAFF)
+    client.patch("/api/products/5", json={"base_price": 12}, headers=MANAGER)
     client.patch("/api/products/5", json={"description": "New"}, headers=OWNER)
-    client.delete("/api/products/5", headers=STAFF)
+    client.delete("/api/products/5", headers=MANAGER)
 
 
 def test_activity_feed_is_newest_first_and_shop_scoped(client, db):
@@ -406,7 +411,7 @@ def test_activity_feed_is_newest_first_and_shop_scoped(client, db):
     body = r.json()
     assert [e["action"] for e in body["data"]] == ["product.deleted", "product.updated", "product.price_changed"]
     assert "Other Thing" not in r.text
-    assert {p["name"] for p in body["people"]} == {"Lyna", "Sara"}
+    assert {p["name"] for p in body["people"]} == {"Lyna", "Kosal", "Sara"}
 
 
 def test_activity_filters(client, db):
@@ -415,8 +420,8 @@ def test_activity_filters(client, db):
     assert len(by_group) == 3
     only_price = client.get("/api/merchant-activity?action=product.price_changed", headers=OWNER).json()["data"]
     assert [e["action"] for e in only_price] == ["product.price_changed"]
-    by_sara = client.get("/api/merchant-activity?actor_id=11", headers=OWNER).json()["data"]
-    assert {e["actor_name"] for e in by_sara} == {"Sara"} and len(by_sara) == 2
+    by_kosal = client.get("/api/merchant-activity?actor_id=12", headers=OWNER).json()["data"]
+    assert {e["actor_name"] for e in by_kosal} == {"Kosal"} and len(by_kosal) == 2
     search = client.get("/api/merchant-activity?q=matcha", headers=OWNER).json()["data"]
     assert len(search) == 3
     assert client.get("/api/merchant-activity?action=nonsense", headers=OWNER).status_code == 400

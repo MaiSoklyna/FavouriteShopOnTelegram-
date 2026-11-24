@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { AssignableDriver, DeliveryInfo, Order } from "@/types";
 import { BrandLoader } from "@/components/ui/Spinner";
+import { usePermissions } from "@/lib/permissions";
 
 const TABS = ["all", "pending", "confirmed", "processing", "shipped", "delivered", "cancelled"];
 // Database values stay as-is; these are the names shown to merchants.
@@ -14,6 +15,9 @@ const NEXT: Record<string, string[]> = { pending: ["confirmed", "cancelled"], co
 const STATUS_COLORS: Record<string, string> = { pending: "badge-pending", confirmed: "badge-confirmed", processing: "badge-processing", shipped: "badge-shipped", delivered: "badge-delivered", cancelled: "badge-cancelled" };
 
 export default function OrdersPage() {
+  const { can } = usePermissions();
+  // Rejecting or cancelling needs orders.cancel (Owner/Manager); the server refuses it otherwise
+  const nextSteps = (status: string) => (NEXT[status] || []).filter(s => s !== "cancelled" || can("orders.cancel"));
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("all");
@@ -76,14 +80,14 @@ export default function OrdersPage() {
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <button onClick={() => openDetail(o.id)} style={{ background: "none", border: "none", color: "var(--info)", fontWeight: 500, fontSize: 12, cursor: "pointer", padding: 0 }}>View</button>
-                      {NEXT[o.status] && (
+                      {nextSteps(o.status).length > 0 && (
                         <select
                           value=""
                           onChange={e => { if (e.target.value) updateStatus(o.id, e.target.value); }}
                           style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, cursor: "pointer", textTransform: "capitalize" }}
                         >
                           <option value="">Change status...</option>
-                          {NEXT[o.status].map(s => (
+                          {nextSteps(o.status).map(s => (
                             <option key={s} value={s} style={{ textTransform: "capitalize" }}>
                               {s === "cancelled" ? "Cancel order" : s === "confirmed" ? "Accept order" : `Mark ${label(s)}`}
                             </option>
@@ -131,9 +135,9 @@ export default function OrdersPage() {
             {detail.delivery_type === "delivery" && ["confirmed", "processing", "shipped"].includes(detail.status) && (
               <DriverPanel key={detail.id} order={detail} onChanged={() => openDetail(detail.id)} />
             )}
-            {NEXT[detail.status] && (
+            {nextSteps(detail.status).length > 0 && (
               <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-                {NEXT[detail.status].map(s => (
+                {nextSteps(detail.status).map(s => (
                   <button key={s} onClick={() => updateStatus(detail.id, s)} className={s === "cancelled" ? "btn-danger" : "btn-primary"} style={{ textTransform: "capitalize" }}>
                     {s === "cancelled" ? "Cancel Order" : s === "confirmed" ? "Accept order" : `Mark ${label(s)}`}
                   </button>

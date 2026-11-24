@@ -31,6 +31,7 @@ from app.routes import (
     favorites,
     featured_categories,
     loyalty,
+    merchant_dashboard,
     merchant_staff,
     merchants,
     notifications,
@@ -112,6 +113,7 @@ app.include_router(merchants.router, prefix="/api")
 
 # Shop staff accounts and the shop activity log (owners only)
 app.include_router(merchant_staff.router, prefix="/api")
+app.include_router(merchant_dashboard.router, prefix="/api")
 
 # Products & categories (browse + admin CRUD + image upload)
 app.include_router(products.router, prefix="/api")

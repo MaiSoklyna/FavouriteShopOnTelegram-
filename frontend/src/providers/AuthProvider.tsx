@@ -46,7 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Resolve user type helpers
   const isAdmin = !!user && "email" in user;
   const isSuperAdmin = isAdmin && (user as AdminUser).role === "super_admin";
-  const isShopStaff = isAdmin && (user as AdminUser).role === "merchant" && (user as AdminUser).merchant_role === "staff";
+  // Any shop account that is not the owner (manager or staff): owner-only pages are closed to them.
+  // Finer rules per role come from usePermissions() (lib/permissions.ts).
+  const shopRole = isAdmin && (user as AdminUser).role === "merchant" ? (user as AdminUser).merchant_role : undefined;
+  const isShopStaff = shopRole === "staff" || shopRole === "manager";
   const isShopUser = !!user && "telegram_id" in user;
 
   // ── Init: restore the session for this area (on mount and on area switch) ──
@@ -196,6 +199,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   function logout() {
+    // Shop accounts: put the sign-out in the shop's activity log. Fire and forget: the token is read
+    // when the request starts, so it can be cleared right after.
+    if (isAdmin && !isSuperAdmin) void api.post("/auth/logout").catch(() => {});
     clearToken();
     setUser(null);
     stopPolling();

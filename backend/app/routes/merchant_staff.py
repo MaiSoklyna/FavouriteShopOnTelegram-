@@ -1,7 +1,9 @@
-"""Shop staff accounts and the shop activity log.
+"""Shop staff accounts, roles and the shop activity log.
 
-Owners add, change, deactivate and remove their shop's staff, and read the activity log:
-who changed what in the shop, and when. Staff cannot open any of this.
+Owners invite (add), change, deactivate and remove their shop's people and give each one a role:
+Manager or Staff. What each role may do is the matrix in app/core/permissions.py, served to the
+dashboard by GET /merchant-permissions. Owners and managers read the activity log: who changed
+what in the shop, and when.
 """
 
 from __future__ import annotations
@@ -13,7 +15,8 @@ import httpx
 from fastapi import APIRouter, Query
 
 from app.core.constants import Role, ShopRole, shop_role
-from app.core.dependencies import forget_staff_check, require_shop_owner, require_shop_owner_only
+from app.core import permissions
+from app.core.dependencies import forget_staff_check, require_any_admin, require_permission, require_shop_owner_only
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims, hash_password
 from app.db.client import SupabaseClient
@@ -25,6 +28,7 @@ router = APIRouter(tags=["Shop staff and activity"])
 
 ACCOUNT_FIELDS = "id,merchant_id,full_name,email,role,is_active,telegram_id,last_login,created_at"
 MIGRATION_HINT = "The activity log needs supabase/migrations/034_merchant_staff_audit.sql to be run first"
+MANAGER_MIGRATION_HINT = "The Manager role needs supabase/migrations/037_shop_manager_role.sql to be run first"
 
 
 def _view(row: dict, me: TokenClaims) -> dict:
@@ -55,13 +59,33 @@ async def _check_unique(db, *, email: str | None = None, telegram_id: int | None
 
 
 async def _own_staff(db, staff_id: int, user: TokenClaims) -> dict:
-    """A staff account of the owner's shop. Owners (including yourself) cannot be changed here."""
+    """A manager or staff account of the owner's shop. Owners (including yourself) cannot be changed here."""
     row = await db.from_("merchant_admins").eq("id", staff_id).select_one(ACCOUNT_FIELDS)
     if not row or row.get("merchant_id") != user.merchant_id:
         raise NotFoundError("Staff member", staff_id)
-    if shop_role(row.get("role")) != ShopRole.STAFF:
+    if shop_role(row.get("role")) == ShopRole.OWNER:
         raise ForbiddenError("Owner accounts cannot be changed here")
     return row
+
+
+def _role_not_allowed_yet(exc: httpx.HTTPStatusError) -> bool:
+    """The database still only knows owner/staff (migration 037 not run)."""
+    return "23514" in exc.response.text and "role" in exc.response.text
+
+
+# ── Roles and permissions ──────────────────────────────────────
+
+
+@router.get("/merchant-permissions")
+async def my_permissions(user: TokenClaims = require_any_admin()):
+    """The permission matrix, and what the signed-in person may do (the dashboard hides the rest)."""
+    if user.is_super_admin:
+        mine = [str(p) for p in permissions.Perm]
+        role = None
+    else:
+        role = user.shop_role
+        mine = sorted(str(p) for p in permissions.ROLE_PERMISSIONS.get(role, ()))
+    return {"role": role, "permissions": mine, "matrix": permissions.matrix()}
 
 
 # ── Staff accounts ─────────────────────────────────────────────
@@ -79,13 +103,13 @@ async def list_staff(user: TokenClaims = require_shop_owner_only()):
 
 @router.post("/merchant-staff")
 async def add_staff(body: StaffCreate, user: TokenClaims = require_shop_owner_only()):
-    """Give someone their own staff login for this shop."""
+    """Invite someone: give them their own login for this shop, as Manager or Staff."""
     merchant_id = _shop(user)
     async with SupabaseClient.service_role() as db:
         await _check_unique(db, email=body.email, telegram_id=body.telegram_id)
         row = {
             "merchant_id": merchant_id, "full_name": body.full_name, "email": body.email,
-            "password_hash": hash_password(body.password), "role": ShopRole.STAFF.value, "is_active": True,
+            "password_hash": hash_password(body.password), "role": body.role, "is_active": True,
         }
         if body.telegram_id:
             row["telegram_id"] = body.telegram_id
@@ -94,18 +118,20 @@ async def add_staff(body: StaffCreate, user: TokenClaims = require_shop_owner_on
         except httpx.HTTPStatusError as exc:
             if "23505" in exc.response.text:
                 raise ConflictError("That email or Telegram account is already used by another account")
+            if _role_not_allowed_yet(exc):
+                raise BadRequestError(MANAGER_MIGRATION_HINT) from exc
             raise
         await audit.record(
             db, user, merchant_id=merchant_id, action="staff.added", target_type="staff",
             target_id=created["id"], target_label=body.full_name,
-            new={"full_name": body.full_name, "email": body.email, "telegram_id": body.telegram_id, "role": "staff"},
+            new={"full_name": body.full_name, "email": body.email, "telegram_id": body.telegram_id, "role": body.role},
         )
     return {"success": True, "data": _view(created, user)}
 
 
 @router.patch("/merchant-staff/{staff_id}")
 async def update_staff(staff_id: int, body: StaffUpdate, user: TokenClaims = require_shop_owner_only()):
-    """Rename, change email, reset password, link Telegram, or deactivate/reactivate a staff member."""
+    """Rename, change email or role, reset password, link Telegram, or deactivate/reactivate someone."""
     async with SupabaseClient.service_role() as db:
         row = await _own_staff(db, staff_id, user)
         changes: dict = {}
@@ -121,13 +147,20 @@ async def update_staff(staff_id: int, body: StaffUpdate, user: TokenClaims = req
             changes["telegram_id"] = body.telegram_id
         if body.is_active is not None:
             changes["is_active"] = body.is_active
+        if body.role is not None and body.role != shop_role(row.get("role")):
+            changes["role"] = body.role
         if body.new_password is not None:
             changes["password_hash"] = hash_password(body.new_password)
         if not changes:
             raise BadRequestError("Nothing to change")
 
-        await db.from_("merchant_admins").eq("id", staff_id).update(changes)
-        forget_staff_check(staff_id)
+        try:
+            await db.from_("merchant_admins").eq("id", staff_id).update(changes)
+        except httpx.HTTPStatusError as exc:
+            if _role_not_allowed_yet(exc):
+                raise BadRequestError(MANAGER_MIGRATION_HINT) from exc
+            raise
+        forget_staff_check(staff_id)  # a new role or deactivation takes effect on their next request
 
         visible = {k: v for k, v in changes.items() if k != "password_hash"}
         old, new = audit.diff(row, visible)
@@ -136,6 +169,8 @@ async def update_staff(staff_id: int, body: StaffUpdate, user: TokenClaims = req
         if new:
             if set(new) == {"is_active"}:
                 action = "staff.reactivated" if new["is_active"] else "staff.deactivated"
+            elif set(new) == {"role"}:
+                action = "staff.role_changed"
             else:
                 action = "staff.updated"
             await audit.record(
@@ -182,9 +217,13 @@ async def activity_log(
     q: str | None = Query(None, max_length=100, description="Search the product, order, driver, coupon or person name"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    user: TokenClaims = require_shop_owner(),
+    user: TokenClaims = require_permission(permissions.Perm.ACTIVITY_VIEW),
 ):
-    """Who changed what in the shop, newest first. Owners see their own shop; super admins pick one."""
+    """Who changed what in the shop, newest first.
+
+    Owners and managers see their own shop; super admins pick one. `actor_id` gives one person's
+    history (the Staff page links here for each person).
+    """
     if user.role == Role.MERCHANT_ADMIN:
         shop = _shop(user)
     else:

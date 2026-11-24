@@ -47,6 +47,7 @@ from app.core.security import (
     verify_telegram_hash,
 )
 from app.db.client import SupabaseClient
+from app.services import audit
 from app.models.auth import (
     AdminLoginRequest,
     AdminLoginResponse,
@@ -284,6 +285,7 @@ async def _login_merchant_admin(db, body: AdminLoginRequest) -> AdminLoginRespon
         name=admin.get("full_name"),
         merchant_role=shop_role(admin.get("role")),
     )
+    await log_shop_access(db, admin, "account.login", method="password")
 
     return AdminLoginResponse(
         access_token=token,
@@ -347,6 +349,11 @@ async def poll_tg_session(request: Request, session_id: str):
 
         # Session completed — resolve admin user
         user_data = await _resolve_admin_user(db, row)
+        if user_data and user_data.get("role") == "merchant":
+            await log_shop_access(db, {
+                "id": user_data["id"], "merchant_id": user_data.get("merchant_id"),
+                "full_name": user_data.get("name"), "role": user_data.get("merchant_role"),
+            }, "account.login", method="telegram")
 
         # Clean up session
         await db.from_("login_sessions").eq("session_id", session_id).delete()
@@ -448,6 +455,38 @@ async def _resolve_admin_user(db, session_row: dict) -> Optional[dict]:
             "merchant_role": shop_role(admin.get("role")),
         }
     return None
+
+
+# ═══════════════════════════════════════════════════════════════
+#  SHOP SIGN-IN / SIGN-OUT HISTORY
+# ═══════════════════════════════════════════════════════════════
+
+
+async def log_shop_access(db, admin: dict, action: str, *, method: str | None = None) -> None:
+    """Put a shop account's sign-in or sign-out in its shop's activity log. Never raises."""
+    if not admin.get("merchant_id"):
+        return
+    who = TokenClaims(
+        sub=str(admin["id"]), role=Role.MERCHANT_ADMIN, merchant_id=admin["merchant_id"],
+        name=admin.get("full_name"), merchant_role=shop_role(admin.get("role")),
+    )
+    await audit.record(
+        db, who, merchant_id=admin["merchant_id"], action=action, target_type="account",
+        target_id=int(admin["id"]), target_label=admin.get("full_name"),
+        new={"method": method} if method else None,
+    )
+
+
+@router.post("/logout")
+async def logout(user: TokenClaims = require_any_admin()):
+    """Record a dashboard sign-out. The token itself is dropped by the browser."""
+    if user.role == Role.MERCHANT_ADMIN:
+        async with SupabaseClient.service_role() as db:
+            await log_shop_access(db, {
+                "id": user.sub, "merchant_id": user.merchant_id,
+                "full_name": user.name, "role": user.merchant_role,
+            }, "account.logout")
+    return {"success": True}
 
 
 # ═══════════════════════════════════════════════════════════════

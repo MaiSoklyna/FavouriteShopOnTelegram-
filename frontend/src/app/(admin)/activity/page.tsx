@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
-import type { ActivityEntry, Merchant } from "@/types";
+import type { ActivityEntry, Merchant, ShopRole } from "@/types";
 import { BrandLoader } from "@/components/ui/Spinner";
 
-type Person = { id: string; name: string | null; role: "owner" | "staff" };
+type Person = { id: string; name: string | null; role: ShopRole };
 type Page = { data: ActivityEntry[]; page: number; has_more: boolean; people: Person[] };
 
 const FILTERS: { value: string; label: string }[] = [
@@ -25,9 +25,12 @@ const FILTERS: { value: string; label: string }[] = [
   { value: "shop", label: "Shop settings" },
   { value: "payout", label: "Payout account" },
   { value: "staff", label: "Staff accounts" },
+  { value: "staff.role_changed", label: "Role changes" },
+  { value: "access", label: "Sign-ins and sign-outs" },
 ];
 
-/** Who changed what in the shop, and when. Owners only (and the platform, per shop). */
+/** Who changed what in the shop, and when. Owners and managers (and the platform, per shop).
+ *  `?actor_id=<id>` opens one person's history (linked from the Staff page). */
 export default function ActivityPage() {
   const { isSuperAdmin } = useAuth();
   const [shops, setShops] = useState<Merchant[]>([]);
@@ -49,6 +52,11 @@ export default function ActivityPage() {
     if (isSuperAdmin) api.get<Merchant[]>("/merchants").then(setShops).catch(() => {});
   }, [isSuperAdmin]);
   useEffect(() => { const t = setTimeout(() => setQuery(search.trim()), 350); return () => clearTimeout(t); }, [search]);
+  // One person's history, opened from the Staff page
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("actor_id");
+    if (id && /^\d+$/.test(id)) setPerson(id);
+  }, []);
 
   const load = useCallback(async (nextPage: number) => {
     if (isSuperAdmin && !shopId) { setRows([]); setLoading(false); return; }
@@ -102,7 +110,7 @@ export default function ActivityPage() {
         <label style={{ flex: "1 1 150px", fontSize: 12 }}>Who
           <select className="admin-input" data-testid="filter-person" value={person} onChange={e => setPerson(e.target.value)}>
             <option value="">Everyone</option>
-            {people.map(p => <option key={p.id} value={p.id}>{p.name} ({p.role === "owner" ? "owner" : "staff"})</option>)}
+            {people.map(p => <option key={p.id} value={p.id}>{p.name} ({roleName(p.role).toLowerCase()})</option>)}
           </select>
         </label>
         <label style={{ flex: "1 1 140px", fontSize: 12 }}>From
@@ -176,7 +184,8 @@ function Entry({ e }: { e: ActivityEntry }) {
 // ── Reading an entry ───────────────────────────────────────────
 
 function roleName(t: ActivityEntry["actor_type"]): string {
-  return t === "owner" ? "Owner" : t === "staff" ? "Staff" : t === "super_admin" ? "Platform admin" : t === "system" ? "System" : "";
+  return t === "owner" ? "Owner" : t === "manager" ? "Manager" : t === "staff" ? "Staff"
+    : t === "super_admin" ? "Platform admin" : t === "system" ? "System" : "";
 }
 
 function dot(action: string): string {
@@ -231,6 +240,9 @@ function sentence(e: ActivityEntry): string {
     case "staff.deactivated": return `${who} deactivated staff member ${what}`;
     case "staff.reactivated": return `${who} reactivated staff member ${what}`;
     case "staff.removed": return `${who} removed staff member ${what}`;
+    case "staff.role_changed": return `${who} changed the role of ${what}`;
+    case "account.login": return `${who} signed in${n.method === "telegram" ? " with Telegram" : ""}`;
+    case "account.logout": return `${who} signed out`;
     default: return `${who}: ${e.action} ${what}`;
   }
 }
@@ -245,14 +257,16 @@ const LABELS: Record<string, string> = {
   min_order: "Minimum order", max_uses: "Max uses", expires_at: "Expires", title: "Title", starts_at: "Starts", ends_at: "Ends",
   customers: "Customers", variants: "Options", products: "Products", sort_order: "Position", cover_url: "Cover", image: "Photo", hero_image: "Hero image", logo_url: "Logo",
   opening_hours: "Opening hours", delivery_base_fee: "Delivery fee", delivery_per_km_fee: "Fee per km",
-  delivery_radius_km: "Delivery radius (km)", tagline: "Tagline", address: "Address",
+  delivery_radius_km: "Delivery radius (km)", tagline: "Tagline", address: "Address", role: "Role",
 };
+const ROLE_NAMES: Record<string, string> = { owner: "Owner", manager: "Manager", staff: "Staff" };
 const MONEY = new Set(["base_price", "compare_price", "min_order", "delivery_base_fee", "delivery_per_km_fee"]);
-const SKIP = new Set(["user_ids", "driver_id", "primary", "role"]);
+const SKIP = new Set(["user_ids", "driver_id", "primary", "method"]);
 
 function show(field: string, v: unknown): string {
   if (v === null || v === undefined || v === "") return "—";
   if (field === "status" && typeof v === "string") return STATUS[v] || v;
+  if (field === "role" && typeof v === "string") return ROLE_NAMES[v] || v;
   if (MONEY.has(field) && !isNaN(Number(v))) return `$${Number(v).toFixed(2)}`;
   if (typeof v === "boolean") return v ? "Yes" : "No";
   if ((field === "starts_at" || field === "ends_at") && typeof v === "string") return new Date(v).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });

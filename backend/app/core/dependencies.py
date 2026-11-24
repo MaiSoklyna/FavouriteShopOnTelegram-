@@ -24,8 +24,9 @@ import time
 
 from fastapi import Depends, Request
 
-from app.core.constants import Role, ShopRole, shop_role
+from app.core.constants import Role, shop_role
 from app.core.exceptions import AuthenticationError, ForbiddenError
+from app.core.permissions import Perm, denied_message, required_permission, role_can
 from app.core.security import (
     InvalidTokenError,
     TokenClaims,
@@ -83,9 +84,24 @@ async def get_current_user(request: Request) -> TokenClaims:
     except InvalidTokenError as exc:
         raise AuthenticationError(exc.reason)
     if claims.is_shop_staff and not await staff_account_active(claims):
-        # Deactivated or removed staff lose access at once, not when their token runs out
+        # Deactivated, removed or re-roled staff lose access at once, not when their token runs out
         raise AuthenticationError("This staff account is no longer active. Ask the shop owner.")
+    if claims.role == Role.MERCHANT_ADMIN:
+        _enforce_shop_permission(request, claims)
     return claims
+
+
+def _enforce_shop_permission(request: Request, claims: TokenClaims) -> None:
+    """Apply the permission matrix (app/core/permissions.py) to every shop-account request."""
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    if not path:
+        return
+    perm = required_permission(request.method, path)
+    if perm is not None and not role_can(claims.shop_role, perm):
+        logger.info("Permission %s denied to %s account %s on %s %s",
+                    perm, claims.shop_role, claims.sub, request.method, path)
+        raise ForbiddenError(denied_message(claims.shop_role, perm))
 
 
 # ── Staff accounts: checked live ────────────────────────────────
@@ -110,10 +126,12 @@ async def staff_account_active(claims: TokenClaims) -> bool:
     except Exception:
         logger.exception("Could not check staff account %s", claims.sub)
         return False
+    # The account must still be active, in this shop, and still have the role the token carries
+    # (an owner changing someone from manager to staff signs them out).
     ok = bool(
         row and row.get("is_active")
         and row.get("merchant_id") == claims.merchant_id
-        and shop_role(row.get("role")) == ShopRole.STAFF
+        and shop_role(row.get("role")) == claims.shop_role
     )
     _staff_checks[key] = (now, ok)
     return ok
@@ -211,6 +229,21 @@ def require_shop_owner_only():
             raise ForbiddenError("This action requires one of: merchant_admin")
         if current_user.is_shop_staff:
             raise ForbiddenError("Only the shop owner can do this")
+        return current_user
+
+    return Depends(_guard)
+
+
+def require_permission(perm: Perm, *, allow_super_admin: bool = True):
+    """A shop account whose role has `perm` (see app/core/permissions.py), or a super admin."""
+
+    async def _guard(current_user: TokenClaims = Depends(get_current_user)) -> TokenClaims:
+        if current_user.is_super_admin and allow_super_admin:
+            return current_user
+        if current_user.role != Role.MERCHANT_ADMIN:
+            raise ForbiddenError("This action requires a shop account")
+        if not role_can(current_user.shop_role, perm):
+            raise ForbiddenError(denied_message(current_user.shop_role, perm))
         return current_user
 
     return Depends(_guard)

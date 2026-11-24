@@ -38,7 +38,9 @@ ACTION_GROUPS: dict[str, tuple[str, ...]] = {
     "coupon": ("coupon.created", "coupon.updated", "coupon.disabled", "coupon.deleted", "coupon.granted"),
     "shop": ("shop.profile_updated", "shop.settings_updated"),
     "payout": ("payout.account_updated", "payout.verification_changed"),
-    "staff": ("staff.added", "staff.updated", "staff.deactivated", "staff.reactivated", "staff.removed"),
+    "staff": ("staff.added", "staff.updated", "staff.role_changed", "staff.deactivated", "staff.reactivated",
+              "staff.removed"),
+    "access": ("account.login", "account.logout"),
 }
 ACTIONS = frozenset(a for group in ACTION_GROUPS.values() for a in group)
 
@@ -67,6 +69,9 @@ def _same(a: Any, b: Any) -> bool:
     except Exception:
         pass
     return jsonable(a) == jsonable(b)
+
+
+same_value = _same  # public name for routes that compare a submitted value with the stored one
 
 
 def diff(before: dict, after: dict, fields: Iterable[str] | None = None) -> tuple[dict, dict]:

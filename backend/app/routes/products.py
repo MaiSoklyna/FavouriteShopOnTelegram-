@@ -20,6 +20,7 @@ from app.core.dependencies import (
     require_role,
 )
 from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
+from app.core.permissions import Perm, denied_message, role_can
 from app.core.security import TokenClaims
 from app.db.client import StorageClient, SupabaseClient
 from app.models.product import (
@@ -256,6 +257,7 @@ async def update_product(
         # Explicit category_id (including 0/null from the form) clears the category
         if "category_id" in body.model_fields_set:
             data["category_id"] = body.category_id
+        _check_price_permission(user, existing, data)
 
         new_merchant = data.get("merchant_id")
         if new_merchant is not None and new_merchant != existing["merchant_id"]:
@@ -646,6 +648,15 @@ def _check_merchant_ownership(user: TokenClaims, resource_merchant_id: int | Non
     # A token without a merchant must never match an unowned row (None == None)
     if _own_merchant_id(user) != resource_merchant_id:
         raise ForbiddenError("You can only modify your own merchant's resources")
+
+
+def _check_price_permission(user: TokenClaims, existing: dict, data: dict) -> None:
+    """Changing an existing product's price needs the products.price permission (Owner/Manager)."""
+    if user.role != Role.MERCHANT_ADMIN or role_can(user.shop_role, Perm.PRODUCTS_PRICE):
+        return
+    for field in PRICE_FIELDS:
+        if field in data and not audit.same_value(existing.get(field), data[field]):
+            raise ForbiddenError(denied_message(user.shop_role, Perm.PRODUCTS_PRICE))
 
 
 async def _require_merchant(db: SupabaseClient, merchant_id: int) -> None:

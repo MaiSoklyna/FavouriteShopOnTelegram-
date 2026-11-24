@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
+
+# Roles an owner can give: shops have one owner, set when the shop is approved
+AssignableRole = Literal["manager", "staff"]
 
 
 def _clean_email(v: str | None) -> str | None:
@@ -28,6 +33,7 @@ class StaffCreate(BaseModel):
     email: str = Field(..., min_length=3, max_length=254)
     password: str = Field(..., min_length=8, max_length=128)
     telegram_id: int | None = Field(None, gt=0)
+    role: AssignableRole = "staff"
 
     @field_validator("email")
     @classmethod
@@ -47,6 +53,7 @@ class StaffUpdate(BaseModel):
     telegram_id: int | None = Field(None, gt=0)
     clear_telegram_id: bool = False
     is_active: bool | None = None
+    role: AssignableRole | None = None
 
     @field_validator("email")
     @classmethod

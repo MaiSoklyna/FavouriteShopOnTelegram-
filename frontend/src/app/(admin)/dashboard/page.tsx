@@ -6,6 +6,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { DashboardStats, AdminUser, ShopReview, ShopReviewSummary } from "@/types";
 import { RatingSummary } from "@/components/admin/ShopReviewsPanel";
+import { ShopOverview } from "@/components/admin/ShopOverview";
 import { HiOutlineShoppingBag, HiOutlineClipboardList, HiOutlineCurrencyDollar, HiOutlineClock, HiOutlineUsers, HiOutlineTrendingUp } from "react-icons/hi";
 
 export default function DashboardPage() {
@@ -14,6 +15,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   async function fetchStats() {
+    // Shops get their own overview (ShopOverview); these platform-wide cards are for super admins
+    if (!isSuperAdmin) { setLoading(false); return; }
     try {
       const data = await api.get<DashboardStats>("/analytics/dashboard");
       setStats(data);
@@ -24,7 +27,8 @@ export default function DashboardPage() {
     }
   }
 
-  useEffect(() => { fetchStats(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchStats(); }, [isSuperAdmin]);
   useAutoRefresh(fetchStats, { interval: 30000 });
 
   const adminUser = user as AdminUser;
@@ -58,7 +62,7 @@ export default function DashboardPage() {
 
       {!isSuperAdmin && <WorkQueue staff={isShopStaff} />}
 
-      {loading ? (
+      {!isSuperAdmin ? <ShopOverview /> : loading ? (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
           {[...Array(6)].map((_, i) => (
             <div key={i} style={{ height: 100, background: "var(--bg-secondary)", borderRadius: 12, animation: "pulse 1.5s infinite" }} />

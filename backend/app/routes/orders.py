@@ -22,6 +22,7 @@ from app.core.constants import (
 )
 from app.core.dependencies import require_any_admin, require_role
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
+from app.core.permissions import Perm, denied_message, role_can
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.services import activity, audit, coupons, deliveries, inventory, notify, order_status, settlement, shop_reviews
@@ -453,6 +454,10 @@ async def update_order_status(
     new_status = body.get("status")
     if not new_status:
         raise BadRequestError("status is required")
+    # Rejecting or cancelling an order is a manager/owner decision (app/core/permissions.py)
+    if (new_status == "cancelled" and user.role == Role.MERCHANT_ADMIN
+            and not role_can(user.shop_role, Perm.ORDERS_CANCEL)):
+        raise ForbiddenError(denied_message(user.shop_role, Perm.ORDERS_CANCEL))
 
     async with SupabaseClient.service_role() as db:
         order = await db.from_("orders").eq("id", order_id).select_one("id,status,merchant_id,order_code")

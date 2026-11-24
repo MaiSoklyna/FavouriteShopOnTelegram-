@@ -10,11 +10,11 @@ export interface AdminUser {
   role: AdminDisplayRole;
   merchant_id?: number | null;
   merchant_name?: string;
-  /** Shop accounts only: the owner runs the shop, staff do the daily work. */
+  /** Shop accounts only: the owner runs the shop, managers run the day, staff do the daily work. */
   merchant_role?: ShopRole;
 }
 
-export type ShopRole = "owner" | "staff";
+export type ShopRole = "owner" | "manager" | "staff";
 
 /** Someone who can sign in to a shop (Staff page). */
 export interface ShopAccount {
@@ -62,7 +62,7 @@ export interface AdminCollection extends ShopCollection {
 /** One entry in a shop's activity log. */
 export interface ActivityEntry {
   id: number;
-  actor_type: "owner" | "staff" | "super_admin" | "system" | "user";
+  actor_type: "owner" | "manager" | "staff" | "super_admin" | "system" | "user";
   actor_id: string | null;
   actor_name: string | null;
   action: string;

@@ -19,7 +19,7 @@ from app.db.client import SupabaseClient
 from app.main import app
 from app.models.collection import MAX_COLLECTIONS_PER_SHOP
 from app.routes import collections as route
-from tests.test_merchant_staff import OWNER, STAFF, SUPER, FakeDb, bearer
+from tests.test_merchant_staff import MANAGER, OWNER, STAFF, SUPER, FakeDb, bearer
 
 NOW = datetime.now(timezone.utc)
 PAST, FUTURE = (NOW - timedelta(days=2)).isoformat(), (NOW + timedelta(days=2)).isoformat()
@@ -136,8 +136,8 @@ def test_customers_see_nothing_before_the_migration(client, db):
 # ── Shops manage them ───────────────────────────────────────────
 
 
-def test_staff_create_a_collection_with_their_products(client, db):
-    r = client.post("/api/collections/admin", headers=STAFF, json={
+def test_manager_creates_a_collection_with_their_products(client, db):
+    r = client.post("/api/collections/admin", headers=MANAGER, json={
         "title": " Birthday Cakes ", "description": "For your day", "product_ids": [7, 5, 7],
         "starts_at": PAST, "ends_at": FUTURE, "merchant_id": 2,  # a shop account's merchant_id is ignored
     })
@@ -146,7 +146,7 @@ def test_staff_create_a_collection_with_their_products(client, db):
     assert (c["merchant_id"], c["title"], c["type"]) == (1, "Birthday Cakes", "manual")
     assert [l["product_id"] for l in sorted(db.t[route.LINKS], key=lambda l: l["sort_order"])] == [7, 5]
     e = db.log("collection.created")[0]
-    assert (e["actor_name"], e["actor_type"], e["target_label"]) == ("Sara", "staff", "Birthday Cakes")
+    assert (e["actor_name"], e["actor_type"], e["target_label"]) == ("Kosal", "manager", "Birthday Cakes")
     assert e["new_value"]["products"] == ["Chocolate Cake", "Matcha Cake"]
 
 
@@ -174,15 +174,15 @@ def test_a_shop_has_at_most_20_collections(client, db):
 
 def test_reordering_products_is_logged_once(client, db):
     db.add(1, products=[5, 7], title="Cakes")
-    r = client.put("/api/collections/admin/1/products", headers=STAFF, json={"product_ids": [7, 5]})
+    r = client.put("/api/collections/admin/1/products", headers=MANAGER, json={"product_ids": [7, 5]})
     assert r.status_code == 200
     assert [l["product_id"] for l in sorted(db.t[route.LINKS], key=lambda l: l["sort_order"])] == [7, 5]
-    client.put("/api/collections/admin/1/products", headers=STAFF, json={"product_ids": [7, 5]})  # no change
+    client.put("/api/collections/admin/1/products", headers=MANAGER, json={"product_ids": [7, 5]})  # no change
     entries = db.log("collection.products_changed")
     assert len(entries) == 1
     assert entries[0]["old_value"] == {"products": ["Matcha Cake", "Chocolate Cake"]}
     assert entries[0]["new_value"] == {"products": ["Chocolate Cake", "Matcha Cake"]}
-    assert client.put("/api/collections/admin/1/products", headers=STAFF, json={"product_ids": [6]}).status_code == 400
+    assert client.put("/api/collections/admin/1/products", headers=MANAGER, json={"product_ids": [6]}).status_code == 400
 
 
 def test_editing_and_deleting_are_logged(client, db):
