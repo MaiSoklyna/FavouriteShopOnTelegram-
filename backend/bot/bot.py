@@ -1,6 +1,6 @@
 import logging
-from telegram import BotCommand
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters
+from telegram import BotCommand, User
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ExtBot, MessageHandler, filters
 from app.config import settings
 
 from bot.handlers.start import start_command, help_command, main_menu_callback, dash_role_callback
@@ -37,9 +37,46 @@ async def _post_init(app):
         logger.warning("set_my_commands failed: %s", e)
 
 
-def create_bot_app():
-    """Create and configure the Telegram bot application."""
-    app = ApplicationBuilder().token(settings.TELEGRAM_BOT_TOKEN).post_init(_post_init).build()
+class KnownIdentityBot(ExtBot):
+    """A bot that already knows who it is, so starting it makes no call to Telegram.
+
+    ``Application.initialize()`` calls ``get_me`` on every start. On Vercel that is every
+    cold start, and while Telegram is rate-limiting the bot each of those calls renews
+    the limit. The id and username are already known from the token and settings.
+    """
+
+    def __init__(self, *args, identity: User, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._known_identity = identity
+
+    async def get_me(self, *args, **kwargs) -> User:
+        self._bot_user = self._known_identity
+        return self._known_identity
+
+
+def bot_identity_from_settings() -> User | None:
+    """The bot's own User, built from the token's numeric id and TELEGRAM_BOT_USERNAME.
+
+    Returns None when the username is not configured; callers then fall back to getMe.
+    """
+    username = (settings.TELEGRAM_BOT_USERNAME or "").strip().lstrip("@")
+    bot_id = (settings.TELEGRAM_BOT_TOKEN or "").split(":", 1)[0]
+    if not username or not bot_id.isdigit():
+        return None
+    return User(id=int(bot_id), is_bot=True, first_name=username, username=username)
+
+
+def create_bot_app(identity: User | None = None):
+    """Create and configure the Telegram bot application.
+
+    With ``identity``, ``initialize()`` makes no network call (see KnownIdentityBot).
+    """
+    builder = ApplicationBuilder()
+    if identity is not None:
+        builder = builder.bot(KnownIdentityBot(token=settings.TELEGRAM_BOT_TOKEN, identity=identity))
+    else:
+        builder = builder.token(settings.TELEGRAM_BOT_TOKEN)
+    app = builder.post_init(_post_init).build()
 
     # === Command Handlers ===
     app.add_handler(CommandHandler("start", start_command))

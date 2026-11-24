@@ -20,7 +20,7 @@ from telegram import Update
 from telegram.ext import Application
 
 from app.config import settings
-from bot.bot import create_bot_app
+from bot.bot import bot_identity_from_settings, create_bot_app
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/telegram", tags=["Telegram Webhook"])
@@ -36,7 +36,12 @@ async def _get_bot_app() -> Application:
         return _bot_app
     async with _bot_lock:
         if _bot_app is None:
-            app = create_bot_app()
+            # With a known identity, initialize() only sets up the HTTP client: no getMe,
+            # so a cold start makes no Telegram call and cannot renew a rate limit.
+            identity = bot_identity_from_settings()
+            if identity is None:
+                logger.warning("TELEGRAM_BOT_USERNAME not set; bot start will call getMe")
+            app = create_bot_app(identity)
             await app.initialize()
             _bot_app = app
     return _bot_app
