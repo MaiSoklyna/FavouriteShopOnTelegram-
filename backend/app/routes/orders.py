@@ -14,16 +14,20 @@ from decimal import ROUND_HALF_UP, Decimal
 from fastapi import APIRouter
 
 from app.core.constants import (
+    DEFAULT_DELIVERY_FEE,
     FREE_DELIVERY_THRESHOLD,
     ORDER_PREFIX,
     ORDER_STATUS_TRANSITIONS,
     Role,
 )
 from app.core.dependencies import require_any_admin, require_role
-from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
+from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
+from app.core.permissions import Perm, denied_message, role_can
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.services import settlement
+from app.services import activity, audit, coupons, deliveries, inventory, notify, order_status, settlement, shop_reviews
+from app.services import promo_schedule
+from app.services.delivery import is_open, quote_delivery, valid_point
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -54,12 +58,24 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
 
         # ── Price the cart (same computation as /orders/quote) ──
         promo_code = (request_body.get("promo_code") or "").strip() or None
-        priced = await _price_cart(db, user_id, merchant_id, promo_code)
+        delivery_type, dest = _parse_delivery(request_body)
+        priced = await _price_cart(db, user_id, merchant_id, promo_code, delivery_type, dest)
         if priced is None:
             raise BadRequestError("Cart is empty")
         if promo_code and not priced["promo"]:
             # The customer was shown a discount; never silently charge more.
             raise BadRequestError(priced["promo_error"] or "Promo code is no longer valid")
+
+        _enforce_shop_rules(priced)
+        expected = request_body.get("expected_total")
+        if expected is not None:
+            try:
+                changed = _money(expected) != priced["total"]
+            except Exception:
+                raise BadRequestError("Invalid expected_total")
+            if changed:
+                # Fee, promo or stock price moved since the customer last saw the total
+                raise ConflictError(f"The price changed to ${priced['total']}. Please review your order.")
 
         cart, items, promo = priced["cart"], priced["items"], priced["promo"]
         subtotal = float(priced["subtotal"])
@@ -87,6 +103,14 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
             "payment_status": "pending",
             "delivery_address": delivery_address,
         }
+        # Columns from migration 016 — only sent when used, so plain delivery orders
+        # keep working on a database that hasn't been migrated yet.
+        if delivery_type != "delivery":
+            order_data["delivery_type"] = delivery_type
+        if dest:
+            order_data["delivery_latitude"], order_data["delivery_longitude"] = dest
+        if priced["distance_km"] is not None:
+            order_data["distance_km"] = float(priced["distance_km"])
 
         # Optional fields — only include if present to avoid schema errors
         for field in ("delivery_province", "customer_note", "delivery_phone", "delivery_name"):
@@ -106,67 +130,81 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
 
         if promo:
             order_data["promo_code_id"] = promo["id"]
+        # Migration 022 columns — only sent with a discount, so other orders work without it
+        merchant_discount, platform_discount = discount_parts(priced["discount"], priced["discount_funded_by"])
+        if priced["discount"] > 0:
+            order_data["merchant_discount_amount"] = float(merchant_discount)
+            order_data["platform_discount_amount"] = float(platform_discount)
 
-        rows = await db.from_("orders").insert(order_data)
-        order = rows[0]
-        order_id = order["id"]
+        # ── Take the stock first, atomically, before anything else exists ──
+        # One database call takes every line or none: the last unit can only go to one
+        # buyer, and a sold-out item stops the order here instead of after it is created.
+        # Count the coupon use first, atomically (the database checks the limits), so a coupon that was just
+        # used up stops the order here, before stock is taken
+        coupon_claim = await coupons.claim_use(db, promo, user_id, discount) if promo else None
+        try:
+            await inventory.reserve_stock(db, items)
+        except Exception:
+            await coupons.release_use(db, coupon_claim)
+            raise
+        order_id = None
+        try:
+            rows = await db.from_("orders").insert(order_data)
+            order = rows[0]
+            order_id = order["id"]
 
-        # ── Create order items + decrement stock ────────────────
-        for item in items:
-            product = await db.from_("products").eq("id", item["product_id"]).select_one(
-                "id,name,sku,base_price,stock"
-            )
-            if not product:
-                continue
+            # Cash on delivery: the shop collects the customer's money, so the platform
+            # owes it the platform-funded part of the discount (QR orders get this when paid).
+            if platform_discount > 0 and order_data["payment_method"] not in settlement.PLATFORM_COLLECTED_METHODS:
+                try:
+                    await settlement.record_order_earning(
+                        db, {**order, "platform_discount_amount": str(platform_discount)},
+                        actor_type="system", actor_id=None,
+                    )
+                except Exception:
+                    # The order stands; /settlements/admin/backfill records it later.
+                    logger.exception("Subsidy earning not recorded for COD order %s", order_id)
 
-            await db.from_("order_items").insert({
-                "order_id": order_id,
-                "product_id": item["product_id"],
-                "product_name": product.get("name", "Unknown"),
-                "product_sku": product.get("sku"),
-                "selected_variants": item.get("selected_variants"),
-                "quantity": item["quantity"],
-                "unit_price": item.get("unit_price", product["base_price"]),
-                "subtotal": round(item.get("unit_price", product["base_price"]) * item["quantity"], 2),
-            })
-
-            # Decrement product-level stock (prevent negative)
-            new_stock = max(product.get("stock", 0) - item["quantity"], 0)
-            await db.from_("products").eq("id", item["product_id"]).update({"stock": new_stock})
-
-            # Decrement per-variant stock as well
-            for sv in (item.get("selected_variants") or []):
-                opt_id = sv.get("option_id") if isinstance(sv, dict) else None
-                if not opt_id:
+            # ── Create order items (stock was already taken above) ──
+            for item in items:
+                product = await db.from_("products").eq("id", item["product_id"]).select_one(
+                    "id,name,sku,base_price"
+                )
+                if not product:
                     continue
-                opt = await db.from_("product_variant_options").eq("id", opt_id).select_one("stock_adjust")
-                if not opt:
-                    continue
-                new_opt_stock = max((opt.get("stock_adjust") or 0) - item["quantity"], 0)
-                await db.from_("product_variant_options").eq("id", opt_id).update({"stock_adjust": new_opt_stock})
 
-        # ── Record promo usage ──────────────────────────────────
-        if promo:
-            await db.from_("promo_usages").insert({
-                "promo_code_id": promo["id"],
-                "user_id": user_id,
-                "order_id": order_id,
-                "discount_applied": discount,
-            })
-            used_count = promo.get("used_count", 0) + 1
-            await db.from_("promo_codes").eq("id", promo["id"]).update({"used_count": used_count})
+                await db.from_("order_items").insert({
+                    "order_id": order_id,
+                    "product_id": item["product_id"],
+                    "product_name": product.get("name", "Unknown"),
+                    "product_sku": product.get("sku"),
+                    "selected_variants": item.get("selected_variants"),
+                    "quantity": item["quantity"],
+                    "unit_price": item.get("unit_price", product["base_price"]),
+                    "subtotal": round(item.get("unit_price", product["base_price"]) * item["quantity"], 2),
+                })
+
+            if promo:
+                await coupons.finish_use(db, coupon_claim, promo, user_id, order_id, discount)
+
+        except Exception:
+            # Nothing may keep stock or a coupon use for an order that does not exist
+            await inventory.release_stock(db, items)
+            await coupons.release_use(db, coupon_claim)
+            if order_id is not None:
+                try:
+                    await db.from_("orders").eq("id", order_id).update(
+                        {"status": "cancelled", "admin_note": "System: order could not be completed"}
+                    )
+                except Exception:
+                    logger.exception("Could not cancel half-created order %s", order_id)
+            raise
 
         # ── Clean up cart ───────────────────────────────────────
         await db.from_("cart_items").eq("cart_id", cart["id"]).delete()
         await db.from_("cart").eq("id", cart["id"]).delete()
 
-        # ── Earn loyalty points (best-effort) ───────────────────
-        loyalty_result = None
-        try:
-            from app.services.loyalty import earn_points
-            loyalty_result = await earn_points(user_id, order_id, float(total))
-        except Exception as exc:
-            logger.warning("Loyalty points not awarded for order %s: %s", order_id, exc)
+        await activity.record(db, "order_placed", user_id=user_id, merchant_id=merchant_id, order_id=order_id)
 
         # ── Telegram notifications (best-effort) ────────────────
         try:
@@ -201,7 +239,7 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
 
             # A QR order reaches the shop only once it is paid
             # (sent from payments._settle); COD orders go now.
-            if merchant_group_id and order_data["payment_method"] != "khqr":
+            if merchant_group_id and order_data["payment_method"] not in ("khqr", "stripe"):
                 await send_order_placed_to_merchant_group(
                     merchant_group_id,
                     order_id=order_id,
@@ -217,6 +255,9 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
         except Exception:
             logger.exception("Order notification dispatch failed (non-fatal)")
 
+        # In-app: the customer's receipt, and a new-order alert for the shop (cash orders)
+        await notify.order_placed(db, order_id)
+
     return {
         "success": True,
         "data": {
@@ -228,7 +269,6 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
             "total": total,
             "status": "pending",
             "payment_method": order_data["payment_method"],
-            "loyalty": loyalty_result,
         },
     }
 
@@ -237,14 +277,21 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
 async def quote_order(request_body: dict, user: TokenClaims = require_role(Role.USER)):
     """Price the caller's cart exactly as placing the order would.
 
-    Body: {"promo_code"?: str}. Returns one quote per shop (each shop is a
-    separate order with its own delivery fee). A promo code belongs to one
+    Body: {"promo_code"?: str, "delivery_type"?: "delivery"|"pickup",
+    "lat"?: float, "lng"?: float, "merchant_id"?: int} — lat/lng is the delivery pin; pickup is free,
+    delivery without a pin gets the default fee. Returns one quote per shop (each shop is a
+    separate order with its own delivery fee); merchant_id prices that one shop's cart only,
+    so another shop being out of range doesn't block it. A promo code belongs to one
     shop and is applied to that shop's order only.
     """
     promo_code = (request_body.get("promo_code") or "").strip() or None
+    delivery_type, dest = _parse_delivery(request_body)
+    only_merchant = request_body.get("merchant_id")
     async with SupabaseClient.service_role() as db:
         db_user = await _get_db_user(db, user)
         carts = await db.from_("cart").eq("user_id", db_user["id"]).select("id,merchant_id")
+        if only_merchant is not None:
+            carts = [c for c in carts if str(c.get("merchant_id")) == str(only_merchant)]
 
         quotes = []
         promo_merchant_id = None
@@ -252,7 +299,7 @@ async def quote_order(request_body: dict, user: TokenClaims = require_role(Role.
         for cart in carts:
             if not cart.get("merchant_id"):
                 continue
-            priced = await _price_cart(db, db_user["id"], cart["merchant_id"], promo_code)
+            priced = await _price_cart(db, db_user["id"], cart["merchant_id"], promo_code, delivery_type, dest)
             if priced is None:
                 continue
             if priced["promo"]:
@@ -264,8 +311,16 @@ async def quote_order(request_body: dict, user: TokenClaims = require_role(Role.
                 "subtotal": str(priced["subtotal"]),
                 "discount": str(priced["discount"]),
                 "delivery_fee": str(priced["delivery_fee"]),
+                "distance_km": str(priced["distance_km"]) if priced["distance_km"] is not None else None,
                 "total": str(priced["total"]),
                 "promo_applied": bool(priced["promo"]),
+                "promo_code": priced["promo"]["code"] if priced["promo"] else None,
+                "promo_title": (priced.get("promotion") or {}).get("title"),
+                "promo_auto": bool(priced.get("promo_auto")),
+                "eta_minutes": priced["eta"][0] if priced["eta"] else None,
+                "eta_max_minutes": priced["eta"][1] if priced["eta"] else None,
+                "is_open": priced["shop_open"],
+                "min_order_amount": str(priced["min_order"]) if priced["min_order"] is not None else None,
             })
 
     if promo_code and promo_merchant_id is None and promo_error is None:
@@ -321,6 +376,10 @@ async def get_order(order_id: int, user: TokenClaims = require_role(Role.USER, R
 
         items = await db.from_("order_items").eq("order_id", order_id).select()
         order["items"] = items
+        # Who is bringing it and how far it got (null for pickup orders and until a driver is assigned)
+        order["delivery"] = await deliveries.customer_view(db, order_id)
+        # The review this order's customer left for the shop (null until they do)
+        order["shop_review"] = await shop_reviews.for_order(db, order_id)
     return order
 
 
@@ -337,28 +396,21 @@ async def cancel_order(order_id: int, user: TokenClaims = require_role(Role.USER
         if order["status"] != "pending":
             raise BadRequestError("Only pending orders can be cancelled")
 
-        # Restore stock (product-level + variant options)
-        items = await db.from_("order_items").eq("order_id", order_id).select("product_id,quantity,selected_variants")
-        for item in items:
-            product = await db.from_("products").eq("id", item["product_id"]).select_one("stock")
-            if product:
-                new_stock = (product.get("stock", 0)) + item["quantity"]
-                await db.from_("products").eq("id", item["product_id"]).update({"stock": new_stock})
-
-            for sv in (item.get("selected_variants") or []):
-                opt_id = sv.get("option_id") if isinstance(sv, dict) else None
-                if not opt_id:
-                    continue
-                opt = await db.from_("product_variant_options").eq("id", opt_id).select_one("stock_adjust")
-                if opt:
-                    restored = (opt.get("stock_adjust") or 0) + item["quantity"]
-                    await db.from_("product_variant_options").eq("id", opt_id).update({"stock_adjust": restored})
-
+        # Reverse first: it refuses if the earning sits in an open payout, and that must stop
+        # the cancellation too.
         await settlement.on_order_status_changed(
             db, order_id, "cancelled", actor_type="user", actor_id=str(db_user["id"]),
             reason="Cancelled by customer",
         )
-        await db.from_("orders").eq("id", order_id).update({"status": "cancelled"})
+        # Claim the cancellation: only one request can flip pending -> cancelled, so the stock
+        # is given back exactly once even if the button is tapped twice.
+        claimed = await db.from_("orders").eq("id", order_id).eq("status", "pending").update({"status": "cancelled"})
+        if not claimed:
+            raise BadRequestError("Only pending orders can be cancelled")
+        items = await db.from_("order_items").eq("order_id", order_id).select("product_id,quantity,selected_variants")
+        await inventory.release_stock(db, items)
+        await coupons.release_for_order(db, order_id)
+        await notify.order_status_changed(db, order_id, "cancelled", by_customer=True)
     return {"success": True, "message": "Order cancelled"}
 
 
@@ -402,9 +454,13 @@ async def update_order_status(
     new_status = body.get("status")
     if not new_status:
         raise BadRequestError("status is required")
+    # Rejecting or cancelling an order is a manager/owner decision (app/core/permissions.py)
+    if (new_status == "cancelled" and user.role == Role.MERCHANT_ADMIN
+            and not role_can(user.shop_role, Perm.ORDERS_CANCEL)):
+        raise ForbiddenError(denied_message(user.shop_role, Perm.ORDERS_CANCEL))
 
     async with SupabaseClient.service_role() as db:
-        order = await db.from_("orders").eq("id", order_id).select_one("id,status,merchant_id")
+        order = await db.from_("orders").eq("id", order_id).select_one("id,status,merchant_id,order_code")
         if not order:
             raise NotFoundError("Order", order_id)
 
@@ -412,32 +468,22 @@ async def update_order_status(
         if user.role == Role.MERCHANT_ADMIN and order.get("merchant_id") != user.merchant_id:
             raise ForbiddenError("You can only manage your merchant's orders")
 
-        # Validate transition
-        allowed = ORDER_STATUS_TRANSITIONS.get(order["status"], [])
-        if new_status not in allowed:
-            raise BadRequestError(
-                f"Cannot transition from '{order['status']}' to '{new_status}'. "
-                f"Allowed: {allowed}"
-            )
-
-        update_data: dict = {"status": new_status}
+        old_status = order["status"]
+        await order_status.change_status(
+            db, order, new_status,
+            actor_type=str(user.role), actor_id=user.sub,
+            admin_note=body.get("admin_note"), payment_status=body.get("payment_status"),
+        )
+        new = {"status": new_status}
         if body.get("admin_note"):
-            update_data["admin_note"] = body["admin_note"]
+            new["note"] = body["admin_note"]
         if body.get("payment_status"):
-            update_data["payment_status"] = body["payment_status"]
-
-        actor = {"actor_type": str(user.role), "actor_id": user.sub}
-        # Reverse first: it refuses if the earning sits in an open payout,
-        # and that must stop the cancellation too.
-        if new_status == "cancelled":
-            await settlement.on_order_status_changed(
-                db, order_id, new_status, reason=body.get("admin_note"), **actor,
-            )
-
-        await db.from_("orders").eq("id", order_id).update(update_data)
-
-        if new_status == "delivered":
-            await settlement.on_order_status_changed(db, order_id, new_status, **actor)
+            new["payment_status"] = body["payment_status"]
+        await audit.record(
+            db, user, merchant_id=order.get("merchant_id"), action=audit.order_action(old_status, new_status),
+            target_type="order", target_id=order_id, target_label=order.get("order_code") or f"#{order_id}",
+            old={"status": old_status}, new=new,
+        )
     return {"success": True}
 
 
@@ -457,7 +503,11 @@ async def _get_db_user(db, user: TokenClaims) -> dict:
     raise NotFoundError("User")
 
 
-async def _price_cart(db, user_id: int, merchant_id: int, promo_code: str | None) -> dict | None:
+async def _price_cart(
+    db, user_id: int, merchant_id: int, promo_code: str | None,
+    delivery_type: str = "delivery",
+    dest: tuple[float, float] | None = None,
+) -> dict | None:
     """Single source of truth for an order's price.
 
     Used by both /orders/quote (what the customer sees) and place_order
@@ -474,19 +524,31 @@ async def _price_cart(db, user_id: int, merchant_id: int, promo_code: str | None
         (_money(item.get("unit_price")) * int(item.get("quantity") or 0) for item in items),
         Decimal("0.00"),
     )
-    delivery_fee = Decimal("0.00") if subtotal >= Decimal(str(FREE_DELIVERY_THRESHOLD)) else Decimal("5.00")
+    shop = await db.from_("merchants").eq("id", merchant_id).select_one() or {}
+    distance_km, delivery_fee, eta = _delivery_for(shop, delivery_type, dest)
+    if subtotal >= Decimal(str(FREE_DELIVERY_THRESHOLD)):
+        delivery_fee = Decimal("0.00")
 
     promo, promo_error, promo_owned = None, None, False
+    promotion = None
     discount = Decimal("0.00")
     if promo_code:
-        promo, promo_error, promo_owned = await _validate_promo(db, promo_code, merchant_id, subtotal)
+        promo, promo_error, promo_owned = await _validate_promo(db, promo_code, merchant_id, subtotal, user_id)
         if promo:
-            value = _money(promo["value"])
-            if promo["type"] == "percent":
-                discount = (subtotal * value / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            promotion = await _promotion_for_code(db, promo["id"])
+            if promotion and not promo_schedule.window(promotion)[0]:
+                # A scheduled code only works while its promotion is on
+                promo, promo_error = None, f"{promotion['title']} isn't on right now ({promo_schedule.describe(promotion).lower()})"
+        if promo:
+            # A product or category promotion discounts only the items it covers
+            base = await _eligible_base(db, promotion, items, subtotal)
+            if base <= 0:
+                promo, promo_error = None, "This code only applies to selected products"
             else:
-                discount = value
-            discount = min(discount, subtotal)
+                discount = _discount(promo, base)
+    else:
+        # No code typed: the best live promotion this cart qualifies for applies by itself
+        promo, promotion, discount = await _best_auto_promotion(db, merchant_id, items, subtotal, user_id)
 
     return {
         "cart": cart,
@@ -494,31 +556,191 @@ async def _price_cart(db, user_id: int, merchant_id: int, promo_code: str | None
         "subtotal": subtotal,
         "discount": discount,
         "delivery_fee": delivery_fee,
+        "distance_km": distance_km,
+        "eta": eta,
+        "shop_open": is_open(shop.get("opening_hours")),
+        "min_order": _money(shop["min_order_amount"]) if shop.get("min_order_amount") else None,
         "total": subtotal - discount + delivery_fee,
+        # Who pays the discount: the shop (comes out of its payout) or the platform
+        "discount_funded_by": discount_funder(promo, promotion) if discount > 0 else None,
         "promo": promo,
         "promo_error": promo_error,
         "promo_owned": promo_owned,
+        # The promotion behind the discount (typed or automatic), for "Weekend Sale applied"
+        "promotion": {"id": promotion["id"], "title": promotion["title"]} if promo and promotion else None,
+        "promo_auto": bool(promo) and not promo_code,
     }
+
+
+def discount_funder(promo: dict | None, promotion: dict | None) -> str:
+    """'platform' or 'shop': who pays for this discount.
+
+    The promotion's funded_by decides (migration 022). Without it: a platform
+    promotion, or a code that belongs to no shop, is paid by the platform;
+    everything else by the shop.
+    """
+    if promotion:
+        if promotion.get("funded_by") in ("shop", "platform"):
+            return promotion["funded_by"]
+        if promotion.get("scope") == "platform" or not promotion.get("merchant_id"):
+            return "platform"
+        return "shop"
+    return "platform" if promo and not promo.get("merchant_id") else "shop"
+
+
+def discount_parts(discount: Decimal, funded_by: str | None) -> tuple[Decimal, Decimal]:
+    """(merchant_discount, platform_discount) — they add up to the discount."""
+    if discount <= 0:
+        return Decimal("0.00"), Decimal("0.00")
+    return (Decimal("0.00"), discount) if funded_by == "platform" else (discount, Decimal("0.00"))
+
+
+def _parse_delivery(body: dict) -> tuple[str, tuple[float, float] | None]:
+    """(delivery_type, customer's map pin or None) from a request body."""
+    delivery_type = body.get("delivery_type") or "delivery"
+    if delivery_type not in ("delivery", "pickup"):
+        raise BadRequestError("delivery_type must be 'delivery' or 'pickup'")
+    if delivery_type == "pickup":
+        return delivery_type, None
+    lat, lng = body.get("lat", body.get("delivery_latitude")), body.get("lng", body.get("delivery_longitude"))
+    if lat is None or lng is None:
+        return delivery_type, None
+    if not valid_point(lat, lng):
+        raise BadRequestError("Invalid delivery location")
+    return delivery_type, (float(lat), float(lng))
+
+
+def _delivery_for(shop: dict, delivery_type: str, dest) -> tuple[Decimal | None, Decimal, tuple[int, int] | None]:
+    """(distance_km, fee, (eta_min, eta_max)) for a shop → pin.
+
+    Pickup is free. No pin, or a shop without a map location, gets the default
+    fee (so a failed map never blocks checkout). A pin the shop can't reach is
+    rejected here — the same rule the nearby list shows as "can_deliver: false".
+    """
+    if delivery_type == "pickup":
+        return None, Decimal("0.00"), None
+    default = Decimal(str(DEFAULT_DELIVERY_FEE)).quantize(Decimal("0.01"))
+    if not dest:
+        return None, default, None
+    q = quote_delivery(shop, dest)
+    if q is None:
+        return None, default, None
+    if not q.can_deliver:
+        raise BadRequestError(f"Delivery unavailable for this location. {q.reason or ''}".strip())
+    return q.distance_km, q.fee, (q.eta_minutes, q.eta_max_minutes)
+
+
+def _enforce_shop_rules(priced: dict) -> None:
+    """Refuse orders the shop can't take right now: closed, or below its minimum."""
+    if not priced["shop_open"]:
+        raise BadRequestError("This shop is closed right now")
+    if priced["min_order"] is not None and priced["subtotal"] < priced["min_order"]:
+        raise BadRequestError(f"This shop's minimum order is ${priced['min_order']}")
+
+
+def eligible_subtotal(items: list[dict], eligible_ids: set[int]) -> Decimal:
+    """Sum of the cart lines whose product the promotion covers."""
+    return sum(
+        (_money(i.get("unit_price")) * int(i.get("quantity") or 0) for i in items if i.get("product_id") in eligible_ids),
+        Decimal("0.00"),
+    )
+
+
+def _discount(promo: dict, base: Decimal) -> Decimal:
+    value = _money(promo["value"])
+    if promo["type"] == "percent":
+        amount = (base * value / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    else:
+        amount = value
+    return min(amount, base)
+
+
+async def _promotion_for_code(db, promo_code_id: int) -> dict | None:
+    """The promotion a code belongs to, or None (a plain code, or migration 018 not applied)."""
+    try:
+        return await db.from_("promotions").eq("promo_code_id", promo_code_id).select_one()
+    except Exception:  # promotions table missing: every code is shop-wide, as before
+        return None
+
+
+async def _eligible_base(db, promotion: dict | None, items: list[dict], subtotal: Decimal) -> Decimal:
+    """What the discount is worked out on: the whole cart, or only the lines the promotion covers."""
+    if not promotion or promotion["scope"] == "shop" or (promotion["scope"] == "platform" and not promotion.get("category_id")):
+        return subtotal
+    in_cart = list({i["product_id"] for i in items if i.get("product_id")})
+    if not in_cart:
+        return Decimal("0.00")
+    if promotion["scope"] == "product":
+        rows = await db.from_("promotion_products").eq("promotion_id", promotion["id"]).in_("product_id", in_cart).select("product_id")
+        return eligible_subtotal(items, {r["product_id"] for r in rows})
+    rows = await db.from_("products").in_("id", in_cart).eq("category_id", promotion["category_id"]).select("id")
+    return eligible_subtotal(items, {r["id"] for r in rows})
+
+
+async def _best_auto_promotion(db, merchant_id: int, items: list[dict], subtotal: Decimal,
+                               user_id: int | None = None) -> tuple[dict | None, dict | None, Decimal]:
+    """(code row, promotion, discount) for the biggest live auto-apply promotion this cart
+    qualifies for — this shop's or a platform-wide one — or (None, None, 0)."""
+    try:
+        rows = await (
+            db.from_("promotions").eq("is_active", True)
+            .or_(f"merchant_id.eq.{merchant_id}", "merchant_id.is.null").select()
+        )
+    except Exception:  # migration 018 not applied
+        return None, None, Decimal("0.00")
+    live = [r for r in rows if r.get("auto_apply") and r.get("promo_code_id") and promo_schedule.window(r)[0]]
+    if not live:
+        return None, None, Decimal("0.00")
+    codes = {c["id"]: c for c in await db.from_("promo_codes").in_("id", [r["promo_code_id"] for r in live]).select()}
+    uses = await coupons.user_use_counts(db, user_id, list(codes))
+    wallet = await coupons.wallet_code_ids(db, user_id) if any(c.get("audience") == "private" for c in codes.values()) else set()
+    best: tuple[dict | None, dict | None, Decimal] = (None, None, Decimal("0.00"))
+    for promotion in live:
+        code = codes.get(promotion["promo_code_id"])
+        if not code or not code.get("is_active"):
+            continue
+        if code.get("audience") == "private" and code["id"] not in wallet:
+            continue
+        if code.get("per_user_limit") and uses.get(code["id"], 0) >= code["per_user_limit"]:
+            continue  # this customer has had their share of this promotion
+        if code.get("max_uses") and (code.get("used_count") or 0) >= code["max_uses"]:
+            continue
+        if code.get("min_order") and subtotal < _money(code["min_order"]):
+            continue
+        base = await _eligible_base(db, promotion, items, subtotal)
+        if base <= 0:
+            continue
+        amount = _discount(code, base)
+        if amount > best[2]:
+            best = (code, promotion, amount)
+    return best
 
 
 def _money(value) -> Decimal:
     return Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-async def _validate_promo(db, code: str, merchant_id: int, subtotal: Decimal) -> tuple[dict | None, str | None, bool]:
+async def _validate_promo(db, code: str, merchant_id: int, subtotal: Decimal,
+                          user_id: int | None = None) -> tuple[dict | None, str | None, bool]:
     """Validate a promo code for one shop.
 
     Returns (promo, error, owned): `owned` is True when the code exists for
     this shop, so its error message is the one to show the customer.
     """
-    promo = await (
+    rows = await (
         db.from_("promo_codes")
-        .eq("merchant_id", merchant_id)
+        .or_(f"merchant_id.eq.{merchant_id}", "merchant_id.is.null")
         .eq("code", code)
         .eq("is_active", True)
-        .select_one()
+        .select()
     )
+    # The shop's own code wins over a platform code with the same name
+    promo = next((r for r in rows if r.get("merchant_id") == merchant_id), rows[0] if rows else None)
     if not promo:
+        return None, None, False
+
+    # A private code only exists for the customers it was given to: anyone else is told nothing about it
+    if promo.get("audience") == "private" and promo["id"] not in await coupons.wallet_code_ids(db, user_id):
         return None, None, False
 
     if promo.get("expires_at"):
@@ -531,5 +753,9 @@ async def _validate_promo(db, code: str, merchant_id: int, subtotal: Decimal) ->
 
     if promo.get("min_order") and subtotal < _money(promo["min_order"]):
         return None, f"Minimum order ${_money(promo['min_order'])} required for this code", True
+
+    limit = promo.get("per_user_limit")
+    if limit and user_id and (await coupons.user_use_counts(db, user_id, [promo["id"]])).get(promo["id"], 0) >= limit:
+        return None, "You've already used this promo code" if limit == 1 else f"You've used this promo code {limit} times", True
 
     return promo, None, True

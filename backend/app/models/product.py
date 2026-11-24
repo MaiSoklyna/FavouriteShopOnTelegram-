@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── Variants ────────────────────────────────────────────────────
@@ -58,7 +58,15 @@ class ProductImageResponse(BaseModel):
 # ── Products ────────────────────────────────────────────────────
 
 
+def _zero_is_none(v: int | None) -> int | None:
+    """The admin form sends 0 for "no selection"; store that as NULL."""
+    return v or None
+
+
 class ProductCreate(BaseModel):
+    # Owning shop. Required for super_admin; ignored for merchant_admin (their
+    # own shop is always used).
+    merchant_id: int | None = None
     category_id: int | None = None
     name: str = Field(..., min_length=1, max_length=200)
     slug: str | None = None
@@ -73,8 +81,12 @@ class ProductCreate(BaseModel):
     is_featured: bool = False
     variants: list[VariantGroupCreate] = []
 
+    _category_zero = field_validator("category_id", "merchant_id")(_zero_is_none)
+
 
 class ProductUpdate(BaseModel):
+    # Reassigning a product to another shop is super_admin only.
+    merchant_id: int | None = None
     category_id: int | None = None
     name: str | None = Field(None, min_length=1, max_length=200)
     description: str | None = Field(None, max_length=5000)
@@ -87,6 +99,8 @@ class ProductUpdate(BaseModel):
     icon_emoji: str | None = None
     is_featured: bool | None = None
     is_active: bool | None = None
+
+    _category_zero = field_validator("category_id", "merchant_id")(_zero_is_none)
 
 
 class ProductResponse(BaseModel):

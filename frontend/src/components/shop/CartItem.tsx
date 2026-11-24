@@ -14,14 +14,14 @@ export function CartItemCard({ item, onUpdateQuantity, onRemove }: CartItemProps
       style={{
         display: "flex", gap: 12, background: "var(--shop-surface, #FFFFFF)",
         borderRadius: "var(--shop-r-card, 16px)", padding: 14,
-        boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
+        boxShadow: "var(--shop-shadow, 0 8px 24px rgba(8,29,60,0.08))",
       }}
     >
       {/* Image */}
       <div
         style={{
           width: 72, height: 72, borderRadius: "var(--shop-r-input, 12px)",
-          background: "var(--shop-primary-tint, #E8F0FF)", flexShrink: 0, overflow: "hidden",
+          background: "var(--shop-primary-tint)", flexShrink: 0, overflow: "hidden",
         }}
       >
         {item.primary_image ? (
@@ -46,7 +46,7 @@ export function CartItemCard({ item, onUpdateQuantity, onRemove }: CartItemProps
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
           {/* Price */}
-          <span style={{ fontWeight: 700, fontSize: 16, color: "var(--shop-primary, #1E6BFF)" }}>
+          <span style={{ fontWeight: 700, fontSize: 16, color: "var(--shop-primary)" }}>
             ${item.line_total.toFixed(2)}
           </span>
 
@@ -69,9 +69,9 @@ export function CartItemCard({ item, onUpdateQuantity, onRemove }: CartItemProps
             <button
               onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
               style={{
-                width: 26, height: 26, borderRadius: "50%", border: "1px solid var(--shop-primary, #1E6BFF)",
-                background: "var(--shop-primary-tint, #E8F0FF)", cursor: "pointer", fontSize: 14,
-                color: "var(--shop-primary, #1E6BFF)", display: "flex", alignItems: "center", justifyContent: "center",
+                width: 26, height: 26, borderRadius: "50%", border: "1px solid var(--shop-primary)",
+                background: "var(--shop-primary-tint)", cursor: "pointer", fontSize: 14,
+                color: "var(--shop-primary)", display: "flex", alignItems: "center", justifyContent: "center",
                 padding: 0, lineHeight: 1,
               }}
             >
@@ -87,7 +87,7 @@ export function CartItemCard({ item, onUpdateQuantity, onRemove }: CartItemProps
           onClick={() => onRemove(item.id)}
           style={{
             background: "none", border: "none", cursor: "pointer",
-            color: "#DC2626", fontSize: 11, fontWeight: 500, padding: "2px 0",
+            color: "var(--shop-muted)", fontSize: 11, fontWeight: 500, padding: "2px 0",
           }}
         >
           Remove

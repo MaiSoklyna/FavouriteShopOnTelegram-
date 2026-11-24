@@ -6,6 +6,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
 import { api } from "@/lib/api";
 import type { SellerApplication } from "@/types";
+import { Icon } from "@/components/shop/Icon";
 
 const NAVY = "#103562";
 const GOLD = "#71541A";
@@ -18,6 +19,8 @@ const PROVINCES = [
   "Prey Veng", "Pursat", "Ratanakiri", "Siem Reap", "Stung Treng", "Svay Rieng",
   "Takeo", "Tboung Khmum",
 ];
+
+interface ShopCategory { id: number; name: string; subcategories: { id: number; name: string }[] }
 
 const STEPS = ["Seller type", "Registration", "Store setup", "Location", "Review"];
 
@@ -34,6 +37,8 @@ interface FormState {
   store_name: string;
   store_description: string;
   logo_url: string;
+  shop_category_id: string;
+  shop_subcategory_id: string;
   province: string;
   district: string;
   commune: string;
@@ -46,7 +51,7 @@ const EMPTY: FormState = {
   seller_type: "individual",
   full_name: "", email: "", phone: "", gender: "", date_of_birth: "", company_name: "",
   password: "", confirm_password: "",
-  store_name: "", store_description: "", logo_url: "",
+  store_name: "", store_description: "", logo_url: "", shop_category_id: "", shop_subcategory_id: "",
   province: "", district: "", commune: "", address_line1: "", address_line2: "",
   agree_terms: false,
 };
@@ -76,6 +81,7 @@ function SellContent() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [categories, setCategories] = useState<ShopCategory[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -94,6 +100,9 @@ function SellContent() {
     finally { setChecking(false); }
   }, []);
   useEffect(() => { loadExisting(); }, [loadExisting]);
+  useEffect(() => {
+    api.get<{ data: ShopCategory[] }>("/shop-categories").then((r) => setCategories(r.data || [])).catch(() => {});
+  }, []);
 
   function validateStep(): string {
     if (step === 1) {
@@ -105,6 +114,8 @@ function SellContent() {
     }
     if (step === 2) {
       if (form.store_name.trim().length < 2) return "Enter your store name";
+      if (!form.shop_category_id) return "Choose a shop category";
+      if (!form.shop_subcategory_id) return "Choose a shop subcategory";
     }
     if (step === 3) {
       if (!form.province) return "Select your province";
@@ -142,6 +153,8 @@ function SellContent() {
         store_name: form.store_name.trim(),
         store_description: form.store_description || null,
         logo_url: form.logo_url || null,
+        shop_category_id: Number(form.shop_category_id),
+        shop_subcategory_id: Number(form.shop_subcategory_id),
         province: form.province || null,
         district: form.district || null,
         commune: form.commune || null,
@@ -226,12 +239,12 @@ function SellContent() {
 
         {step === 0 && <StepSellerType value={form.seller_type} onChange={(v) => set("seller_type", v)} />}
         {step === 1 && <StepKyc form={form} set={set} />}
-        {step === 2 && <StepStore form={form} set={set} logoPreview={logoPreview} uploadingLogo={uploadingLogo} fileRef={fileRef} onLogoPick={onLogoPick} />}
+        {step === 2 && <StepStore categories={categories} form={form} set={set} logoPreview={logoPreview} uploadingLogo={uploadingLogo} fileRef={fileRef} onLogoPick={onLogoPick} />}
         {step === 3 && <StepLocation form={form} set={set} />}
-        {step === 4 && <StepReview form={form} set={set} />}
+        {step === 4 && <StepReview categories={categories} form={form} set={set} />}
 
         {error && (
-          <p style={{ color: "#DC2626", fontSize: 13, marginTop: 12, fontWeight: 500 }}>{error}</p>
+          <p style={{ color: "var(--fos-warning)", fontSize: 13, marginTop: 12, fontWeight: 500 }}>{error}</p>
         )}
       </div>
 
@@ -319,8 +332,8 @@ function StepKyc({ form, set }: { form: FormState; set: <K extends keyof FormSta
   );
 }
 
-function StepStore({ form, set, logoPreview, uploadingLogo, fileRef, onLogoPick }: {
-  form: FormState; set: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
+function StepStore({ categories, form, set, logoPreview, uploadingLogo, fileRef, onLogoPick }: {
+  categories: ShopCategory[]; form: FormState; set: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
   logoPreview: string; uploadingLogo: boolean;
   fileRef: React.RefObject<HTMLInputElement>; onLogoPick: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
@@ -354,11 +367,21 @@ function StepStore({ form, set, logoPreview, uploadingLogo, fileRef, onLogoPick 
       </div>
       {(logoPreview || uploadingLogo) && (
         <p style={{ textAlign: "center", fontSize: 11, color: form.logo_url ? "#1E7A43" : "var(--shop-muted)", marginTop: -8, marginBottom: 12 }}>
-          {uploadingLogo ? "Uploading logo…" : form.logo_url ? "✓ Logo uploaded" : "Tap to add your store logo"}
+          {uploadingLogo ? "Uploading logo…" : form.logo_url ? "Logo uploaded" : "Tap to add your store logo"}
         </p>
       )}
       <style>{`.sp-spin{animation:spin .6s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       <Field label="Store name"><Input value={form.store_name} onChange={(v) => set("store_name", v)} placeholder="Your store name" /></Field>
+      <Field label="Shop category">
+        <Select value={form.shop_category_id} placeholder="Select category"
+          onChange={(v) => { set("shop_category_id", v); set("shop_subcategory_id", ""); }}
+          options={categories.map((c) => ({ value: String(c.id), label: c.name }))} />
+      </Field>
+      <Field label="Shop type">
+        <Select value={form.shop_subcategory_id} placeholder={form.shop_category_id ? "Select type" : "Choose a category first"}
+          onChange={(v) => set("shop_subcategory_id", v)}
+          options={(categories.find((c) => String(c.id) === form.shop_category_id)?.subcategories || []).map((s) => ({ value: String(s.id), label: s.name }))} />
+      </Field>
       <Field label="Store description (optional)">
         <textarea value={form.store_description} onChange={(e) => set("store_description", e.target.value)} rows={4}
           placeholder="Tell customers what makes your store special..."
@@ -383,7 +406,7 @@ function StepLocation({ form, set }: { form: FormState; set: <K extends keyof Fo
   );
 }
 
-function StepReview({ form, set }: { form: FormState; set: <K extends keyof FormState>(k: K, v: FormState[K]) => void }) {
+function StepReview({ categories, form, set }: { categories: ShopCategory[]; form: FormState; set: <K extends keyof FormState>(k: K, v: FormState[K]) => void }) {
   const rows: [string, string][] = [
     ["Seller type", form.seller_type === "company" ? "Registered Business" : "Individual Seller"],
     ["Full name", form.full_name],
@@ -391,6 +414,7 @@ function StepReview({ form, set }: { form: FormState; set: <K extends keyof Form
     ["Email", form.email],
     ["Phone", form.phone || "—"],
     ["Store name", form.store_name],
+    ["Category", (() => { const c = categories.find((x) => String(x.id) === form.shop_category_id); const s = c?.subcategories.find((x) => String(x.id) === form.shop_subcategory_id); return c && s ? `${c.name} › ${s.name}` : "—"; })()],
     ["Location", [form.address_line1, form.commune, form.district, form.province].filter(Boolean).join(", ") || "—"],
   ];
   return (
@@ -419,6 +443,7 @@ function StepReview({ form, set }: { form: FormState; set: <K extends keyof Form
 
 function StatusScreen({ app, onBack }: { app: SellerApplication; onBack: () => void }) {
   const approved = app.status === "approved";
+  if (approved) return <SuccessDashboard app={app} onBack={onBack} />;
   const stages = [
     { label: "Registration & KYC", done: true },
     { label: "Byme24 Approval", done: approved, current: !approved },
@@ -433,7 +458,7 @@ function StatusScreen({ app, onBack }: { app: SellerApplication; onBack: () => v
           border: `1px solid ${approved ? "#A7E0BD" : GOLD_LIGHT}`,
           borderRadius: 16, padding: 20, marginBottom: 16, textAlign: "center",
         }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>{approved ? "🎉" : "⏳"}</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 8, color: approved ? "#1E7A43" : GOLD }}><Icon name={approved ? "party" : "clock"} size={36} /></div>
           <p style={{ fontSize: 16, fontWeight: 700, color: approved ? "#1E7A43" : GOLD, margin: 0 }}>
             {approved ? "You're approved!" : "Under review"}
           </p>
@@ -452,10 +477,10 @@ function StatusScreen({ app, onBack }: { app: SellerApplication; onBack: () => v
                 <div style={{
                   width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
                   display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700,
-                  background: s.done ? "#2E7D32" : (s as any).current ? GOLD : "var(--shop-divider)",
+                  background: s.done ? "var(--fos-success)" : (s as any).current ? GOLD : "var(--shop-divider)",
                   color: s.done || (s as any).current ? "#fff" : "var(--shop-muted)",
-                }}>{s.done ? "✓" : i + 1}</div>
-                {i < stages.length - 1 && <div style={{ width: 2, height: 28, background: s.done ? "#2E7D32" : "var(--shop-divider)" }} />}
+                }}>{s.done ? <Icon name="check" size={14} strokeWidth={3} /> : i + 1}</div>
+                {i < stages.length - 1 && <div style={{ width: 2, height: 28, background: s.done ? "var(--fos-success)" : "var(--shop-divider)" }} />}
               </div>
               <div style={{ paddingBottom: 14 }}>
                 <p style={{ fontSize: 14, fontWeight: 600, color: "var(--shop-black)", margin: 0 }}>{s.label}</p>
@@ -466,6 +491,97 @@ function StatusScreen({ app, onBack }: { app: SellerApplication; onBack: () => v
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Approved: the store is live. A milestone with next steps, not a workflow still in progress. */
+function SuccessDashboard({ app, onBack }: { app: SellerApplication; onBack: () => void }) {
+  // Products and orders live in the seller dashboard; the login page sends a signed-in admin straight through
+  const actions = [
+    { icon: "box" as const, label: "Manage Products", hint: "Add and edit items", href: "/login?redirect=/products" },
+    { icon: "list" as const, label: "View Orders", hint: "New and active orders", href: "/login?redirect=/orders" },
+    ...(app.merchant_id ? [{ icon: "store" as const, label: "Open Shop", hint: "See it as customers do", href: `/shop/merchant/${app.merchant_id}` }] : []),
+  ];
+  const canDo = [
+    { icon: "plus" as const, text: "Add products with photos, prices and variants" },
+    { icon: "bell" as const, text: "Receive orders, with alerts in Telegram" },
+    { icon: "tag" as const, text: "Create promotions and discount codes" },
+    { icon: "chat" as const, text: "Manage customers, reviews and support" },
+  ];
+  const liveSince = app.reviewed_at ? new Date(app.reviewed_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null;
+
+  return (
+    <div className="min-h-screen bg-surface pb-28">
+      <Header title="Your Store" subtitle={app.store_name} onBack={onBack} />
+      <div className="px-4 pt-4">
+        {/* Success card */}
+        <section className="relative overflow-hidden rounded-hero bg-grad-hero p-5 text-white shadow-fos-lg">
+          <span aria-hidden className="absolute -right-12 -top-12 h-44 w-44 rounded-full border-[22px] border-gold-400/15" />
+          <span aria-hidden className="absolute -bottom-12 right-16 h-28 w-28 rounded-full bg-gold-400/10" />
+          <div className="relative">
+            <div className="flex items-center justify-between gap-3">
+              <span className="grid h-14 w-14 place-items-center rounded-full bg-grad-gold text-navy-900 shadow-fos-md"><Icon name="party" size={28} strokeWidth={2} /></span>
+              <span className="inline-flex h-8 items-center gap-2 rounded-full bg-positive-500/15 px-3 text-[12px] font-extrabold text-positive-500 ring-1 ring-positive-500/40">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-positive-500 opacity-60" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-positive-500" />
+                </span>
+                Store Live
+              </span>
+            </div>
+            <p className="mt-4 text-[12px] font-extrabold uppercase tracking-[0.1em] text-gold-400">Congratulations</p>
+            <h2 className="mt-1 text-[26px] font-extrabold leading-[32px] tracking-[-0.02em]">{app.store_name} is open for business</h2>
+            <p className="mt-2 text-[14px] leading-[21px] text-white/75">
+              Byme24 approved your store{liveSince ? ` on ${liveSince}` : ""}. Customers can find you and order today.
+            </p>
+          </div>
+        </section>
+
+        {/* Quick actions */}
+        <h3 className="mt-6 text-section text-ink-900">Quick actions</h3>
+        <div className="mt-2.5 grid grid-cols-3 gap-2.5">
+          {actions.map((a, i) => (
+            <a key={a.label} href={a.href}
+              className={`fos-press flex min-h-[118px] flex-col justify-between rounded-card p-3 shadow-fos-md ${i === 0 ? "bg-gold-400 text-navy-900" : "bg-card text-ink-900"}`}>
+              <span className={`grid h-10 w-10 place-items-center rounded-full ${i === 0 ? "bg-navy-900 text-gold-400" : "bg-tint-gold text-gold-700"}`}><Icon name={a.icon} size={19} strokeWidth={2} /></span>
+              <span>
+                <span className="block text-[13px] font-extrabold leading-[17px]">{a.label}</span>
+                <span className={`mt-0.5 block text-[11px] leading-[14px] ${i === 0 ? "text-navy-900/70" : "text-ink-500"}`}>{a.hint}</span>
+              </span>
+            </a>
+          ))}
+        </div>
+        <p className="mt-2 text-caption text-ink-500">
+          Sign in to the seller dashboard with <b className="text-ink-900">{app.email}</b> and the password you chose when applying.
+        </p>
+
+        {/* Starter guidance */}
+        <section className="mt-6 rounded-card bg-card p-4 shadow-fos-md">
+          <h3 className="text-section text-ink-900">You can now</h3>
+          <ul className="mt-3 flex flex-col gap-3">
+            {canDo.map((c) => (
+              <li key={c.text} className="flex items-center gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-tint-positive text-tone-positive"><Icon name={c.icon} size={17} strokeWidth={2.2} /></span>
+                <span className="text-[14px] font-semibold text-ink-900">{c.text}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* Completed journey, kept small */}
+        <section className="mt-4 flex items-center gap-3 rounded-card border border-line px-4 py-3">
+          <div className="flex items-center">
+            {["Registered", "Approved", "Live"].map((label, i) => (
+              <span key={label} className="flex items-center">
+                {i > 0 && <span className="h-0.5 w-4 bg-positive-500/50" />}
+                <span title={label} className="grid h-5 w-5 place-items-center rounded-full bg-positive-500 text-white"><Icon name="check" size={11} strokeWidth={3.2} /></span>
+              </span>
+            ))}
+          </div>
+          <p className="text-[12px] font-semibold text-ink-500">Registered · Approved · Live — all steps complete</p>
+        </section>
       </div>
     </div>
   );
@@ -525,12 +641,15 @@ function Input({ value, onChange, placeholder, type = "text" }: { value: string;
   );
 }
 
-function Select({ value, onChange, placeholder, options }: { value: string; onChange: (v: string) => void; placeholder: string; options: string[] }) {
+function Select({ value, onChange, placeholder, options }: { value: string; onChange: (v: string) => void; placeholder: string; options: (string | { value: string; label: string })[] }) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)}
       style={{ ...inputStyle, color: value ? "var(--shop-black)" : "var(--shop-muted)", appearance: "none" as const }}>
       <option value="">{placeholder}</option>
-      {options.map((o) => <option key={o} value={o} style={{ color: "#000" }}>{o}</option>)}
+      {options.map((o) => {
+        const v = typeof o === "string" ? o : o.value;
+        return <option key={v} value={v} style={{ color: "#000" }}>{typeof o === "string" ? o : o.label}</option>;
+      })}
     </select>
   );
 }

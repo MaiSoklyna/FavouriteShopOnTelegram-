@@ -1,8 +1,32 @@
 export { ProductCard } from "./ProductCard";
 export { CategoryIcon, icons8Url } from "./CategoryIcon";
+export { CategoryPhotoIcon } from "./CategoryPhotoIcon";
 export { ShopPageHeader } from "./ShopPageHeader";
 export { CartItemCard } from "./CartItem";
 export { PriceSummary } from "./PriceSummary";
-export { OrderTimeline } from "./OrderTimeline";
+export { OrderProgress, OrderStatusHero, OrderTimeline } from "./OrderTimeline";
+export { KhqrCard, PaidSuccess } from "./Khqr";
 export { LoginGate, TelegramLoginPrompt } from "./LoginGate";
 export { isOutOfStock, OutOfStockOverlay } from "./OutOfStock";
+
+// Design handoff components
+export { Pill, RatingPill } from "./Pill";
+export { PriceTag } from "./PriceTag";
+export { SectionHeader } from "./SectionHeader";
+export { Skeleton } from "./Skeleton";
+export { EmptyState } from "./EmptyState";
+export { HeroCarousel, type HeroSlide } from "./HeroCarousel";
+export { FlashCard, Countdown } from "./FlashCard";
+export { ShopCard, ShopCardSkeleton, type ShopCardData } from "./ShopCard";
+export { ShopCover } from "./ShopCover";
+export { TabBar } from "./TabBar";
+export { HomeTopBar, SearchBar } from "./HomeTopBar";
+export { LocationSheet } from "./LocationSheet";
+export { PromotionCard, PromotionCardSkeleton } from "./PromotionCard";
+export { ShopCategoryTiles, CategoryChips } from "./ShopCategoryTiles";
+export { Stars, StarInput } from "./Stars";
+export { ShopReviews } from "./ShopReviews";
+export { CollectionRows } from "./CollectionRows";
+export { ShopReviewCard } from "./ShopReviewCard";
+export { CouponCard } from "./CouponCard";
+export { CouponSheet } from "./CouponSheet";

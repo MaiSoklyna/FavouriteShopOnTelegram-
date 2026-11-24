@@ -10,6 +10,68 @@ export interface AdminUser {
   role: AdminDisplayRole;
   merchant_id?: number | null;
   merchant_name?: string;
+  /** Shop accounts only: the owner runs the shop, managers run the day, staff do the daily work. */
+  merchant_role?: ShopRole;
+}
+
+export type ShopRole = "owner" | "manager" | "staff";
+
+/** Someone who can sign in to a shop (Staff page). */
+export interface ShopAccount {
+  id: number;
+  full_name: string;
+  email: string;
+  role: ShopRole;
+  is_active: boolean;
+  telegram_id: number | null;
+  last_login: string | null;
+  created_at: string;
+  is_you: boolean;
+}
+
+/** A shop's curated, ordered product list. Only "manual" exists today; "smart" is reserved. */
+export interface ShopCollection {
+  id: number;
+  merchant_id: number;
+  type: "manual" | "smart";
+  title: string;
+  description: string | null;
+  cover_url: string | null;
+  sort_order: number;
+  is_active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+}
+
+/** A collection as customers get it: only visible ones, with their active products. */
+export interface PublicCollection extends ShopCollection {
+  product_count: number;
+  products: Product[];
+  merchant?: { id: number; name: string; logo_url?: string | null; icon_emoji?: string | null };
+}
+
+/** A collection in the dashboard: every one, with its state. */
+export interface AdminCollection extends ShopCollection {
+  product_ids: number[];
+  visible_product_count: number;
+  /** draft = not shown (switched off, or no active product yet); live = customers see it */
+  status: "draft" | "live" | "scheduled" | "ended";
+  draft_reason: "off" | "no_products" | null;
+}
+
+/** One entry in a shop's activity log. */
+export interface ActivityEntry {
+  id: number;
+  actor_type: "owner" | "manager" | "staff" | "super_admin" | "system" | "user";
+  actor_id: string | null;
+  actor_name: string | null;
+  action: string;
+  target_type: string;
+  target_id: number | null;
+  target_label: string | null;
+  old_value: Record<string, unknown> | null;
+  new_value: Record<string, unknown> | null;
+  created_at: string;
 }
 
 export interface TelegramUser {
@@ -45,9 +107,34 @@ export interface Merchant {
   logo_url?: string | null;
   is_featured?: boolean;
   telegram_group_id?: number | null;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  delivery_radius_km?: number | null;
+  /** Migration 017. Null/absent = platform defaults (always open, standard fee bands, no minimum). */
+  opening_hours?: Record<string, [string, string][]> | null;
+  delivery_base_fee?: number | string | null;
+  delivery_per_km_fee?: number | string | null;
+  min_order_amount?: number | string | null;
+  /** Migration 029: the average of the shop's visible reviews and how many there are. */
+  rating?: number | null;
+  rating_count?: number;
+  /** Migration 024. Null = not categorised yet; the names come from the API next to the ids. */
+  shop_category_id?: number | null;
+  shop_subcategory_id?: number | null;
+  shop_category?: string | null;
+  shop_subcategory?: string | null;
   product_count?: number;
   order_count?: number;
   created_at?: string;
+}
+
+/** What kind of shop a merchant runs (GET /shop-categories). `shop_count` = active shops under it. */
+export interface ShopCategory {
+  id: number;
+  name: string;
+  shop_count?: number;
+  subcategories: { id: number; name: string; shop_count?: number }[];
 }
 
 // ── Product ────────────────────────────────────────────────────
@@ -59,6 +146,9 @@ export interface Product {
   description?: string;
   merchant_id: number;
   merchant_name?: string;
+  merchant_icon?: string | null;
+  merchant_logo_url?: string | null;
+  merchant_status?: string | null;
   category_id?: number | null;
   category_name?: string;
   base_price: number;
@@ -166,7 +256,139 @@ export interface Order {
   admin_note?: string;
   created_at?: string;
   updated_at?: string;
+  /** Live columns from the delivery/payment migrations */
+  delivery_type?: "delivery" | "pickup" | null;
+  delivery_name?: string | null;
+  delivery_phone?: string | null;
+  delivery_latitude?: number | null;
+  delivery_longitude?: number | null;
+  distance_km?: number | null;
+  paid_at?: string | null;
   items?: OrderItem[];
+  /** Who is bringing it and how far it got (null for pickup orders and until a driver is assigned). */
+  delivery?: DeliveryInfo | null;
+  /** The customer's review of the shop for this order (null until they leave one). */
+  shop_review?: { id: number; rating: number; comment?: string | null; created_at?: string } | null;
+}
+
+// ── Coupons ────────────────────────────────────────────────────
+
+export interface Coupon {
+  id: number;
+  code: string;
+  title: string;
+  subtitle?: string | null;
+  type: "percent" | "fixed" | string;
+  value: number | string;
+  /** "10% off" / "$2 off" */
+  discount_text: string;
+  min_order: number;
+  expires_at?: string | null;
+  /** Null = valid at every shop. */
+  merchant_id: number | null;
+  shop_name?: string | null;
+  per_user_limit?: number | null;
+  /** Uses left for everyone, when the coupon has a cap. */
+  remaining?: number | null;
+  audience: "public" | "private";
+  /** Applied at checkout without picking it. */
+  auto_apply: boolean;
+}
+
+/** A public coupon in the browse list. */
+export interface PublicCoupon extends Coupon {
+  claimed: boolean;
+  used_by_me: number;
+  usable: boolean;
+  reason?: string | null;
+}
+
+/** A coupon in the customer's wallet. */
+export interface WalletCoupon extends Coupon {
+  status: "available" | "used" | "expired" | "used_up" | "inactive";
+  source: "claimed" | "granted";
+  used_by_me: number;
+}
+
+/** A coupon offered for the cart at checkout. */
+export interface EligibleCoupon extends Coupon {
+  eligible: boolean;
+  /** Why it cannot be used yet, e.g. "Spend $4.20 more (minimum $20.00)". */
+  reason?: string | null;
+  /** What it would take off this cart. */
+  discount: number;
+  in_wallet: boolean;
+}
+
+// ── Shop reviews ───────────────────────────────────────────────
+
+export interface ShopReviewSummary {
+  rating: number | null;
+  count: number;
+  /** How many reviews gave each star, "5" .. "1". */
+  distribution: Record<string, number>;
+}
+
+export interface ShopReview {
+  id: number;
+  rating: number;
+  comment?: string | null;
+  created_at?: string;
+  /** First name and last initial, e.g. "Mai S." */
+  reviewer: string;
+  /** Admin lists only. */
+  is_visible?: boolean;
+  shop_name?: string | null;
+}
+
+// ── Deliveries ─────────────────────────────────────────────────
+
+/** assigned -> accepted -> picked_up -> delivered, or failed / cancelled / declined */
+export interface DeliveryInfo {
+  status: string;
+  driver: { name?: string | null; phone?: string | null; vehicle?: string | null };
+  accepted_at?: string | null;
+  picked_up_at?: string | null;
+  delivered_at?: string | null;
+  /** Only in the shop's view. */
+  failure_reason?: string | null;
+}
+
+export interface DriverProfile {
+  id: number;
+  merchant_id: number | null;
+  full_name: string;
+  phone: string;
+  vehicle?: string | null;
+  is_active: boolean;
+  is_available: boolean;
+}
+
+/** One delivery as the driver sees it: everything needed to do the job. */
+export interface DriverJob {
+  delivery: { id: number; status: string; assigned_at?: string; accepted_at?: string | null; picked_up_at?: string | null; delivered_at?: string | null; failure_reason?: string | null };
+  order: { id: number; code: string; status: string; total: number | string; payment_method: string; note?: string | null; created_at?: string; item_count: number; items: string[] };
+  /** Cash the driver must collect (cash on delivery, not yet paid); 0 otherwise. */
+  collect_cash: number;
+  shop: { name?: string | null; phone?: string | null; address?: string | null; lat?: number | null; lng?: number | null };
+  customer: { name?: string | null; phone?: string | null; address?: string | null; lat?: number | null; lng?: number | null; distance_km?: number | string | null };
+}
+
+/** A driver a shop can give an order to. */
+export interface AssignableDriver {
+  id: number;
+  full_name: string;
+  phone: string;
+  vehicle?: string | null;
+  merchant_id: number | null;
+  is_available: boolean;
+  active_jobs: number;
+}
+
+/** A driver in the admin lists. */
+export interface AdminDriver extends DriverProfile {
+  shop_name?: string | null;
+  active_jobs: number;
 }
 
 // ── Cart ───────────────────────────────────────────────────────
@@ -267,11 +489,18 @@ export interface Review {
 
 export interface Notification {
   id: number;
-  user_id: number;
+  /** Null on a shop-inbox notification (those carry merchant_id instead). */
+  user_id?: number | null;
+  merchant_id?: number | null;
+  /** The stored enum: order_update | promo | system. */
   type: string;
+  /** What happened (migration 027): order_placed, order_paid, order_status, review_request, new_order, payout, ... */
+  kind?: string | null;
   title: string;
   body: string;
   ref_id?: number | null;
+  /** Where a tap goes inside the app, e.g. /shop/order/35 (migration 027). */
+  link?: string | null;
   is_read?: boolean;
   sent_at?: string;
   user_name?: string;
@@ -298,6 +527,8 @@ export interface SellerApplication {
   commune?: string | null;
   address_line1?: string | null;
   address_line2?: string | null;
+  shop_category_id?: number | null;
+  shop_subcategory_id?: number | null;
   status: SellerApplicationStatus;
   review_note?: string | null;
   merchant_id?: number | null;
@@ -330,6 +561,7 @@ export interface LoyaltySettings {
   gold_threshold: number;
   silver_multiplier: number;
   gold_multiplier: number;
+  redeem_coupon_days?: number;
 }
 
 // ── AI ─────────────────────────────────────────────────────────
@@ -364,4 +596,8 @@ export interface DashboardStats {
   totalUsers: number;
   todayOrders: number;
   todayRevenue: number;
+  /** Discounts paid by the shop (came out of its revenue) */
+  merchantFundedDiscounts?: number;
+  /** Discounts paid by the platform (a shop's revenue already includes them) */
+  platformFundedDiscounts?: number;
 }

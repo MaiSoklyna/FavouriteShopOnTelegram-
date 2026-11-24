@@ -27,6 +27,8 @@ export interface MerchantBalance {
   failed_amount: Money;
   gross_total: Money;
   commission_total: Money;
+  /** Platform-funded discounts the platform pays the shop (migration 022) */
+  subsidy_total?: Money;
   last_earning_at?: string | null;
   // admin list only
   aba_account_masked?: string | null;
@@ -44,6 +46,9 @@ export interface Earning {
   entry_type: "order" | "adjustment";
   currency: string;
   gross_amount: Money;
+  /** Platform-funded discount added to what the shop earns */
+  platform_subsidy?: Money;
+  collected_by?: "platform" | "merchant";
   commission_base: Money;
   commission_rate: Money;
   commission_amount: Money;
@@ -113,6 +118,8 @@ export interface ReportRow {
   currency: string;
   orders: number;
   gross: Money;
+  /** Platform-funded discounts paid to shops */
+  subsidy?: Money;
   commission: Money;
   net: Money;
   paid_out: Money;
@@ -173,6 +180,12 @@ export const adminSettlements = {
     unwrap(api.get<Envelope<AuditEntry[]>>("/settlements/admin/audit", { params })),
   report: (date_from: string, date_to: string) =>
     unwrap(api.get<Envelope<SettlementReport>>("/settlements/admin/report", { params: { date_from, date_to } })),
+  monthlySettlement: (month: string, currency = "USD") =>
+    unwrap(api.post<Envelope<{
+      month: string;
+      created: { merchant_id: number; name?: string | null; payout: Payout }[];
+      skipped: { merchant_id: number; name?: string | null; reason: string }[];
+    }>>("/settlements/admin/monthly-settlement", { month, currency })),
   backfill: () =>
     unwrap(api.post<Envelope<{ scanned: number; created: number[]; skipped: number[] }>>("/settlements/admin/backfill")),
 };

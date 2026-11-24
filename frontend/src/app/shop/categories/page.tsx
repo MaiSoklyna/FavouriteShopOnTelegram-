@@ -5,11 +5,18 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import type { Category } from "@/types";
+import { classifyShop, THEMES, type ShopTheme } from "@/lib/shopTheme";
 
 export default function CategoriesPage() {
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  // ?group=beauty — a parent group picked on Discover (categories have no parent column yet)
+  const [group, setGroup] = useState<ShopTheme | null>(null);
+  useEffect(() => {
+    const g = new URLSearchParams(window.location.search).get("group") as ShopTheme | null;
+    if (g && g in THEMES) setGroup(g);
+  }, []);
 
   useEffect(() => {
     api.get<Category[]>("/categories")
@@ -18,9 +25,11 @@ export default function CategoriesPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const sorted = [...categories].sort((a, b) =>
-    (a.sort_order ?? 0) - (b.sort_order ?? 0)
-  );
+  // Empty categories only add noise
+  const sorted = [...categories]
+    .filter((c) => (c.product_count ?? 0) > 0)
+    .filter((c) => !group || classifyShop([c.name]) === group)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--shop-bg)" }}>
@@ -49,7 +58,7 @@ export default function CategoriesPage() {
             flex: 1, fontSize: 16, fontWeight: 500, color: "#FFFFFF",
             fontFamily: "'Kantumruy Pro', sans-serif",
           }}>
-            All Categories
+            {group ? (THEMES[group].label === "Shop" ? "Everyday" : THEMES[group].label) : "All categories"}
           </span>
         </div>
       </div>
@@ -140,7 +149,7 @@ export default function CategoriesPage() {
                     fontSize: 10, color: "var(--shop-muted)", marginTop: 2,
                     fontFamily: "'Inter', sans-serif",
                   }}>
-                    {cat.product_count} items
+                    {cat.product_count} {cat.product_count === 1 ? "item" : "items"}
                   </span>
                 )}
               </Link>

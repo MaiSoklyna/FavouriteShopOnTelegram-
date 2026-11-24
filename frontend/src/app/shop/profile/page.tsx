@@ -6,6 +6,15 @@ import { useAuth } from "@/providers/AuthProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
 import { api } from "@/lib/api";
 
+const DRIVER_ITEM = {
+  label: "Driver dashboard", href: "/shop/driver",
+  icon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--shop-primary)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+    </svg>
+  ),
+};
+
 const MENU = [
   {
     label: "My Orders", href: "/shop/orders",
@@ -20,6 +29,22 @@ const MENU = [
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--shop-primary)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      </svg>
+    ),
+  },
+  {
+    label: "Favorites", href: "/shop/favorites",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--shop-primary)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>
+      </svg>
+    ),
+  },
+  {
+    label: "My Coupons", href: "/shop/coupons",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--shop-primary)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 9a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v0a2 2 0 0 0 0 6v0a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v0a2 2 0 0 0 0-6z"/><path d="M13 7v2M13 11v2M13 15v2"/>
       </svg>
     ),
   },
@@ -51,6 +76,11 @@ const MENU = [
 
 export default function ProfilePage() {
   const router = useRouter();
+  const [isDriver, setIsDriver] = useState(false);
+  useEffect(() => {
+    // Only drivers see the entry; everyone else gets {driver: null}
+    api.get<{ driver: unknown | null }>("/deliveries/me").then((r) => setIsDriver(!!r.driver)).catch(() => {});
+  }, []);
   const { user, isShopUser, logout } = useAuth();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "" });
@@ -86,6 +116,8 @@ export default function ProfilePage() {
 
   const displayName = ("name" in user ? (user as any).name : (user as any).username) || "User";
   const initial = displayName[0]?.toUpperCase() || "?";
+
+  const menu = isDriver ? [DRIVER_ITEM, ...MENU] : MENU;
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--shop-bg)", paddingBottom: 80 }}>
@@ -227,12 +259,12 @@ export default function ProfilePage() {
           boxShadow: "var(--shop-shadow)",
           overflow: "hidden",
         }}>
-          {MENU.map((item, i) => (
+          {menu.map((item, i) => (
             <button key={i} onClick={() => router.push(item.href)} style={{
               width: "100%", display: "flex", alignItems: "center", gap: 12,
               padding: "14px 16px",
               background: "none", border: "none", cursor: "pointer",
-              borderBottom: i < MENU.length - 1 ? "1px solid var(--shop-divider)" : "none",
+              borderBottom: i < menu.length - 1 ? "1px solid var(--shop-divider)" : "none",
             }}>
               <div style={{
                 width: 36, height: 36, borderRadius: 8, flexShrink: 0,
@@ -263,12 +295,12 @@ export default function ProfilePage() {
               background: "rgba(239, 68, 68, 0.06)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--shop-muted)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
               </svg>
             </div>
             <span style={{
-              flex: 1, textAlign: "left", fontSize: 14, fontWeight: 500, color: "#EF4444",
+              flex: 1, textAlign: "left", fontSize: 14, fontWeight: 500, color: "var(--shop-text)",
               fontFamily: "'Kantumruy Pro', sans-serif",
             }}>Logout</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--shop-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

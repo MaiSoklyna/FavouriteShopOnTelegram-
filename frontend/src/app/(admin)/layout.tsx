@@ -2,44 +2,79 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
+import { ROLE_LABEL, usePermissions, type Perm } from "@/lib/permissions";
 import type { AdminUser } from "@/types";
-import {
-  HiOutlineHome, HiOutlineShoppingBag, HiOutlineClipboardList,
-  HiOutlineTag, HiOutlineUsers, HiOutlineChartBar,
-  HiOutlineCog, HiOutlineTicket, HiOutlineStar,
-  HiOutlineBell, HiOutlineGift, HiOutlineOfficeBuilding,
-  HiOutlineLogout, HiOutlineMenu, HiOutlineX,
-  HiOutlinePhotograph, HiOutlineChatAlt2, HiOutlineUserAdd,
-  HiOutlineCash, HiOutlineCurrencyDollar,
-} from "react-icons/hi";
+import { HiOutlineMenu, HiOutlineX, HiOutlineChatAlt2 } from "react-icons/hi";
+import { ApproveIcon, BellIcon, CategoryIcon, CustomersIcon, DashboardIcon, HomeIcon, LogoutIcon, OrdersIcon, PayoutIcon, ProductsIcon, PromoIcon, ReportsIcon, RewardsIcon, SettingsIcon, StoreIcon, SupportIcon } from "@/components/brand/Icons";
+import { FullPageSpinner } from "@/components/ui/Spinner";
 
-const MENU = [
-  { href: "/dashboard", label: "Dashboard", icon: HiOutlineHome },
-  { href: "/products", label: "Products", icon: HiOutlineShoppingBag },
-  { href: "/orders", label: "Orders", icon: HiOutlineClipboardList },
-  { href: "/categories", label: "Categories", icon: HiOutlineTag },
-  { href: "/banners", label: "Banners", icon: HiOutlinePhotograph, superOnly: true },
-  { href: "/promotions", label: "Promotions", icon: HiOutlineGift },
-  { href: "/analytics", label: "Analytics", icon: HiOutlineChartBar },
-  { href: "/earnings", label: "Earnings", icon: HiOutlineCurrencyDollar, merchantOnly: true },
-  { href: "/settlements", label: "Settlements", icon: HiOutlineCash, superOnly: true },
+type MenuItem = {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  superOnly?: boolean;      // platform admin only
+  merchantOnly?: boolean;   // any shop account
+  shopOwnerOnly?: boolean;  // a shop's owner, not staff, not the platform
+  ownerOnly?: boolean;      // a shop's owner or the platform, not staff
+  perm?: Perm;              // shop accounts need this permission (lib/permissions.ts)
+};
+
+// Pages only a shop's owner can open (the API refuses them too)
+const OWNER_PATHS = ["/staff", "/earnings"];
+// Pages that need a permission some roles lack
+const PERM_PATHS: [string, Perm][] = [
+  ["/activity", "activity.view"],
+  ["/analytics", "sales.view"],
+  ["/promotions", "marketing.manage"],
+  ["/collections", "marketing.manage"],
+];
+
+const MENU: MenuItem[] = [
+  { href: "/dashboard", label: "Dashboard", icon: DashboardIcon },
+  { href: "/products", label: "Products", icon: ProductsIcon },
+  { href: "/orders", label: "Orders", icon: OrdersIcon },
+  { href: "/categories", label: "Categories", icon: CategoryIcon },
+  { href: "/featured-categories", label: "Home Categories", icon: HomeIcon, superOnly: true },
+  { href: "/promotions", label: "Promotions", icon: PromoIcon, perm: "marketing.manage" },
+  { href: "/collections", label: "Collections", icon: CategoryIcon, perm: "marketing.manage" },
+  { href: "/analytics", label: "Analytics", icon: ReportsIcon, perm: "sales.view" },
+  { href: "/earnings", label: "Earnings", icon: PayoutIcon, shopOwnerOnly: true },
+  { href: "/settlements", label: "Settlements", icon: PayoutIcon, superOnly: true },
   { href: "/reviews", label: "Reviews", icon: HiOutlineChatAlt2 },
-  { href: "/support", label: "Support", icon: HiOutlineTicket },
-  { href: "/loyalty", label: "Loyalty", icon: HiOutlineStar },
-  { href: "/notifications", label: "Notifications", icon: HiOutlineBell, adminOnly: false },
-  { href: "/merchants", label: "Merchants", icon: HiOutlineOfficeBuilding, superOnly: true },
-  { href: "/seller-applications", label: "Seller Applications", icon: HiOutlineUserAdd, superOnly: true },
-  { href: "/users", label: "Users", icon: HiOutlineUsers, superOnly: true },
-  { href: "/settings", label: "Settings", icon: HiOutlineCog },
+  { href: "/drivers", label: "Drivers", icon: CustomersIcon },
+  { href: "/support", label: "Support", icon: SupportIcon },
+  { href: "/loyalty", label: "Loyalty", icon: RewardsIcon, superOnly: true },
+  { href: "/notifications", label: "Notifications", icon: BellIcon, superOnly: true },
+  { href: "/inbox", label: "Inbox", icon: BellIcon, merchantOnly: true },
+  { href: "/merchants", label: "Merchants", icon: StoreIcon, superOnly: true },
+  { href: "/seller-applications", label: "Seller Applications", icon: ApproveIcon, superOnly: true },
+  { href: "/users", label: "Users", icon: CustomersIcon, superOnly: true },
+  { href: "/staff", label: "Staff", icon: CustomersIcon, shopOwnerOnly: true },
+  { href: "/activity", label: "Activity Log", icon: ReportsIcon, perm: "activity.view" },
+  { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, loading, isAdmin, isSuperAdmin, logout } = useAuth();
+  const { user, loading, isAdmin, isSuperAdmin, isShopStaff, logout } = useAuth();
+  const { can, role: shopRole } = usePermissions();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [inboxUnread, setInboxUnread] = useState(0);
+
+  // A shop's unread count for the Inbox badge (a cheap count, refreshed while the dashboard is open)
+  useEffect(() => {
+    if (!isAdmin || isSuperAdmin) return;
+    let live = true;
+    const load = () => api.get<{ count: number }>("/notifications/merchant/unread-count")
+      .then((r) => { if (live) setInboxUnread(r.count); }).catch(() => {});
+    load();
+    const t = setInterval(load, 30000);
+    return () => { live = false; clearInterval(t); };
+  }, [isAdmin, isSuperAdmin, pathname]);
 
   useEffect(() => {
     if (!loading && !isAdmin) {
@@ -49,18 +84,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (loading || !user || !isAdmin) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#EAEFF3" }}>
-        <div className="spinner" />
-      </div>
+      <FullPageSpinner />
     );
   }
 
   const adminUser = user as AdminUser;
   const visibleMenu = MENU.filter((m) =>
-    "superOnly" in m && m.superOnly ? isSuperAdmin
-      : "merchantOnly" in m && m.merchantOnly ? !isSuperAdmin
+    m.superOnly ? isSuperAdmin
+      : m.shopOwnerOnly ? !isSuperAdmin && !isShopStaff
+      : m.merchantOnly ? !isSuperAdmin
+      : m.ownerOnly ? !isShopStaff
+      : m.perm ? can(m.perm)
       : true,
   );
+  const onPath = (p: string) => pathname === p || pathname.startsWith(p + "/");
+  const ownerPage = OWNER_PATHS.some(onPath);
+  const lockedByRole = !isSuperAdmin && PERM_PATHS.some(([p, perm]) => onPath(p) && !can(perm));
 
   function handleLogout() {
     logout();
@@ -146,6 +185,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               >
                 <Icon size={18} />
                 {!collapsed && item.label}
+                {item.href === "/inbox" && inboxUnread > 0 && (
+                  <span aria-label={`${inboxUnread} unread`} style={{
+                    marginLeft: "auto", minWidth: 20, height: 20, padding: "0 6px", borderRadius: 10,
+                    background: "#D6BA80", color: "#081D3C", fontSize: 11, fontWeight: 700,
+                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  }}>{inboxUnread > 99 ? "99+" : inboxUnread}</span>
+                )}
               </a>
             );
           })}
@@ -165,7 +211,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 color: "#D6BA80", fontSize: 11,
                 fontFamily: "'Kantumruy Pro', sans-serif",
               }}>
-                {adminUser.role === "super_admin" ? "Super Admin" : adminUser.merchant_name || "Admin"}
+                {adminUser.role === "super_admin"
+                  ? "Super Admin"
+                  : `${adminUser.merchant_name || "Shop"} · ${isShopStaff ? "Staff" : "Owner"}`}
               </div>
             </div>
           )}
@@ -209,7 +257,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
                 }}
               >
-                <HiOutlineLogout size={14} /> Logout
+                <LogoutIcon size={16} /> Logout
               </button>
             )}
             {collapsed && (
@@ -224,7 +272,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}
               >
-                <HiOutlineLogout size={14} />
+                <LogoutIcon size={16} />
               </button>
             )}
           </div>
@@ -262,7 +310,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             Byme24
           </span>
         </div>
-        {children}
+        {(isShopStaff && ownerPage) || lockedByRole ? (
+          <div className="admin-card" style={{ maxWidth: 520, margin: "40px auto", textAlign: "center", padding: 32 }} data-testid="owner-only">
+            <h1 style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", marginBottom: 8 }}>
+              {ownerPage ? "Only the shop owner can open this page" : "Your role cannot open this page"}
+            </h1>
+            <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+              You are signed in as {shopRole ? ROLE_LABEL[shopRole] : "a shop account"}. Ask the shop owner if you need something changed here.
+            </p>
+          </div>
+        ) : children}
       </main>
 
       <style>{`

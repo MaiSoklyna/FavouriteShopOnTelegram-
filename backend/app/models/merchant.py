@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field
 
 
 class MerchantCreate(BaseModel):
+    shop_category_id: int | None = None
+    shop_subcategory_id: int | None = None
     name: str = Field(..., min_length=1, max_length=200)
     slug: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-z0-9-]+$")
     owner_name: str = Field(..., min_length=1, max_length=200)
@@ -25,9 +27,19 @@ class MerchantCreate(BaseModel):
     logo_url: str | None = Field(None, max_length=500)
     is_featured: bool = False
     telegram_group_id: int | None = None
+    address: str | None = Field(None, max_length=500)
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
+    delivery_radius_km: float | None = Field(None, ge=0, le=10)
+    opening_hours: dict[str, list[list[str]]] | None = None
+    delivery_base_fee: float | None = Field(None, ge=0, le=100)
+    delivery_per_km_fee: float | None = Field(None, ge=0, le=100)
+    min_order_amount: float | None = Field(None, ge=0, le=10000)
 
 
 class MerchantUpdate(BaseModel):
+    shop_category_id: int | None = None
+    shop_subcategory_id: int | None = None
     name: str | None = Field(None, min_length=1, max_length=200)
     owner_name: str | None = Field(None, min_length=1, max_length=200)
     email: str | None = Field(None, min_length=3, max_length=254)
@@ -45,9 +57,19 @@ class MerchantUpdate(BaseModel):
     logo_url: str | None = Field(None, max_length=500)
     is_featured: bool | None = None
     telegram_group_id: int | None = None
+    address: str | None = Field(None, max_length=500)
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
+    delivery_radius_km: float | None = Field(None, ge=0, le=10)
+    opening_hours: dict[str, list[list[str]]] | None = None
+    delivery_base_fee: float | None = Field(None, ge=0, le=100)
+    delivery_per_km_fee: float | None = Field(None, ge=0, le=100)
+    min_order_amount: float | None = Field(None, ge=0, le=10000)
 
 
 class MerchantResponse(BaseModel):
+    shop_category_id: int | None = None
+    shop_subcategory_id: int | None = None
     id: int
     name: str
     slug: str
@@ -66,6 +88,14 @@ class MerchantResponse(BaseModel):
     logo_url: str | None = None
     is_featured: bool = False
     telegram_group_id: int | None = None
+    address: str | None = Field(None, max_length=500)
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
+    delivery_radius_km: float | None = Field(None, ge=0, le=10)
+    opening_hours: dict[str, list[list[str]]] | None = None
+    delivery_base_fee: float | None = Field(None, ge=0, le=100)
+    delivery_per_km_fee: float | None = Field(None, ge=0, le=100)
+    min_order_amount: float | None = Field(None, ge=0, le=10000)
     product_count: int = 0
     order_count: int = 0
     created_at: datetime | None = None

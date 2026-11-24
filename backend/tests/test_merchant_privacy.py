@@ -67,14 +67,15 @@ def client(monkeypatch):
     app.dependency_overrides.clear()
 
 
-def login_as(role, merchant_id=None):
-    app.dependency_overrides[get_optional_user] = lambda: TokenClaims(sub="1", role=role, merchant_id=merchant_id)
+def login_as(role, merchant_id=None, merchant_role=None):
+    app.dependency_overrides[get_optional_user] = lambda: TokenClaims(
+        sub="1", role=role, merchant_id=merchant_id, merchant_role=merchant_role)
 
 
 def assert_public(shop):
     assert not any(k in shop for k in PRIVATE), shop
     # Allow-list: only known public fields plus computed ones, so a new column never leaks
-    allowed = set(merchants_route.PUBLIC_FIELDS) | {"product_count", "order_count"}
+    allowed = set(merchants_route.PUBLIC_FIELDS) | {"product_count", "order_count", "shop_category", "shop_subcategory"}
     assert set(shop) <= allowed, set(shop) - allowed
 
 
@@ -116,6 +117,24 @@ def test_super_admin_sees_everything(client):
     assert {s["id"] for s in data} == {1, 2, 3}
     assert all(s["telegram_token"] == "123:SECRET" for s in data)
     assert client.get("/api/merchants/3").json()["email"] == "owner3@secret.example"
+
+
+def test_shop_staff_get_the_public_view_of_their_own_shop(client):
+    login_as(Role.MERCHANT_ADMIN, merchant_id=1, merchant_role="staff")
+    assert_public(client.get("/api/merchants/1").json())
+    for s in client.get("/api/merchants").json():
+        assert_public(s)
+
+
+def test_shop_owner_token_sees_own_private_fields(client):
+    login_as(Role.MERCHANT_ADMIN, merchant_id=1, merchant_role="owner")
+    own = client.get("/api/merchants/1").json()
+    assert own["aba_account"] == "000111222" and own["phone"] == "012345678"
+
+
+def test_public_field_lists_name_no_private_column():
+    assert not set(PRIVATE) & set(merchants_route.PUBLIC_FIELDS)
+    assert not set(PRIVATE) & set(merchants_route.NEARBY_PUBLIC_FIELDS)
 
 
 def test_request_urls_with_the_bot_token_are_not_logged():

@@ -13,6 +13,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { BrandLoader } from "@/components/ui/Spinner";
 
 const MAX_ACTIVE = 6;
 
@@ -132,7 +133,7 @@ export function HeroImagesEditor({ merchantId, onError }: Props) {
       </div>
 
       {loading ? (
-        <p style={{ fontSize: 12, color: "var(--text-muted)", padding: 12 }}>Loading…</p>
+        <BrandLoader size={32} minHeight={80} />
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10 }}>
           {images.map((img, i) => (

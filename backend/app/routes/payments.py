@@ -35,7 +35,7 @@ from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.rate_limit import limiter
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.services import payway, settlement
+from app.services import notify, payway, settlement
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments/payway", tags=["Payments"])
@@ -46,7 +46,8 @@ _TS_DIGITS = 10  # unix timestamp suffix length in tran_id
 _ORDER_COLUMNS = (
     "id,user_id,merchant_id,order_code,total,status,payment_method,"
     "payment_status,payway_tran_id,customer_name,delivery_name,delivery_phone,"
-    "delivery_fee,commission_rate,payout_mode"
+    "delivery_fee,commission_rate,payout_mode,platform_discount_amount,"
+    "stripe_payment_intent_id"
 )
 
 
@@ -219,6 +220,19 @@ async def _settle(db, order: dict, tran_id: str, *, raise_errors: bool = False) 
         )
         return order.get("payment_status") or "pending"
 
+    return await mark_order_paid(
+        db, order,
+        fields={"payment_ref": txn.get("apv") or None, "payway_tran_id": tran_id},
+        actor_type="payway", actor_id=tran_id,
+    )
+
+
+async def mark_order_paid(db, order: dict, *, fields: dict, actor_type: str, actor_id: str | None) -> str:
+    """Record a verified payment. Shared by every online payment provider.
+
+    Idempotent: the update only matches rows not already paid. Callers must
+    have verified the provider's result and the amount before calling.
+    """
     updated = await (
         db.from_("orders")
         .eq("id", order["id"])
@@ -226,12 +240,11 @@ async def _settle(db, order: dict, tran_id: str, *, raise_errors: bool = False) 
         .update({
             "payment_status": "paid",
             "paid_at": datetime.now(timezone.utc).isoformat(),
-            "payment_ref": txn.get("apv") or None,
-            "payway_tran_id": tran_id,
+            **fields,
         })
     )
     if updated:
-        logger.info("Order %s paid via PayWay tran %s", order["id"], tran_id)
+        logger.info("Order %s paid (%s)", order["id"], actor_type)
         # Advance a pending order; a cancelled one stays cancelled and
         # needs a manual refund.
         if order.get("status") == "pending":
@@ -249,7 +262,7 @@ async def _settle(db, order: dict, tran_id: str, *, raise_errors: bool = False) 
     # backfill endpoint re-runs this for any paid order without an earning.
     try:
         await settlement.record_order_earning(
-            db, {**order, "payway_tran_id": tran_id}, actor_type="payway", actor_id=tran_id,
+            db, {**order, **fields}, actor_type=actor_type, actor_id=actor_id,
         )
     except Exception:
         logger.exception("Failed to record earning for paid order %s", order["id"])
@@ -262,6 +275,7 @@ async def _notify_paid(db, order: dict) -> None:
     Only called by the request that actually flipped payment_status to
     paid, so each order is announced once.
     """
+    await notify.order_paid(db, order["id"])  # in-app: customer receipt + shop alert (never raises)
     try:
         from bot.notifications import (
             send_order_placed_to_merchant_group,
@@ -315,7 +329,7 @@ def _build_payout(order: dict, merchant: dict | None, commission_rate) -> tuple[
     is verified. Otherwise the platform collects everything and the
     merchant is paid from the settlement ledger.
     """
-    if not settlement.split_payout_allowed(merchant):
+    if not settlement.split_payout_allowed(merchant, order):
         return None, "platform"
     split = settlement.compute_split(order, commission_rate)
     if split.net <= 0:

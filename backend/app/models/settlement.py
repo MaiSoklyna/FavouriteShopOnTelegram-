@@ -68,6 +68,12 @@ class PayoutCreate(BaseModel):
     note: str | None = Field(None, max_length=500)
 
 
+class MonthlySettlement(BaseModel):
+    """Settle every verified merchant for a calendar month label (YYYY-MM)."""
+    month: str = Field(..., pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    currency: str = Field("USD", pattern=r"^(USD|KHR)$")
+
+
 class PayoutComplete(BaseModel):
     reference: str = Field(..., min_length=3, max_length=100)
 

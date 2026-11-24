@@ -13,17 +13,17 @@ export function PriceSummary({ subtotal, deliveryFee, discount = 0 }: PriceSumma
         background: "var(--shop-surface, #FFFFFF)",
         borderRadius: "var(--shop-r-card, 16px)",
         padding: 16,
-        boxShadow: "var(--shop-shadow, 0 8px 24px rgba(30,107,255,0.08))",
+        boxShadow: "var(--shop-shadow, 0 8px 24px rgba(8,29,60,0.08))",
       }}
     >
       <Row label="Subtotal" value={`$${subtotal.toFixed(2)}`} />
       <Row
         label="Delivery"
         value={deliveryFee === 0 ? "FREE" : `$${deliveryFee.toFixed(2)}`}
-        valueColor={deliveryFee === 0 ? "#16A34A" : undefined}
+        valueColor={deliveryFee === 0 ? "var(--fos-accent-text)" : undefined}
       />
       {discount > 0 && (
-        <Row label="Discount" value={`-$${discount.toFixed(2)}`} valueColor="#16A34A" />
+        <Row label="Discount" value={`-$${discount.toFixed(2)}`} valueColor="var(--fos-accent-text)" />
       )}
       <div
         style={{
@@ -34,7 +34,7 @@ export function PriceSummary({ subtotal, deliveryFee, discount = 0 }: PriceSumma
       />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", paddingTop: 10 }}>
         <span style={{ fontWeight: 700, fontSize: 17, color: "var(--shop-black, #0B0B0F)" }}>Total</span>
-        <span style={{ fontWeight: 700, fontSize: 17, color: "var(--shop-primary, #1E6BFF)" }}>${total.toFixed(2)}</span>
+        <span style={{ fontWeight: 700, fontSize: 17, color: "var(--shop-primary)" }}>${total.toFixed(2)}</span>
       </div>
     </div>
   );

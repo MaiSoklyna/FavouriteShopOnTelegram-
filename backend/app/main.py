@@ -18,21 +18,34 @@ from app.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.rate_limit import limiter, rate_limit_handler
 from app.routes import (
+    activity,
+    addresses,
     ai,
     analytics,
     auth,
     banners,
     cart,
+    collections,
+    coupons,
+    deliveries,
+    favorites,
+    featured_categories,
     loyalty,
+    merchant_dashboard,
+    merchant_staff,
     merchants,
     notifications,
     orders,
     payments,
+    payments_stripe,
     products,
     promos,
+    promotions,
     reviews,
     sellers,
     settlements,
+    shop_categories,
+    shop_reviews,
     support,
     telegram_webhook,
     users,
@@ -42,6 +55,9 @@ logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL, logging.INFO))
 # Telegram Bot API URLs carry the bot token; keep httpx request lines out of the logs.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
+# httpx logs every request URL at INFO, and Telegram Bot API URLs carry the bot token
+# (api.telegram.org/bot<token>/...). Keep request lines out of the logs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 _DEFAULT_DEV_ORIGINS = [
     "http://localhost:3000",
@@ -97,18 +113,44 @@ app.include_router(users.router, prefix="/api")
 # Merchants (browse + admin CRUD)
 app.include_router(merchants.router, prefix="/api")
 
+# Shop staff accounts and the shop activity log (owners only)
+app.include_router(merchant_staff.router, prefix="/api")
+app.include_router(merchant_dashboard.router, prefix="/api")
+
 # Products & categories (browse + admin CRUD + image upload)
 app.include_router(products.router, prefix="/api")
 app.include_router(banners.router, prefix="/api")
+app.include_router(promotions.router, prefix="/api")
+app.include_router(collections.router, prefix="/api")
+app.include_router(featured_categories.router, prefix="/api")
 
 # Cart
 app.include_router(cart.router, prefix="/api")
 
 # Orders (user placement + admin management)
 app.include_router(orders.router, prefix="/api")
+app.include_router(addresses.router, prefix="/api")
+
+# Drivers and deliveries (driver app, shop assignment, driver management)
+app.include_router(deliveries.router, prefix="/api")
+
+# Shop ratings & reviews (after delivery)
+app.include_router(shop_reviews.router, prefix="/api")
+
+# Promotion Center: public / private coupons, wallet, checkout eligibility
+app.include_router(coupons.router, prefix="/api")
+
+# Favorites: saved products and shops
+app.include_router(favorites.router, prefix="/api")
+
+# Activity tracking: views, searches and the shop/platform summary
+app.include_router(activity.router, prefix="/api")
 
 # ABA PayWay QR payments
 app.include_router(payments.router, prefix="/api")
+
+# Stripe test-mode card payments (demo)
+app.include_router(payments_stripe.router, prefix="/api")
 
 # Merchant settlement (earnings, payouts, payout accounts)
 app.include_router(settlements.router, prefix="/api")
@@ -121,6 +163,9 @@ app.include_router(reviews.router, prefix="/api")
 
 # Seller onboarding applications (mini-app submit + super-admin approval)
 app.include_router(sellers.router, prefix="/api")
+
+# Shop categories / subcategories (registration pickers)
+app.include_router(shop_categories.router, prefix="/api")
 
 # Support tickets
 app.include_router(support.router, prefix="/api")

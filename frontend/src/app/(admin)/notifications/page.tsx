@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import type { Notification } from "@/types";
+import { BrandLoader } from "@/components/ui/Spinner";
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -41,7 +42,7 @@ export default function NotificationsPage() {
       </div>
 
       <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
-        {loading ? <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Loading...</div> : (
+        {loading ? <BrandLoader /> : (
           <table className="admin-table">
             <thead><tr><th>Type</th><th>Title</th><th>Body</th><th>User</th><th>Read</th><th>Date</th><th></th></tr></thead>
             <tbody>

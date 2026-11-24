@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { SupportTicket, TicketMessage } from "@/types";
+import { BrandLoader } from "@/components/ui/Spinner";
 
 export default function AdminSupportPage() {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -61,7 +62,7 @@ export default function AdminSupportPage() {
           ))}
         </div>
         <div style={{ flex: 1, overflowY: "auto" }}>
-          {loading ? <p style={{ color: "var(--text-muted)", padding: 20, textAlign: "center" }}>Loading...</p> :
+          {loading ? <BrandLoader /> :
           tickets.length === 0 ? <p style={{ color: "var(--text-muted)", padding: 20, textAlign: "center" }}>No tickets</p> :
           tickets.map(t => (
             <button key={t.id} onClick={() => openTicket(t)}

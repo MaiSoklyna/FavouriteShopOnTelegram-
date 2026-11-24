@@ -6,41 +6,91 @@ Admin: CRUD operations (super_admin for all, merchant_admin for own).
 
 from __future__ import annotations
 
+import asyncio
+
+import math
 import time
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, UploadFile
 
 from app.core.constants import Role
-from app.core.dependencies import get_optional_user, require_any_admin, require_role
+from app.core.dependencies import get_optional_user, require_any_admin, require_role, require_shop_owner
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError, RateLimitError
 from app.core.security import TokenClaims
 from app.db.client import StorageClient, SupabaseClient
 from app.models.merchant import MerchantCreate, MerchantUpdate
+from app.services import audit
+from app.services.delivery import SHOP_TZ, is_open, quote_delivery, valid_point
 
 router = APIRouter(prefix="/merchants", tags=["Merchants"])
 
+# Per-shop delivery settings (migration 017); null means "use the platform default"
+DELIVERY_SETTING_FIELDS = ("opening_hours", "delivery_base_fee", "delivery_per_km_fee", "min_order_amount")
+
+# Fields the public "nearby" list may expose — merchants rows also hold owner contact details
+NEARBY_PUBLIC_FIELDS = (
+    "id", "name", "slug", "tagline", "icon_emoji", "accent_color", "logo_url",
+    "is_featured", "address", "latitude", "longitude", "delivery_radius_km",
+    "min_order_amount", "rating", "rating_count", "shop_category_id", "shop_subcategory_id",
+)
 # Fields any visitor may see on a shop (an allow-list: new columns stay private by default).
-# Everything else (owner_name, email, phone, telegram_token, telegram_group_id, plan,
-# logo_update_history, ABA payout account, payout verification, commission_rate, ...)
-# is visible only to a super admin, or to the shop's own admin.
+# Everything else is owner/super-admin only: owner_name, email, phone, telegram_token,
+# telegram_group_id, plan, logo_update_history, the ABA payout account and its verification,
+# commission_rate, loyalty_enabled. phone is the owner's number from registration; no
+# customer page shows it (drivers get it through their own authenticated job endpoint).
 PUBLIC_FIELDS = (
     "id", "name", "slug", "tagline", "description", "icon_emoji", "accent_color", "logo_url",
     "is_featured", "status", "fb_page", "instagram", "deep_link_code", "created_at",
     "address", "latitude", "longitude", "delivery_radius_km", "rating", "rating_count",
     "shop_category_id", "shop_subcategory_id",
-    "opening_hours", "delivery_base_fee", "delivery_per_km_fee", "min_order_amount",
+    *DELIVERY_SETTING_FIELDS,
 )
+# ~1° of latitude in km; used to turn the search radius into a bounding box
+KM_PER_DEGREE = 111.0
 
 
 def public_view(merchant: dict) -> dict:
     return {k: merchant[k] for k in PUBLIC_FIELDS if k in merchant}
 
 
+async def shop_category_names(db) -> tuple[dict[int, str], dict[int, str]]:
+    """id -> name for shop categories and subcategories (two tiny tables, read once per request)."""
+    cats, subs = await asyncio.gather(
+        db.from_("shop_categories").select("id,name"),
+        db.from_("shop_subcategories").select("id,name"),
+    )
+    return {c["id"]: c["name"] for c in cats}, {s["id"]: s["name"] for s in subs}
+
+
+def with_category_names(shop: dict, cats: dict[int, str], subs: dict[int, str]) -> dict:
+    """Add the readable `shop_category` / `shop_subcategory` next to the ids (null = not categorised yet)."""
+    shop["shop_category"] = cats.get(shop.get("shop_category_id"))
+    shop["shop_subcategory"] = subs.get(shop.get("shop_subcategory_id"))
+    return shop
+
+
+async def validate_shop_category(db, category_id: int | None, subcategory_id: int | None) -> None:
+    """A shop's subcategory must belong to its category, and neither may be made up."""
+    if subcategory_id is not None and category_id is None:
+        raise BadRequestError("Choose a shop category before a subcategory")
+    if category_id is not None:
+        if not await db.from_("shop_categories").eq("id", category_id).select_one("id"):
+            raise BadRequestError("Unknown shop category")
+    if subcategory_id is not None:
+        sub = await db.from_("shop_subcategories").eq("id", subcategory_id).select_one("id,category_id")
+        if not sub or sub["category_id"] != category_id:
+            raise BadRequestError("That subcategory does not belong to the chosen category")
+
+
 def sees_private_fields(user: TokenClaims | None, merchant_id: int) -> bool:
+    """Super admin sees every shop's full row; a shop owner only their own. Staff get the public view."""
     if not user:
         return False
-    return user.is_super_admin or (user.role == Role.MERCHANT_ADMIN and user.merchant_id == merchant_id)
+    if user.is_super_admin:
+        return True
+    return user.role == Role.MERCHANT_ADMIN and not user.is_shop_staff and user.merchant_id == merchant_id
+
 
 # Logo update policy for merchant_admin role: max N updates per rolling window
 LOGO_UPDATE_MAX_PER_WINDOW = 2
@@ -58,9 +108,14 @@ ALLOWED_HERO_MIME = ALLOWED_LOGO_MIME
 async def list_merchants(
     status: str | None = None,
     search: str | None = None,
+    shop_category_id: int | None = None,
+    shop_subcategory_id: int | None = None,
     user: TokenClaims | None = Depends(get_optional_user),
 ):
-    """List merchants. Public for active merchants, admin sees all."""
+    """List merchants. Public for active merchants, admin sees all.
+
+    `shop_category_id` / `shop_subcategory_id` narrow the list to one kind of shop.
+    """
     async with SupabaseClient.service_role() as db:
         q = db.from_("merchants").order("created_at", desc=True)
 
@@ -72,21 +127,99 @@ async def list_merchants(
 
         if search:
             q = q.ilike("name", f"*{search}*")
+        if shop_category_id is not None:
+            q = q.eq("shop_category_id", shop_category_id)
+        if shop_subcategory_id is not None:
+            q = q.eq("shop_subcategory_id", shop_subcategory_id)
 
         merchants = await q.select()
 
-        # Enrich with counts
-        for m in merchants:
-            products = await db.from_("products").eq("merchant_id", m["id"]).eq("is_active", True).select("id")
-            m["product_count"] = len(products)
-            orders = await db.from_("orders").eq("merchant_id", m["id"]).select("id")
-            m["order_count"] = len(orders)
+        async def counts(merchant_id: int) -> tuple[int, int]:
+            products, orders = await asyncio.gather(
+                db.from_("products").eq("merchant_id", merchant_id).eq("is_active", True).select("id"),
+                db.from_("orders").eq("merchant_id", merchant_id).select("id"),
+            )
+            return len(products), len(orders)
+
+        # One wave of requests instead of two sequential round trips per shop
+        (cats, subs), per_shop = await asyncio.gather(
+            shop_category_names(db),
+            asyncio.gather(*(counts(m["id"]) for m in merchants)),
+        )
+        for m, (product_count, order_count) in zip(merchants, per_shop):
+            m["product_count"], m["order_count"] = product_count, order_count
 
     return [
-        m if sees_private_fields(user, m["id"])
-        else {**public_view(m), "product_count": m["product_count"], "order_count": m["order_count"]}
+        with_category_names(
+            m if sees_private_fields(user, m["id"])
+            else {**public_view(m), "product_count": m["product_count"], "order_count": m["order_count"]},
+            cats, subs,
+        )
         for m in merchants
     ]
+
+
+@router.get("/nearby")
+async def nearby_merchants(
+    lat: float,
+    lng: float,
+    radius_km: float = 10,
+    limit: int = 20,
+    offset: int = 0,
+    shop_category_id: int | None = None,
+    shop_subcategory_id: int | None = None,
+):
+    """Active shops with a map location near (lat, lng), best first.
+
+    Everything the card shows is computed here — never by the client:
+    `distance_m`/`distance_km`, `delivery_fee`, `eta_minutes`..`eta_max_minutes`,
+    `is_open` and `can_deliver`. Order: open shops nearest-first, then closed
+    shops (also nearest-first). A shop past its own delivery radius is still
+    listed (`can_deliver: false`) so the customer can pick up instead.
+    """
+    if not valid_point(lat, lng):
+        raise BadRequestError("Invalid location")
+    radius_km = max(0.5, min(radius_km, 25))
+    limit, offset = max(1, min(limit, 50)), max(0, offset)
+
+    # Cheap bounding-box prefilter in the database (uses idx_merchants_location),
+    # then exact great-circle distances on the few rows that remain.
+    dlat = radius_km / KM_PER_DEGREE
+    dlng = radius_km / (KM_PER_DEGREE * max(math.cos(math.radians(lat)), 0.01))
+    async with SupabaseClient.service_role() as db:
+        query = (
+            db.from_("merchants").eq("status", "active")
+            .gte("latitude", lat - dlat).lte("latitude", lat + dlat)
+            .gte("longitude", lng - dlng).lte("longitude", lng + dlng)
+        )
+        if shop_category_id is not None:
+            query = query.eq("shop_category_id", shop_category_id)
+        if shop_subcategory_id is not None:
+            query = query.eq("shop_subcategory_id", shop_subcategory_id)
+        rows = await query.select()
+        cats, subs = await shop_category_names(db)
+
+    now = datetime.now(SHOP_TZ)
+    shops = []
+    for m in rows:
+        q = quote_delivery(m, (lat, lng))
+        if q is None or float(q.distance_km) > radius_km:
+            continue
+        shop = with_category_names({k: m.get(k) for k in NEARBY_PUBLIC_FIELDS if k in m}, cats, subs)
+        shop.update({
+            "distance_km": float(q.distance_km),
+            "distance_m": q.distance_m,
+            "can_deliver": q.can_deliver,
+            "delivery_fee": str(q.fee) if q.fee is not None else None,
+            "delivery_unavailable_reason": q.reason,
+            "eta_minutes": q.eta_minutes,
+            "eta_max_minutes": q.eta_max_minutes,
+            "is_open": is_open(m.get("opening_hours"), now),
+        })
+        shops.append(shop)
+
+    shops.sort(key=lambda s: (not s["is_open"], s["distance_m"]))
+    return shops[offset: offset + limit]
 
 
 @router.get("/{merchant_id}")
@@ -98,6 +231,7 @@ async def get_merchant(merchant_id: int, user: TokenClaims | None = Depends(get_
             raise NotFoundError("Merchant", merchant_id)
         if not sees_private_fields(user, merchant_id):
             merchant = public_view(merchant)
+        with_category_names(merchant, *await shop_category_names(db))
         products = await db.from_("products").eq("merchant_id", merchant_id).eq("is_active", True).select("id")
         merchant["product_count"] = len(products)
         orders = await db.from_("orders").eq("merchant_id", merchant_id).select("id")
@@ -113,7 +247,13 @@ async def create_merchant(body: MerchantCreate, user: TokenClaims = require_role
         if existing:
             raise ConflictError(f"Merchant slug '{body.slug}' already exists")
 
+        await validate_shop_category(db, body.shop_category_id, body.shop_subcategory_id)
         data = body.model_dump()
+        # Columns from migrations 016/017/024 — don't send them unless set
+        for k in ("address", "latitude", "longitude", "delivery_radius_km", "shop_category_id",
+                  "shop_subcategory_id", *DELIVERY_SETTING_FIELDS):
+            if data.get(k) is None:
+                data.pop(k, None)
         data["status"] = "active"
         rows = await db.from_("merchants").insert(data)
     return rows[0] if rows else data
@@ -123,11 +263,11 @@ async def create_merchant(body: MerchantCreate, user: TokenClaims = require_role
 async def update_merchant(
     merchant_id: int,
     body: MerchantUpdate,
-    user: TokenClaims = require_any_admin(),
+    user: TokenClaims = require_shop_owner(),
 ):
-    """Update a merchant."""
+    """Update a merchant (super admin, or the shop's owner: staff cannot change shop settings)."""
     async with SupabaseClient.service_role() as db:
-        existing = await db.from_("merchants").eq("id", merchant_id).select_one("id")
+        existing = await db.from_("merchants").eq("id", merchant_id).select_one()
         if not existing:
             raise NotFoundError("Merchant", merchant_id)
 
@@ -135,6 +275,24 @@ async def update_merchant(
             raise ForbiddenError("You can only update your own merchant")
 
         data = body.model_dump(exclude_none=True)
+        data.pop("shop_category_id", None)
+        data.pop("shop_subcategory_id", None)
+        # The shop's category decides where customers find it, so only a super admin sets it.
+        # Sending null clears it; changing the category without a subcategory clears the subcategory.
+        if user.role == Role.SUPER_ADMIN and {"shop_category_id", "shop_subcategory_id"} & body.model_fields_set:
+            category = body.shop_category_id if "shop_category_id" in body.model_fields_set else existing.get("shop_category_id")
+            if "shop_subcategory_id" in body.model_fields_set:
+                subcategory = body.shop_subcategory_id
+            elif category == existing.get("shop_category_id"):
+                subcategory = existing.get("shop_subcategory_id")
+            else:
+                subcategory = None
+            await validate_shop_category(db, category, subcategory)
+            data["shop_category_id"], data["shop_subcategory_id"] = category, subcategory
+        # Delivery settings can be cleared back to "platform default" by sending null
+        for k in DELIVERY_SETTING_FIELDS:
+            if k in body.model_fields_set:
+                data[k] = getattr(body, k)
         # Merchant admins must use the rate-limited logo upload endpoint
         if user.role == Role.MERCHANT_ADMIN:
             data.pop("logo_url", None)
@@ -142,7 +300,34 @@ async def update_merchant(
             data.pop("is_featured", None)  # super-admin-only flag
         if data:
             await db.from_("merchants").eq("id", merchant_id).update(data)
+            await _log_shop_change(db, user, existing, data)
     return {"success": True}
+
+
+SECRET_SHOP_FIELDS = {"telegram_token"}
+
+# Which shop fields count as the public profile; everything else is a setting
+SHOP_PROFILE_FIELDS = (
+    "name", "owner_name", "email", "phone", "tagline", "description", "icon_emoji",
+    "fb_page", "instagram", "logo_url", "address",
+)
+
+
+async def _log_shop_change(db, user: TokenClaims, before: dict, data: dict) -> None:
+    old, new = audit.diff(before, data)
+    if not new:
+        return
+    for secret in SECRET_SHOP_FIELDS & set(new):  # record that it changed, never the value
+        old[secret], new[secret] = "(hidden)", "(changed)"
+    label = (data.get("name") or before.get("name") or "").strip()
+    profile = {k for k in new if k in SHOP_PROFILE_FIELDS}
+    for action, keys in (("shop.profile_updated", profile), ("shop.settings_updated", set(new) - profile)):
+        if keys:
+            await audit.record(
+                db, user, merchant_id=before["id"], action=action, target_type="shop",
+                target_id=before["id"], target_label=label,
+                old={k: old[k] for k in keys}, new={k: new[k] for k in keys},
+            )
 
 
 @router.delete("/{merchant_id}")
@@ -162,7 +347,7 @@ async def delete_merchant(merchant_id: int, user: TokenClaims = require_role(Rol
 async def upload_merchant_logo(
     merchant_id: int,
     file: UploadFile = File(...),
-    user: TokenClaims = require_any_admin(),
+    user: TokenClaims = require_shop_owner(),
 ):
     """Upload a merchant logo.
 
@@ -186,7 +371,7 @@ async def upload_merchant_logo(
         merchant = await (
             db.from_("merchants")
             .eq("id", merchant_id)
-            .select_one("id,logo_update_history")
+            .select_one("id,name,logo_url,logo_update_history")
         )
         if not merchant:
             raise NotFoundError("Merchant", merchant_id)
@@ -230,6 +415,11 @@ async def upload_merchant_logo(
             "logo_url": public_url,
             "logo_update_history": new_history,
         })
+        await audit.record(
+            db, user, merchant_id=merchant_id, action="shop.profile_updated", target_type="shop",
+            target_id=merchant_id, target_label=merchant.get("name"),
+            old={"logo_url": merchant.get("logo_url")}, new={"logo_url": public_url},
+        )
 
     return {"logo_url": public_url}
 
@@ -280,7 +470,7 @@ async def list_all_hero_images(
 async def upload_hero_image(
     merchant_id: int,
     file: UploadFile = File(...),
-    user: TokenClaims = require_any_admin(),
+    user: TokenClaims = require_shop_owner(),
 ):
     """Upload a new hero image. Caps at MAX_HERO_IMAGES_ACTIVE active images."""
     _check_hero_access(user, merchant_id)
@@ -340,6 +530,10 @@ async def upload_hero_image(
             "sort_order": next_order,
             "is_active": True,
         })
+        await audit.record(
+            db, user, merchant_id=merchant_id, action="shop.settings_updated", target_type="shop",
+            target_id=merchant_id, target_label="Hero image added", new={"hero_image": public_url},
+        )
 
     return rows[0] if rows else {"url": public_url}
 
@@ -349,7 +543,7 @@ async def update_hero_image(
     merchant_id: int,
     image_id: int,
     body: dict,
-    user: TokenClaims = require_any_admin(),
+    user: TokenClaims = require_shop_owner(),
 ):
     """Update sort_order or is_active for a hero image."""
     _check_hero_access(user, merchant_id)
@@ -368,7 +562,7 @@ async def update_hero_image(
             db.from_("merchant_hero_images")
             .eq("id", image_id)
             .eq("merchant_id", merchant_id)
-            .select_one("id")
+            .select_one("id,url,sort_order,is_active")
         )
         if not existing:
             raise NotFoundError("Hero image", image_id)
@@ -388,6 +582,13 @@ async def update_hero_image(
                 )
 
         await db.from_("merchant_hero_images").eq("id", image_id).update(data)
+        old, new = audit.diff(existing, data)
+        if new:
+            await audit.record(
+                db, user, merchant_id=merchant_id, action="shop.settings_updated", target_type="shop",
+                target_id=merchant_id, target_label="Hero image changed",
+                old={"hero_image": existing.get("url"), **old}, new={"hero_image": existing.get("url"), **new},
+            )
     return {"success": True}
 
 
@@ -395,7 +596,7 @@ async def update_hero_image(
 async def delete_hero_image(
     merchant_id: int,
     image_id: int,
-    user: TokenClaims = require_any_admin(),
+    user: TokenClaims = require_shop_owner(),
 ):
     """Permanently delete a hero image row (storage object stays for now)."""
     _check_hero_access(user, merchant_id)
@@ -404,9 +605,13 @@ async def delete_hero_image(
             db.from_("merchant_hero_images")
             .eq("id", image_id)
             .eq("merchant_id", merchant_id)
-            .select_one("id")
+            .select_one("id,url")
         )
         if not existing:
             raise NotFoundError("Hero image", image_id)
         await db.from_("merchant_hero_images").eq("id", image_id).delete()
+        await audit.record(
+            db, user, merchant_id=merchant_id, action="shop.settings_updated", target_type="shop",
+            target_id=merchant_id, target_label="Hero image removed", old={"hero_image": existing.get("url")},
+        )
     return {"success": True}

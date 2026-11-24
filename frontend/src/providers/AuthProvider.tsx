@@ -1,7 +1,8 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef, type ReactNode } from "react";
-import { api, setToken, clearToken, getToken } from "@/lib/api";
+import { usePathname } from "next/navigation";
+import { api, ApiError, setToken, clearToken, getToken, tokenArea, type Area } from "@/lib/api";
 import { getTelegramUser, initTelegram, isInTelegram } from "@/lib/telegram";
 import type { AdminUser, TelegramUser } from "@/types";
 
@@ -13,6 +14,8 @@ interface AuthContextValue {
   loginPending: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  /** A shop's staff member (not the owner): no staff, activity, earnings or shop settings. */
+  isShopStaff: boolean;
   isShopUser: boolean;
   adminLogin: (email: string, password: string) => Promise<void>;
   startTgSession: () => Promise<string>;
@@ -29,24 +32,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loginPending, setLoginPending] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The Telegram session being signed in. A second tap (or a double tap while the first
+  // request is still in flight) reuses it, so the bot and the browser always wait on the same one.
+  const sessionRef = useRef<Promise<string> | null>(null);
+
+  // The shop (/shop/*) and the dashboard keep separate sessions (see lib/api.ts).
+  // Moving between them swaps which account this provider holds.
+  const pathname = usePathname();
+  const area: Area = pathname?.startsWith("/shop") ? "shop" : "admin";
+  // Bumped on every area switch so a slow restore for the old area is dropped.
+  const initGen = useRef(0);
 
   // Resolve user type helpers
   const isAdmin = !!user && "email" in user;
   const isSuperAdmin = isAdmin && (user as AdminUser).role === "super_admin";
+  // Any shop account that is not the owner (manager or staff): owner-only pages are closed to them.
+  // Finer rules per role come from usePermissions() (lib/permissions.ts).
+  const shopRole = isAdmin && (user as AdminUser).role === "merchant" ? (user as AdminUser).merchant_role : undefined;
+  const isShopStaff = shopRole === "staff" || shopRole === "manager";
   const isShopUser = !!user && "telegram_id" in user;
 
-  // ── Init: restore session on mount ───────────────────────────
+  // ── Init: restore the session for this area (on mount and on area switch) ──
   useEffect(() => {
-    initAuth();
-  }, []);
+    const gen = ++initGen.current;
+    stopPolling();
+    setLoginPending(false);
+    setUser(null);
+    setLoading(true);
+    initAuth(area, () => gen === initGen.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [area]);
 
-  async function initAuth() {
+  async function initAuth(area: Area, isCurrent: () => boolean) {
+    const done = (u: AuthUser) => {
+      if (!isCurrent()) return;
+      setUser(u);
+      setLoading(false);
+    };
     try {
       // 1. Check URL token (from Telegram bot "Open Shop" button)
       if (typeof window !== "undefined") {
         const params = new URLSearchParams(window.location.search);
         const urlToken = params.get("auth");
         if (urlToken) {
+          // Filed under its own role, so an admin link never lands in the shop slot.
           setToken(urlToken);
           window.history.replaceState({}, "", window.location.pathname);
         }
@@ -56,17 +85,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const token = getToken();
       if (token) {
         try {
-          const me = await api.get<AdminUser | TelegramUser>("/auth/me");
-          setUser(me);
-          setLoading(false);
+          const me = await api.get<AdminUser | TelegramUser>("/auth/me", { token });
+          done(me);
           return;
-        } catch {
-          clearToken();
+        } catch (e) {
+          // Only a rejected token logs you out; a slow or dropped request keeps it for the next load.
+          if (e instanceof ApiError && (e.status === 401 || e.status === 403)) clearToken();
         }
       }
 
-      // 3. Telegram WebApp auto-auth
-      if (isInTelegram()) {
+      // 3. Telegram WebApp auto-auth — customer accounts only, so shop pages only
+      if (area === "shop" && isInTelegram()) {
         initTelegram();
         const tgUser = getTelegramUser();
         if (tgUser) {
@@ -81,13 +110,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             { token: null },
           );
           setToken(resp.access_token);
-          setUser(resp.user);
+          done(resp.user);
+          return;
         }
       }
+      done(null);
     } catch (err) {
       console.error("Auth init failed:", err);
-    } finally {
-      setLoading(false);
+      done(null);
     }
   }
 
@@ -104,27 +134,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(resp.user);
   }
 
-  // ── Telegram session login (dashboard) ───────────────────────
-  async function startTgSession(): Promise<string> {
-    const resp = await api.post<{ session_id: string }>("/auth/tg-session", {}, { token: null });
-    return resp.session_id;
+  // ── Telegram session login (dashboard or shop) ───────────────
+  // The bot signs a dashboard session in as an admin and a shop session in as a customer.
+  function startTgSession(): Promise<string> {
+    if (!sessionRef.current) {
+      const started = api
+        .post<{ session_id: string }>("/auth/tg-session", { area }, { token: null })
+        .then((r) => r.session_id);
+      started.catch(() => { if (sessionRef.current === started) sessionRef.current = null; });
+      sessionRef.current = started;
+    }
+    return sessionRef.current;
+  }
+
+  function clearTimers() {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    pollRef.current = null;
+    timeoutRef.current = null;
   }
 
   function pollSession(sessionId: string) {
     setLoginPending(true);
-    stopPolling();
+    clearTimers();
 
     pollRef.current = setInterval(async () => {
       try {
-        const resp = await api.get<{ status: string; token?: string; user?: AdminUser }>(
+        const resp = await api.get<{ status: string; token?: string; user?: AdminUser | TelegramUser | null }>(
           "/auth/poll-session",
           { params: { session_id: sessionId }, token: null },
         );
-        if (resp.status === "completed" && resp.token && resp.user) {
+        if (resp.status === "completed" && resp.token) {
           stopPolling();
           setToken(resp.token);
-          setUser(resp.user);
-          setLoginPending(false);
+          // Only sign this page in if the token is for this page's area.
+          try {
+            if (tokenArea(resp.token) === area) {
+              setUser(resp.user ?? (await api.get<AdminUser | TelegramUser>("/auth/me", { token: resp.token })));
+            }
+          } finally {
+            setLoginPending(false);
+          }
         } else if (resp.status === "expired") {
           stopPolling();
           setLoginPending(false);
@@ -141,14 +191,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 5 * 60 * 1000);
   }
 
+  /** Ends the login attempt: timers stop and the next tap starts a fresh session. */
   const stopPolling = useCallback(() => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    pollRef.current = null;
-    timeoutRef.current = null;
+    clearTimers();
+    sessionRef.current = null;
+    setLoginPending(false);
   }, []);
 
   function logout() {
+    // Shop accounts: put the sign-out in the shop's activity log. Fire and forget: the token is read
+    // when the request starts, so it can be cleared right after.
+    if (isAdmin && !isSuperAdmin) void api.post("/auth/logout").catch(() => {});
     clearToken();
     setUser(null);
     stopPolling();
@@ -157,7 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
-        user, loading, loginPending, isAdmin, isSuperAdmin, isShopUser,
+        user, loading, loginPending, isAdmin, isSuperAdmin, isShopStaff, isShopUser,
         adminLogin, startTgSession, pollSession, stopPolling, logout,
       }}
     >

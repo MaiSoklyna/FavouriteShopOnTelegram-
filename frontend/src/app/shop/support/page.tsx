@@ -6,11 +6,12 @@ import { useAuth } from "@/providers/AuthProvider";
 import { LoginGate } from "@/components/shop/LoginGate";
 import { api } from "@/lib/api";
 import type { SupportTicket, TicketMessage } from "@/types";
+import { Icon } from "@/components/shop/Icon";
 
 const FAQ = [
   { q: "How do I track my order?", a: "Go to 'My Orders', then select your order to view its current status." },
   { q: "Can I cancel my order?", a: "You can cancel orders in 'pending' status. Once confirmed, contact support." },
-  { q: "What payment methods are accepted?", a: "KHQR (all Cambodian banks), Cash on Delivery (COD)." },
+  { q: "What payment methods are accepted?", a: "Card (Stripe test mode demo) and Cash on Delivery (COD)." },
   { q: "How long does delivery take?", a: "Typically 3-5 business days depending on location." },
 ];
 
@@ -19,7 +20,7 @@ const SUBJECTS = ["Order Issue", "Wrong Item", "Refund Request", "General Questi
 const statusBadge = (status: string) => {
   const map: Record<string, { bg: string; color: string; border: string }> = {
     open: { bg: "#FFF8E1", color: "#F59E0B", border: "#FDE68A" },
-    replied: { bg: "var(--shop-primary-tint)", color: "var(--shop-primary)", border: "rgba(30,107,255,0.15)" },
+    replied: { bg: "var(--shop-primary-tint)", color: "var(--shop-primary)", border: "var(--shop-primary-tint)" },
     closed: { bg: "#F3F4F6", color: "var(--shop-muted)", border: "var(--shop-divider)" },
   };
   const s = map[status] || map.closed;
@@ -135,7 +136,7 @@ function TicketList() {
           width: "100%", padding: "13px 20px", borderRadius: "var(--shop-r-input)",
           background: "var(--shop-primary)", color: "#fff", fontWeight: 600,
           border: "none", cursor: "pointer", marginBottom: 20, fontSize: 14,
-          boxShadow: "0 4px 12px rgba(30,107,255,0.2)", transition: "background 0.2s",
+          boxShadow: "var(--fos-sh-cta)", transition: "background 0.2s",
           display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
         }}>
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="#fff" strokeWidth="2" strokeLinecap="round"/></svg>
@@ -187,7 +188,7 @@ function TicketList() {
           padding: 28, textAlign: "center", marginBottom: 28,
           boxShadow: "var(--shop-shadow)",
         }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 8, color: "var(--shop-muted)" }}><Icon name="chat" size={32} strokeWidth={1.5} /></div>
           <p style={{ fontSize: 13, color: "var(--shop-muted)" }}>No tickets yet</p>
         </div>
       )}
@@ -384,7 +385,7 @@ function TicketChat({ ticketId }: { ticketId: number }) {
                 border: isCustomer ? "none" : "1px solid var(--shop-divider)",
                 borderBottomRightRadius: isCustomer ? 4 : 16,
                 borderBottomLeftRadius: isCustomer ? 16 : 4,
-                boxShadow: isCustomer ? "0 2px 8px rgba(30,107,255,0.2)" : "var(--shop-shadow)",
+                boxShadow: isCustomer ? "var(--fos-sh-sm)" : "var(--shop-shadow)",
               }}>
                 <p style={{
                   fontSize: 10, fontWeight: 700, marginBottom: 3, letterSpacing: "0.3px",
@@ -435,7 +436,7 @@ function TicketChat({ ticketId }: { ticketId: number }) {
               cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
               opacity: sending || !reply.trim() ? 0.35 : 1,
               transition: "opacity 0.2s, transform 0.15s",
-              boxShadow: "0 2px 8px rgba(30,107,255,0.25)",
+              boxShadow: "var(--fos-sh-cta)",
               flexShrink: 0,
             }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M22 2l-7 20-4-9-9-4 20-7z" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>

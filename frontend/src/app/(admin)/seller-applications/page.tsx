@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import type { SellerApplication } from "@/types";
+import { BrandLoader } from "@/components/ui/Spinner";
+import { ApproveIcon } from "@/components/brand/Icons";
 
 const TABS = ["pending", "approved", "rejected", "all"] as const;
 type Tab = (typeof TABS)[number];
@@ -20,6 +22,8 @@ export default function SellerApplicationsPage() {
   const [apps, setApps] = useState<SellerApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("pending");
+  const [cats, setCats] = useState<Record<number, string>>({});
+  const [subs, setSubs] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState<number | null>(null);
   const [toast, setToast] = useState({ show: false, msg: "", ok: true });
 
@@ -41,6 +45,13 @@ export default function SellerApplicationsPage() {
   }, [tab]);
 
   useEffect(() => { setLoading(true); load(); }, [tab, load]);
+  useEffect(() => {
+    api.get<{ data: { id: number; name: string; subcategories: { id: number; name: string }[] }[] }>("/shop-categories").then((r) => {
+      const c: Record<number, string> = {}, s: Record<number, string> = {};
+      (r.data || []).forEach((x) => { c[x.id] = x.name; x.subcategories.forEach((y) => { s[y.id] = y.name; }); });
+      setCats(c); setSubs(s);
+    }).catch(() => {});
+  }, []);
 
   async function approve(id: number) {
     if (!confirm("Approve this seller? This creates their shop and login.")) return;
@@ -96,7 +107,7 @@ export default function SellerApplicationsPage() {
       </div>
 
       {loading ? (
-        <div style={{ padding: 40, textAlign: "center", color: "var(--text-secondary)" }}>Loading…</div>
+        <BrandLoader />
       ) : apps.length === 0 ? (
         <div style={{ padding: 60, textAlign: "center", color: "var(--text-secondary)" }}>
           <div style={{ fontSize: 40, marginBottom: 8 }}>🗂️</div>
@@ -149,6 +160,7 @@ export default function SellerApplicationsPage() {
                   {a.company_name && <Row k="Company" v={a.company_name} />}
                   <Row k="Email" v={a.email} />
                   <Row k="Phone" v={a.phone || "—"} />
+                  <Row k="Category" v={a.shop_category_id ? `${cats[a.shop_category_id] || "—"}${a.shop_subcategory_id ? ` › ${subs[a.shop_subcategory_id] || "—"}` : ""}` : "—"} />
                   <Row k="Location" v={[a.address_line1, a.commune, a.district, a.province].filter(Boolean).join(", ") || "—"} />
                   {a.store_description && <Row k="About" v={a.store_description} />}
                   {a.review_note && <Row k="Note" v={a.review_note} />}
@@ -160,7 +172,7 @@ export default function SellerApplicationsPage() {
                       flex: 1, padding: 10, borderRadius: 8, border: "none", cursor: "pointer",
                       background: "var(--success)", color: "#fff", fontWeight: 600, fontSize: 13,
                       opacity: busy === a.id ? 0.6 : 1,
-                    }}>Approve</button>
+                    }}><span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><ApproveIcon size={16} />Approve</span></button>
                     <button onClick={() => reject(a.id)} disabled={busy === a.id} style={{
                       flex: 1, padding: 10, borderRadius: 8, cursor: "pointer",
                       border: "1px solid var(--danger)", background: "transparent", color: "var(--danger)",

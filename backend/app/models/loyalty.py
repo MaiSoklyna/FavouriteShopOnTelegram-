@@ -11,7 +11,7 @@ from app.core.constants import LoyaltyTier
 
 class LoyaltySettingsUpdate(BaseModel):
     is_enabled: bool = False
-    points_per_dollar: float = Field(10.0, ge=0)
+    points_per_dollar: float = Field(1.0, ge=0)
     points_value_cents: int = Field(1, ge=1)
     min_redeem_points: int = Field(100, ge=1)
     bronze_threshold: int = Field(0, ge=0)
@@ -19,6 +19,7 @@ class LoyaltySettingsUpdate(BaseModel):
     gold_threshold: int = Field(2000, ge=0)
     silver_multiplier: float = Field(1.5, ge=1.0)
     gold_multiplier: float = Field(2.0, ge=1.0)
+    redeem_coupon_days: int | None = Field(None, ge=1, le=365)
 
 
 class LoyaltySettingsResponse(BaseModel):
@@ -52,6 +53,10 @@ class PointsAdjustRequest(BaseModel):
 
 class PointsRedeemRequest(BaseModel):
     points: int = Field(..., gt=0)
+
+
+class ShopParticipationRequest(BaseModel):
+    enabled: bool
 
 
 class LoyaltyStatsResponse(BaseModel):

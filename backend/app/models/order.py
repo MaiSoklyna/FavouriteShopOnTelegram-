@@ -13,7 +13,7 @@ class OrderCreate(BaseModel):
     merchant_id: int
     delivery_address: str = Field(..., min_length=5, max_length=500)
     delivery_province: str | None = Field(None, max_length=100)
-    payment_method: str = Field("cod", pattern=r"^(khqr|cod|aba|wing)$")
+    payment_method: str = Field("cod", pattern=r"^(khqr|stripe|cod|aba|wing)$")
     promo_code: str | None = Field(None, max_length=50)
     customer_note: str | None = Field(None, max_length=1000)
 

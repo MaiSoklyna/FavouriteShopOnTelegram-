@@ -28,6 +28,7 @@ export default function SettlementsPage() {
   const [loadError, setLoadError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [backfilling, setBackfilling] = useState(false);
+  const [settling, setSettling] = useState(false);
 
   const [payFor, setPayFor] = useState<MerchantBalance | null>(null);
   const [manage, setManage] = useState<MerchantBalance | null>(null);
@@ -77,6 +78,22 @@ export default function SettlementsPage() {
     () => new Set(balances.filter((b) => b.payout_verification_status === "pending").map((b) => b.merchant_id)).size,
     [balances],
   );
+
+  async function monthlySettlement(month: string) {
+    if (!confirm(`Create payouts for orders delivered in ${month} only (Cambodia time)? Other months are not touched.`)) return;
+    setSettling(true);
+    try {
+      const r = await adminSettlements.monthlySettlement(month);
+      flash(`${month}: ${r.created.length} payout${r.created.length === 1 ? "" : "s"} created`
+        + (r.skipped.length ? `, ${r.skipped.length} skipped (${r.skipped.map((s) => s.name ?? `#${s.merchant_id}`).join(", ")})` : ""),
+        r.created.length > 0 || r.skipped.length === 0);
+      refreshAll();
+    } catch (err) {
+      flash(errorMessage(err, "Monthly settlement failed"), false);
+    } finally {
+      setSettling(false);
+    }
+  }
 
   async function backfill() {
     setBackfilling(true);
@@ -149,6 +166,8 @@ export default function SettlementsPage() {
           onManage={setManage}
           onBackfill={backfill}
           backfilling={backfilling}
+          onMonthly={monthlySettlement}
+          settling={settling}
         />
       )}
       {tab === "payouts" && (

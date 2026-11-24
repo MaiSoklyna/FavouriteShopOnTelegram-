@@ -78,6 +78,11 @@ class Settings(BaseModel):
     # ABA must enable payout on the merchant profile first.
     PAYWAY_PAYOUT_ENABLED: bool = False
 
+    # ── Stripe (test mode demo) ─────────────────────────────────
+    # sk_test_... / whsec_... — never put live keys here for the demo.
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+
     # ── Settlement ──────────────────────────────────────────────
     # Default platform commission (percent); merchants.commission_rate
     # overrides it per shop. Old env name PAYWAY_PLATFORM_FEE_PERCENT
@@ -182,6 +187,7 @@ def _load_settings() -> Settings:
         "PAYWAY_BASE_URL", "PAYWAY_MERCHANT_ID", "PAYWAY_API_KEY",
         "PAYWAY_CALLBACK_URL", "PAYWAY_QR_LIFETIME_MINUTES",
         "PLATFORM_COMMISSION_PERCENT",
+        "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
     ]
     for key in simple_keys:
         val = os.getenv(key)

@@ -23,8 +23,10 @@ from app.core.constants import (
     ADMIN_TOKEN_EXPIRY,
     LOGIN_SESSION_PREFIX,
     LOGIN_SESSION_TTL,
+    SHOP_LOGIN_SESSION_PREFIX,
     USER_TOKEN_EXPIRY,
     Role,
+    shop_role,
 )
 from app.core.dependencies import get_current_user, require_any_admin, require_role
 from app.core.exceptions import (
@@ -45,6 +47,7 @@ from app.core.security import (
     verify_telegram_hash,
 )
 from app.db.client import SupabaseClient
+from app.services import audit
 from app.models.auth import (
     AdminLoginRequest,
     AdminLoginResponse,
@@ -52,6 +55,7 @@ from app.models.auth import (
     ChangePasswordRequest,
     CreateMerchantAdminRequest,
     UpdateMerchantAdminRequest,
+    LoginSessionRequest,
     LoginSessionResponse,
     PollSessionResponse,
     TelegramAuthResponse,
@@ -234,6 +238,7 @@ async def _login_super_admin(db, body: AdminLoginRequest) -> AdminLoginResponse:
         sub=str(admin["id"]),
         role=Role.SUPER_ADMIN,
         email=admin["email"],
+        name=admin.get("full_name"),
     )
 
     return AdminLoginResponse(
@@ -277,7 +282,10 @@ async def _login_merchant_admin(db, body: AdminLoginRequest) -> AdminLoginRespon
         role=Role.MERCHANT_ADMIN,
         merchant_id=admin["merchant_id"],
         email=admin["email"],
+        name=admin.get("full_name"),
+        merchant_role=shop_role(admin.get("role")),
     )
+    await log_shop_access(db, admin, "account.login", method="password")
 
     return AdminLoginResponse(
         access_token=token,
@@ -289,6 +297,7 @@ async def _login_merchant_admin(db, body: AdminLoginRequest) -> AdminLoginRespon
             role="merchant",
             merchant_id=admin["merchant_id"],
             merchant_name=merchant_name,
+            merchant_role=shop_role(admin.get("role")),
         ),
     )
 
@@ -300,13 +309,15 @@ async def _login_merchant_admin(db, body: AdminLoginRequest) -> AdminLoginRespon
 
 @router.post("/tg-session", response_model=LoginSessionResponse)
 @limiter.limit("10/minute")
-async def create_tg_session(request: Request):
-    """Create a Telegram login session for the dashboard.
+async def create_tg_session(request: Request, body: LoginSessionRequest | None = None):
+    """Create a Telegram login session for the dashboard or the customer shop.
 
     The browser shows a QR/link to t.me/bot?start=SESSION_ID.
-    The bot completes the session when the admin taps it.
+    The bot completes a ``dash_`` session with an admin token and any other
+    session (``shop_``) with a customer token.
     """
-    session_id = LOGIN_SESSION_PREFIX + secrets.token_urlsafe(32)
+    prefix = SHOP_LOGIN_SESSION_PREFIX if body and body.area == "shop" else LOGIN_SESSION_PREFIX
+    session_id = prefix + secrets.token_urlsafe(32)
     async with SupabaseClient.service_role() as db:
         await db.from_("login_sessions").insert({"session_id": session_id})
     return LoginSessionResponse(session_id=session_id)
@@ -338,6 +349,11 @@ async def poll_tg_session(request: Request, session_id: str):
 
         # Session completed — resolve admin user
         user_data = await _resolve_admin_user(db, row)
+        if user_data and user_data.get("role") == "merchant":
+            await log_shop_access(db, {
+                "id": user_data["id"], "merchant_id": user_data.get("merchant_id"),
+                "full_name": user_data.get("name"), "role": user_data.get("merchant_role"),
+            }, "account.login", method="telegram")
 
         # Clean up session
         await db.from_("login_sessions").eq("session_id", session_id).delete()
@@ -372,6 +388,13 @@ async def _resolve_admin_user(db, session_row: dict) -> Optional[dict]:
         # log loudly so the failure mode is visible.
         logger.warning("Could not decode session jwt_token; falling back to id-only lookup")
 
+    if minted_role == Role.USER:
+        # Customer (shop) session: never fall through to the admin tables, whose
+        # ids overlap with users.id.
+        if not claims.telegram_id:
+            return None
+        return await db.from_("users").eq("telegram_id", claims.telegram_id).select_one()
+
     if minted_role == Role.MERCHANT_ADMIN:
         admin = await db.from_("merchant_admins").eq("id", user_id).select_one(
             "id,merchant_id,full_name,email,role"
@@ -390,6 +413,7 @@ async def _resolve_admin_user(db, session_row: dict) -> Optional[dict]:
             "role": "merchant",
             "merchant_id": admin["merchant_id"],
             "merchant_name": merchant_name,
+            "merchant_role": shop_role(admin.get("role")),
         }
 
     if minted_role == Role.SUPER_ADMIN:
@@ -428,8 +452,41 @@ async def _resolve_admin_user(db, session_row: dict) -> Optional[dict]:
             "role": "merchant",
             "merchant_id": admin["merchant_id"],
             "merchant_name": merchant_name,
+            "merchant_role": shop_role(admin.get("role")),
         }
     return None
+
+
+# ═══════════════════════════════════════════════════════════════
+#  SHOP SIGN-IN / SIGN-OUT HISTORY
+# ═══════════════════════════════════════════════════════════════
+
+
+async def log_shop_access(db, admin: dict, action: str, *, method: str | None = None) -> None:
+    """Put a shop account's sign-in or sign-out in its shop's activity log. Never raises."""
+    if not admin.get("merchant_id"):
+        return
+    who = TokenClaims(
+        sub=str(admin["id"]), role=Role.MERCHANT_ADMIN, merchant_id=admin["merchant_id"],
+        name=admin.get("full_name"), merchant_role=shop_role(admin.get("role")),
+    )
+    await audit.record(
+        db, who, merchant_id=admin["merchant_id"], action=action, target_type="account",
+        target_id=int(admin["id"]), target_label=admin.get("full_name"),
+        new={"method": method} if method else None,
+    )
+
+
+@router.post("/logout")
+async def logout(user: TokenClaims = require_any_admin()):
+    """Record a dashboard sign-out. The token itself is dropped by the browser."""
+    if user.role == Role.MERCHANT_ADMIN:
+        async with SupabaseClient.service_role() as db:
+            await log_shop_access(db, {
+                "id": user.sub, "merchant_id": user.merchant_id,
+                "full_name": user.name, "role": user.merchant_role,
+            }, "account.logout")
+    return {"success": True}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -446,6 +503,8 @@ async def refresh_token(user: TokenClaims = Depends(get_current_user)):
         email=user.email,
         merchant_id=user.merchant_id,
         telegram_id=user.telegram_id,
+        name=user.name,
+        merchant_role=user.merchant_role,
     )
     expiry = ADMIN_TOKEN_EXPIRY if user.is_admin else USER_TOKEN_EXPIRY
     return TokenResponse(access_token=token, expires_in=expiry)
@@ -484,6 +543,7 @@ async def get_current_profile(user: TokenClaims = Depends(get_current_user)):
                 "id": row["id"], "email": row["email"], "name": row["full_name"],
                 "role": "merchant", "merchant_id": row["merchant_id"],
                 "merchant_name": merchant_name,
+                "merchant_role": shop_role(row.get("role")),
             }
 
         # Regular user
@@ -550,7 +610,7 @@ async def create_merchant_admin(
             "password_hash": hash_password(body.password),
             "full_name": body.full_name,
             "merchant_id": body.merchant_id,
-            "role": body.role,
+            "role": shop_role(body.role),
         }
         if body.telegram_id:
             row["telegram_id"] = body.telegram_id

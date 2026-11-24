@@ -8,17 +8,20 @@ from __future__ import annotations
 
 import logging
 
+import httpx
 from fastapi import APIRouter
 
 from app.core.constants import Role
-from app.core.dependencies import require_any_admin, require_role
+from app.core.dependencies import require_any_admin, require_role, require_shop_owner_only, require_super_admin
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
+from app.services import loyalty, notify
 from app.models.loyalty import (
     LoyaltySettingsUpdate,
     PointsAdjustRequest,
     PointsRedeemRequest,
+    ShopParticipationRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -104,16 +107,19 @@ async def get_my_loyalty_history(
 
 @router.post("/redeem")
 async def redeem_points(body: PointsRedeemRequest, user: TokenClaims = require_role(Role.USER)):
-    """Redeem loyalty points for a discount."""
-    try:
-        from app.services.loyalty import redeem_points as do_redeem
-        db_user_row = None
-        async with SupabaseClient.service_role() as db:
-            db_user_row = await _get_db_user(db, user)
-        result = await do_redeem(db_user_row["id"], body.points)
-        return {"success": True, "data": result}
-    except ValueError as e:
-        raise BadRequestError(str(e))
+    """Turn points into a single-use coupon (it lands in My Coupons)."""
+    async with SupabaseClient.service_role() as db:
+        db_user = await _get_db_user(db, user)
+        result = await loyalty.redeem_for_coupon(db, db_user["id"], body.points)
+    return {"success": True, "data": result}
+
+
+@router.get("/pending")
+async def my_pending_points(user: TokenClaims = require_role(Role.USER)):
+    """Points on the way: what the customer's open orders will earn once delivered."""
+    async with SupabaseClient.service_role() as db:
+        db_user = await _get_db_user(db, user)
+        return await loyalty.pending_points(db, db_user["id"])
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -122,31 +128,35 @@ async def redeem_points(body: PointsRedeemRequest, user: TokenClaims = require_r
 
 
 @router.get("/admin/settings")
-async def get_loyalty_settings_admin(user: TokenClaims = require_any_admin()):
+async def get_loyalty_settings_admin(user: TokenClaims = require_super_admin()):
     """Get loyalty settings (admin)."""
     async with SupabaseClient.service_role() as db:
         return await db.from_("loyalty_settings").select_one()
 
 
 @router.put("/admin/settings")
-async def update_loyalty_settings(body: LoyaltySettingsUpdate, user: TokenClaims = require_any_admin()):
+async def update_loyalty_settings(body: LoyaltySettingsUpdate, user: TokenClaims = require_super_admin()):
     """Update or create loyalty settings (admin)."""
     async with SupabaseClient.service_role() as db:
-        data = body.model_dump()
+        data = body.model_dump(exclude_none=True)
         existing = await db.from_("loyalty_settings").select_one("id")
-        if existing:
-            await db.from_("loyalty_settings").eq("id", existing["id"]).update(data)
-            return await db.from_("loyalty_settings").eq("id", existing["id"]).select_one()
-        else:
+        try:
+            if existing:
+                await db.from_("loyalty_settings").eq("id", existing["id"]).update(data)
+                return await db.from_("loyalty_settings").eq("id", existing["id"]).select_one()
             rows = await db.from_("loyalty_settings").insert(data)
             return rows[0] if rows else data
+        except httpx.HTTPStatusError as exc:
+            if "redeem_coupon_days" not in data or notify._error_code(exc) not in ("42703", "PGRST204"):
+                raise
+            raise BadRequestError("Coupon validity needs supabase/migrations/031_loyalty.sql to be run first") from exc
 
 
 @router.get("/admin/accounts")
 async def list_loyalty_accounts(
     tier: str | None = None,
     limit: int = 50,
-    user: TokenClaims = require_any_admin(),
+    user: TokenClaims = require_super_admin(),
 ):
     """List loyalty accounts with user info (admin)."""
     async with SupabaseClient.service_role() as db:
@@ -157,7 +167,7 @@ async def list_loyalty_accounts(
 
 
 @router.post("/admin/adjust")
-async def adjust_loyalty_points(body: PointsAdjustRequest, user: TokenClaims = require_any_admin()):
+async def adjust_loyalty_points(body: PointsAdjustRequest, user: TokenClaims = require_super_admin()):
     """Manually adjust a loyalty account's points (admin)."""
     async with SupabaseClient.service_role() as db:
         account = await db.from_("loyalty_accounts").eq("id", body.account_id).select_one("balance,lifetime_points")
@@ -185,7 +195,7 @@ async def adjust_loyalty_points(body: PointsAdjustRequest, user: TokenClaims = r
 
 
 @router.get("/admin/stats")
-async def get_loyalty_stats(user: TokenClaims = require_any_admin()):
+async def get_loyalty_stats(user: TokenClaims = require_super_admin()):
     """Aggregated loyalty program stats (admin)."""
     async with SupabaseClient.service_role() as db:
         accounts = await db.from_("loyalty_accounts").select("tier")
@@ -227,31 +237,49 @@ async def _get_db_user(db, user: TokenClaims) -> dict:
 
 
 @router.post("/admin/backfill")
-async def backfill_loyalty_points(user: TokenClaims = require_any_admin()):
-    """Backfill loyalty points for all past delivered/confirmed orders that have no points_transaction."""
-    from app.services.loyalty import earn_points
-
+async def backfill_loyalty_points(user: TokenClaims = require_super_admin()):
+    """Pay points for delivered orders that never got them (e.g. delivered before the program existed)."""
     async with SupabaseClient.service_role() as db:
-        settings_row = await db.from_("loyalty_settings").select_one()
-        if not settings_row or not settings_row.get("is_enabled"):
+        ls = await loyalty.get_settings(db)
+        if not ls or not ls.get("is_enabled"):
             raise BadRequestError("Loyalty program is not enabled")
-
-        orders = await db.from_("orders").in_("status", ["delivered", "confirmed", "processing", "shipped"]).select("id,user_id,total")
-        existing_txns = await db.from_("points_transactions").eq("type", "earn").select("order_id")
-        existing_order_ids = {t["order_id"] for t in existing_txns if t.get("order_id")}
-
-        backfilled = 0
-        errors = 0
+        orders = await db.from_("orders").eq("status", "delivered").select("id")
+        paid = {t["order_id"] for t in await db.from_("points_transactions").eq("type", "earn").select("order_id") if t.get("order_id")}
+        backfilled = errors = 0
         for order in orders:
-            if order["id"] in existing_order_ids:
+            if order["id"] in paid:
                 continue
             try:
-                result = await earn_points(order["user_id"], order["id"], float(order["total"]))
-                if result:
+                if await loyalty.award_for_order(db, order["id"]):
                     backfilled += 1
-                    logger.info("Backfilled %d pts for order %d (user %d)", result["points_earned"], order["id"], order["user_id"])
-            except Exception as e:
-                logger.error("Backfill failed for order %d: %s", order["id"], e)
+            except Exception:
+                logger.exception("Backfill failed for order %s", order["id"])
                 errors += 1
+    return {"backfilled": backfilled, "skipped": len(paid), "errors": errors}
 
-    return {"backfilled": backfilled, "skipped": len(existing_order_ids), "errors": errors}
+
+@router.get("/admin/sustainability")
+async def loyalty_sustainability(user: TokenClaims = require_super_admin()):
+    """Can the platform afford the program? (platform decision: super admin only)"""
+    async with SupabaseClient.service_role() as db:
+        return await loyalty.sustainability(db)
+
+
+@router.get("/shop")
+async def my_shop_participation(user: TokenClaims = require_shop_owner_only()):
+    """Does the signed-in shop take part in the rewards program?"""
+    async with SupabaseClient.service_role() as db:
+        return {"enabled": await loyalty.shop_takes_part(db, user.merchant_id)}
+
+
+@router.put("/shop")
+async def set_my_shop_participation(body: ShopParticipationRequest, user: TokenClaims = require_shop_owner_only()):
+    """A shop switches rewards on or off for its own orders (points already earned are kept)."""
+    async with SupabaseClient.service_role() as db:
+        try:
+            await db.from_("merchants").eq("id", user.merchant_id).update({"loyalty_enabled": body.enabled})
+        except httpx.HTTPStatusError as exc:
+            if notify._error_code(exc) in ("42703", "PGRST204"):
+                raise BadRequestError("This needs supabase/migrations/031_loyalty.sql to be run first") from exc
+            raise
+    return {"enabled": body.enabled}

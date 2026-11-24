@@ -30,6 +30,10 @@ class SellerApplicationCreate(BaseModel):
     store_description: str | None = Field(None, max_length=2000)
     logo_url: str | None = Field(None, max_length=500)
 
+    # Shop category (required) — see /shop-categories
+    shop_category_id: int
+    shop_subcategory_id: int
+
     # Store location
     province: str | None = Field(None, max_length=100)
     district: str | None = Field(None, max_length=100)
@@ -63,6 +67,8 @@ class SellerApplicationResponse(BaseModel):
     commune: str | None = None
     address_line1: str | None = None
     address_line2: str | None = None
+    shop_category_id: int | None = None
+    shop_subcategory_id: int | None = None
     status: str
     review_note: str | None = None
     merchant_id: int | None = None

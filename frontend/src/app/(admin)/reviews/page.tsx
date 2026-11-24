@@ -4,11 +4,13 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import type { Review } from "@/types";
+import { BrandLoader } from "@/components/ui/Spinner";
+import { ShopReviewsPanel } from "@/components/admin/ShopReviewsPanel";
 
 const TABS = ["pending", "approved", "all"] as const;
 type Tab = (typeof TABS)[number];
 
-export default function ReviewsPage() {
+function ProductReviews() {
   const { user } = useAuth();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,7 +144,7 @@ export default function ReviewsPage() {
       {/* Table */}
       <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>
+          <BrandLoader />
         ) : (
           <table className="admin-table">
             <thead>
@@ -263,6 +265,31 @@ export default function ReviewsPage() {
           </table>
         )}
       </div>
+    </div>
+  );
+}
+
+
+/** Reviews: how customers rated the shop (after delivery) and the products. */
+export default function ReviewsPage() {
+  const [view, setView] = useState<"shop" | "product">("shop");
+  return (
+    <div>
+      <div role="tablist" style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        {([["shop", "Shop reviews"], ["product", "Product reviews"]] as const).map(([key, label]) => (
+          <button key={key} role="tab" aria-selected={view === key} onClick={() => setView(key)} style={{
+            padding: "8px 16px", borderRadius: 8, fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer",
+            background: view === key ? "var(--accent)" : "var(--bg-secondary)", color: view === key ? "var(--bg)" : "var(--text-secondary)",
+          }}>{label}</button>
+        ))}
+      </div>
+      {view === "shop" ? (
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--text)", marginBottom: 4 }}>Shop reviews</h1>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>What customers said after their order was delivered</p>
+          <ShopReviewsPanel />
+        </div>
+      ) : <ProductReviews />}
     </div>
   );
 }

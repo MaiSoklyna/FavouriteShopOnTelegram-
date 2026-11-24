@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import type { User } from "@/types";
+import { BrandLoader } from "@/components/ui/Spinner";
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -25,7 +26,7 @@ export default function UsersPage() {
       <input className="admin-input" style={{ maxWidth: 300, marginBottom: 16 }} placeholder="Search by name..." value={search} onChange={e => setSearch(e.target.value)} />
 
       <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
-        {loading ? <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Loading...</div> : (
+        {loading ? <BrandLoader /> : (
           <table className="admin-table">
             <thead><tr><th>User</th><th>Phone</th><th>Language</th><th>Status</th><th>Joined</th><th></th></tr></thead>
             <tbody>

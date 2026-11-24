@@ -15,13 +15,14 @@ from decimal import Decimal
 from fastapi import APIRouter, Query
 
 from app.core.constants import Role
-from app.core.dependencies import require_role, require_super_admin
+from app.core.dependencies import require_role, require_shop_owner_only, require_super_admin
 from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.models.settlement import (
     EarningStatus,
     PayoutAccountUpdate,
+    MonthlySettlement,
     PayoutCreate,
     PayoutComplete,
     PayoutFail,
@@ -31,7 +32,7 @@ from app.models.settlement import (
     PayoutStatus,
     VerificationStatus,
 )
-from app.services import settlement
+from app.services import audit, notify, settlement
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/settlements", tags=["Settlements"])
@@ -48,7 +49,7 @@ _ACCOUNT_COLUMNS = (
 
 
 @router.get("/merchant/balance")
-async def merchant_balance(user: TokenClaims = require_role(Role.MERCHANT_ADMIN)):
+async def merchant_balance(user: TokenClaims = require_shop_owner_only()):
     """What the platform owes this shop, per currency."""
     merchant_id = _own_merchant_id(user)
     async with SupabaseClient.service_role() as db:
@@ -61,7 +62,7 @@ async def merchant_earnings(
     status: EarningStatus | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
-    user: TokenClaims = require_role(Role.MERCHANT_ADMIN),
+    user: TokenClaims = require_shop_owner_only(),
 ):
     merchant_id = _own_merchant_id(user)
     async with SupabaseClient.service_role() as db:
@@ -72,7 +73,7 @@ async def merchant_earnings(
 async def merchant_payouts(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
-    user: TokenClaims = require_role(Role.MERCHANT_ADMIN),
+    user: TokenClaims = require_shop_owner_only(),
 ):
     merchant_id = _own_merchant_id(user)
     async with SupabaseClient.service_role() as db:
@@ -85,7 +86,7 @@ async def merchant_payouts(
 
 
 @router.get("/merchant/payout-account")
-async def get_payout_account(user: TokenClaims = require_role(Role.MERCHANT_ADMIN)):
+async def get_payout_account(user: TokenClaims = require_shop_owner_only()):
     merchant_id = _own_merchant_id(user)
     async with SupabaseClient.service_role() as db:
         merchant = await _get_merchant(db, merchant_id)
@@ -95,7 +96,7 @@ async def get_payout_account(user: TokenClaims = require_role(Role.MERCHANT_ADMI
 @router.put("/merchant/payout-account")
 async def update_payout_account(
     body: PayoutAccountUpdate,
-    user: TokenClaims = require_role(Role.MERCHANT_ADMIN),
+    user: TokenClaims = require_shop_owner_only(),
 ):
     """Set the ABA account to be paid into.
 
@@ -134,6 +135,17 @@ async def update_payout_account(
                 "aba_account_name": changes["aba_account_name"],
                 "payout_verification_status": changes["payout_verification_status"],
             },
+        )
+        # The owner's activity log shows the change with the account masked
+        await audit.record(
+            db, user, merchant_id=merchant_id, action="payout.account_updated", target_type="payout",
+            target_id=merchant_id, target_label=changes["aba_account_name"],
+            old={"aba_account": settlement.mask_account(merchant.get("aba_account")),
+                 "aba_account_name": merchant.get("aba_account_name"),
+                 "payout_verification_status": merchant.get("payout_verification_status")},
+            new={"aba_account": settlement.mask_account(account),
+                 "aba_account_name": changes["aba_account_name"],
+                 "payout_verification_status": changes["payout_verification_status"]},
         )
         merchant.update(changes)
     return {"data": _account_view(merchant)}
@@ -227,6 +239,13 @@ async def admin_update_payout_settings(
             new_value={k: _jsonable(v) for k, v in changes.items()},
             note=body.payout_rejection_reason,
         )
+        if "payout_verification_status" in changes or "payout_enabled" in changes:
+            keys = [k for k in ("payout_verification_status", "payout_enabled", "payout_rejection_reason") if k in changes]
+            await audit.record(
+                db, user, merchant_id=merchant_id, action="payout.verification_changed", target_type="payout",
+                target_id=merchant_id, target_label=merchant.get("aba_account_name"),
+                old={k: merchant.get(k) for k in keys}, new={k: changes[k] for k in keys},
+            )
         merchant.update(changes)
     return {"data": _account_view(merchant)}
 
@@ -271,7 +290,65 @@ async def admin_create_payout(
             "p_actor_type": str(user.role),
             "p_actor_id": user.sub,
         })
+        await notify.payout_event(db, payout, "created")
     return {"data": payout}
+
+
+@router.post("/admin/monthly-settlement")
+async def admin_monthly_settlement(
+    body: MonthlySettlement,
+    user: TokenClaims = require_super_admin(),
+):
+    """Create one pending payout for every merchant with money available.
+
+    Merchants whose payout account is not verified, or with nothing available,
+    are skipped and reported. Each payout still has to be sent and then marked
+    complete, exactly like a single manual payout.
+
+    Strict cutoff: only earnings delivered inside the month (Cambodia time,
+    [first day 00:00, first day of next month 00:00)) are included. Later
+    months stay untouched, and an earning already in a payout is never
+    picked up again, so running the same month twice creates nothing new.
+    """
+    if body.month > settlement.current_month():
+        raise BadRequestError("Cannot settle a month that has not started yet")
+    period_start, period_end = settlement.month_bounds(body.month)
+
+    created: list[dict] = []
+    skipped: list[dict] = []
+    async with SupabaseClient.service_role() as db:
+        balances = await db.from_("merchant_balances").eq("currency", body.currency).select()
+        accounts = {
+            m["id"]: m for m in await db.from_("merchants").select("id,payout_verification_status")
+        }
+        for b in balances:
+            mid = b["merchant_id"]
+            if float(b.get("available_amount") or 0) <= 0:
+                continue
+            if accounts.get(mid, {}).get("payout_verification_status") != VerificationStatus.VERIFIED.value:
+                skipped.append({"merchant_id": mid, "name": b.get("merchant_name"), "reason": "Payout account not verified"})
+                continue
+            try:
+                payout = await settlement.rpc(db, "create_merchant_payout", {
+                    "p_merchant_id": mid,
+                    "p_currency": body.currency,
+                    "p_method": PayoutMethod.MANUAL_TRANSFER.value,
+                    "p_note": f"Monthly settlement {body.month}",
+                    "p_actor_type": str(user.role),
+                    "p_actor_id": user.sub,
+                    "p_period_start": period_start.isoformat(),
+                    "p_period_end": period_end.isoformat(),
+                })
+                created.append({"merchant_id": mid, "name": b.get("merchant_name"), "payout": payout})
+                await notify.payout_event(db, payout, "created")
+            except BadRequestError as exc:
+                # Nothing delivered in this month (or already settled): not an error.
+                if "Nothing to pay out" not in str(exc):
+                    skipped.append({"merchant_id": mid, "name": b.get("merchant_name"), "reason": str(exc)[:200]})
+            except Exception as exc:
+                logger.exception("Monthly settlement failed for merchant %s", mid)
+                skipped.append({"merchant_id": mid, "name": b.get("merchant_name"), "reason": str(exc)[:200]})
+    return {"data": {"month": body.month, "created": created, "skipped": skipped}}
 
 
 @router.get("/admin/payouts")
@@ -323,6 +400,7 @@ async def admin_complete_payout(
             "p_actor_type": str(user.role),
             "p_actor_id": user.sub,
         })
+        await notify.payout_event(db, payout, "paid")
     return {"data": payout}
 
 
@@ -341,6 +419,7 @@ async def admin_fail_payout(
             "p_actor_type": str(user.role),
             "p_actor_id": user.sub,
         })
+        await notify.payout_event(db, payout, "failed")
     return {"data": payout}
 
 
@@ -362,6 +441,7 @@ async def admin_reverse_payout(
             "p_actor_type": str(user.role),
             "p_actor_id": user.sub,
         })
+        await notify.payout_event(db, payout, "reversed")
     return {"data": payout}
 
 
@@ -418,7 +498,7 @@ async def admin_settlement_report(
             db.from_("merchant_earnings")
             .gte("created_at", start.isoformat()).lt("created_at", end.isoformat())
             .neq("status", "reversed")
-            .select("merchant_id,currency,gross_amount,commission_amount,net_amount,entry_type")
+            .select("merchant_id,currency,gross_amount,platform_subsidy,commission_amount,net_amount,entry_type")
         )
         payouts = await (
             db.from_("merchant_payouts")
@@ -436,7 +516,7 @@ async def admin_settlement_report(
             rows[key] = {
                 "merchant_id": merchant_id, "merchant_name": merchants.get(merchant_id),
                 "currency": currency, "orders": 0, "gross": Decimal("0"),
-                "commission": Decimal("0"), "net": Decimal("0"),
+                "subsidy": Decimal("0"), "commission": Decimal("0"), "net": Decimal("0"),
                 "paid_out": Decimal("0"), "payouts": 0,
             }
         return rows[key]
@@ -446,6 +526,8 @@ async def admin_settlement_report(
         if e["entry_type"] == "order":
             r["orders"] += 1
         r["gross"] += settlement.money(e["gross_amount"])
+        # Platform-funded discounts the platform pays the shop on top of what it collected
+        r["subsidy"] += settlement.money(e.get("platform_subsidy"))
         r["commission"] += settlement.money(e["commission_amount"])
         r["net"] += settlement.money(e["net_amount"])
     for p in payouts:
@@ -457,10 +539,10 @@ async def admin_settlement_report(
     totals: dict[str, dict] = {}
     for r in merchants_out:
         t = totals.setdefault(r["currency"], {
-            "currency": r["currency"], "orders": 0, "gross": Decimal("0"),
+            "currency": r["currency"], "orders": 0, "gross": Decimal("0"), "subsidy": Decimal("0"),
             "commission": Decimal("0"), "net": Decimal("0"), "paid_out": Decimal("0"), "payouts": 0,
         })
-        for k in ("orders", "gross", "commission", "net", "paid_out", "payouts"):
+        for k in ("orders", "gross", "subsidy", "commission", "net", "paid_out", "payouts"):
             t[k] += r[k]
 
     def out(d: dict) -> dict:
@@ -491,7 +573,18 @@ async def admin_backfill_earnings(
             .order("id")
             .limit(limit)
             .select("id,merchant_id,total,delivery_fee,status,payment_method,"
-                    "payway_tran_id,commission_rate,payout_mode")
+                    "payway_tran_id,commission_rate,payout_mode,platform_discount_amount")
+        )
+        # Cash-on-delivery orders whose discount the platform funded are owed that subsidy
+        orders += await (
+            db.from_("orders")
+            .gt("platform_discount_amount", 0)
+            .not_("payment_method", "in", f"({','.join(settlement.PLATFORM_COLLECTED_METHODS)})")
+            .neq("status", "cancelled")
+            .order("id")
+            .limit(limit)
+            .select("id,merchant_id,total,delivery_fee,status,payment_method,"
+                    "payway_tran_id,commission_rate,payout_mode,platform_discount_amount")
         )
         order_ids = [o["id"] for o in orders]
         existing = set()

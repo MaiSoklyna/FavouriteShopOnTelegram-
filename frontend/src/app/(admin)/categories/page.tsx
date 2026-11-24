@@ -5,6 +5,8 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { IconPicker } from "@/components/admin";
 import type { Category } from "@/types";
+import { BrandLoader } from "@/components/ui/Spinner";
+import { AddIcon, DeleteIcon, EditIcon } from "@/components/brand/Icons";
 
 export default function CategoriesPage() {
   const { isSuperAdmin } = useAuth();
@@ -89,13 +91,13 @@ export default function CategoriesPage() {
             {categories.length} categories
           </p>
         </div>
-        <button className="btn-primary" onClick={openCreate}>+ Add Category</button>
+        <button className="btn-primary" onClick={openCreate}><AddIcon size={16} />Add Category</button>
       </div>
 
       {/* Table */}
       <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#746D6D" }}>Loading...</div>
+          <BrandLoader />
         ) : (
           <table className="admin-table">
             <thead>
@@ -184,7 +186,7 @@ export default function CategoriesPage() {
                             color: "#103562", fontSize: 13,
                           }}
                         >
-                          Edit
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><EditIcon size={14} />Edit</span>
                         </button>
                         <button
                           onClick={() => deleteCategory(c.id)}
@@ -195,7 +197,7 @@ export default function CategoriesPage() {
                             color: "#EF4444", fontSize: 13,
                           }}
                         >
-                          Delete
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><DeleteIcon size={14} />Delete</span>
                         </button>
                       </div>
                     ) : (

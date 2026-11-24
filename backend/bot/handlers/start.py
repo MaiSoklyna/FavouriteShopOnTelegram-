@@ -12,7 +12,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppI
 from telegram.ext import ContextTypes
 
 from app.config import settings
-from app.core.constants import ADMIN_TOKEN_EXPIRY, USER_TOKEN_EXPIRY, Role
+from app.core.constants import ADMIN_TOKEN_EXPIRY, USER_TOKEN_EXPIRY, Role, shop_role
 from app.core.security import mint_jwt
 from bot.supabase_helpers import sb_get, sb_get_one, sb_post, sb_patch
 
@@ -68,9 +68,10 @@ def _build_admin_keyboard(miniapp_url: str, dashboard_base: str, admin_token: st
 def _admin_token_for(sa: dict | None, ma: dict | None) -> str | None:
     """Mint an admin SSO token, preferring the shop-owner (merchant) role."""
     if ma:
-        return _make_admin_token(ma["id"], Role.MERCHANT_ADMIN, ma["email"], ma.get("merchant_id"))
+        return _make_admin_token(ma["id"], Role.MERCHANT_ADMIN, ma["email"], ma.get("merchant_id"),
+                                 name=ma.get("full_name"), merchant_role=shop_role(ma.get("role")))
     if sa:
-        return _make_admin_token(sa["id"], Role.SUPER_ADMIN, sa["email"])
+        return _make_admin_token(sa["id"], Role.SUPER_ADMIN, sa["email"], name=sa.get("full_name"))
     return None
 
 
@@ -102,13 +103,16 @@ def _make_user_token(user_id: int, telegram_id: int) -> str:
     )
 
 
-def _make_admin_token(admin_id: int, role: Role, email: str, merchant_id: int | None = None) -> str:
+def _make_admin_token(admin_id: int, role: Role, email: str, merchant_id: int | None = None, *,
+                      name: str | None = None, merchant_role: str | None = None) -> str:
     """Mint an admin JWT using the shared security module."""
     return mint_jwt(
         sub=str(admin_id),
         role=role,
         email=email,
         merchant_id=merchant_id,
+        name=name,
+        merchant_role=merchant_role,
         expires_in=ADMIN_TOKEN_EXPIRY,
     )
 
@@ -141,12 +145,13 @@ async def _get_admin_accounts(telegram_id: int):
 
 
 async def _complete_dash_as_super(session_id: str, sa: dict):
-    token = _make_admin_token(sa["id"], Role.SUPER_ADMIN, sa["email"])
+    token = _make_admin_token(sa["id"], Role.SUPER_ADMIN, sa["email"], name=sa.get("full_name"))
     await _complete_login_session(session_id, sa["id"], token)
 
 
 async def _complete_dash_as_merchant(session_id: str, ma: dict):
-    token = _make_admin_token(ma["id"], Role.MERCHANT_ADMIN, ma["email"], ma.get("merchant_id"))
+    token = _make_admin_token(ma["id"], Role.MERCHANT_ADMIN, ma["email"], ma.get("merchant_id"),
+                              name=ma.get("full_name"), merchant_role=shop_role(ma.get("role")))
     await _complete_login_session(session_id, ma["id"], token)
 
 

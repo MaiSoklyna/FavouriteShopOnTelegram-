@@ -55,6 +55,8 @@ class TokenClaims:
     merchant_id: int | None = None
     email: str | None = None
     name: str | None = None
+    # Shop accounts only: "owner", "manager" or "staff". Missing on older tokens, which all belong to owners.
+    merchant_role: str | None = None
     exp: int = 0
     iat: int = 0
 
@@ -70,6 +72,23 @@ class TokenClaims:
     def is_user(self) -> bool:
         return self.role == Role.USER
 
+    @property
+    def shop_role(self) -> str | None:
+        """owner / manager / staff for shop accounts (older tokens without a role are owners); None otherwise."""
+        if self.role != Role.MERCHANT_ADMIN:
+            return None
+        v = (self.merchant_role or "").strip().lower()
+        return v if v in ("manager", "staff") else "owner"
+
+    @property
+    def is_shop_staff(self) -> bool:
+        """Any shop account that is not the owner (manager or staff).
+
+        Owner-only areas (staff management, payouts, earnings, shop settings) refuse these
+        accounts; finer rules per role are in app/core/permissions.py.
+        """
+        return self.shop_role in ("manager", "staff")
+
 
 # ── JWT minting ─────────────────────────────────────────────────
 
@@ -82,6 +101,7 @@ def mint_jwt(
     merchant_id: int | None = None,
     email: str | None = None,
     name: str | None = None,
+    merchant_role: str | None = None,
     expires_in: int | None = None,
     extra_claims: dict[str, Any] | None = None,
 ) -> str:
@@ -116,6 +136,8 @@ def mint_jwt(
         claims["email"] = email
     if name is not None:
         claims["name"] = name
+    if merchant_role is not None:
+        claims["merchant_role"] = merchant_role
     if extra_claims:
         claims.update(extra_claims)
 
@@ -190,6 +212,7 @@ def verify_jwt(token: str) -> TokenClaims:
         merchant_id=raw.get("merchant_id"),
         email=raw.get("email"),
         name=raw.get("name"),
+        merchant_role=raw.get("merchant_role"),
         exp=raw.get("exp", 0),
         iat=raw.get("iat", 0),
     )

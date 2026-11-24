@@ -6,6 +6,7 @@ import {
   type ReportRow, type SettlementReport,
 } from "@/lib/settlements";
 import { BTN, FieldLabel, INPUT, Notice, Panel, Spinner, SummaryCard, Table, type Column } from "../ui";
+import { ExportIcon } from "@/components/brand/Icons";
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -47,6 +48,7 @@ export function ReportsTab() {
     { key: "merchant", header: "Merchant", render: (r) => <span className="font-semibold">{r.merchant_name ?? `#${r.merchant_id}`}</span> },
     { key: "orders", header: "Orders", align: "right", render: (r) => r.orders },
     { key: "gross", header: "Sales", align: "right", render: (r) => formatMoney(r.gross, r.currency) },
+    { key: "subsidy", header: "Platform discounts", align: "right", render: (r) => formatMoney(r.subsidy ?? 0, r.currency) },
     { key: "commission", header: "Commission", align: "right", render: (r) => <span className="text-success">{formatMoney(r.commission, r.currency)}</span> },
     { key: "net", header: "Merchant share", align: "right", render: (r) => formatMoney(r.net, r.currency) },
     { key: "paid_out", header: "Paid out", align: "right", render: (r) => formatMoney(r.paid_out, r.currency) },
@@ -57,10 +59,10 @@ export function ReportsTab() {
     if (!report) return;
     downloadCsv(
       `settlement-report-${from}-to-${to}.csv`,
-      ["Merchant ID", "Merchant", "Currency", "Orders", "Sales", "Commission", "Merchant share", "Paid out", "Payouts"],
+      ["Merchant ID", "Merchant", "Currency", "Orders", "Sales", "Platform discounts", "Commission", "Merchant share", "Paid out", "Payouts"],
       [
-        ...report.merchants.map((r) => [r.merchant_id, r.merchant_name, r.currency, r.orders, r.gross, r.commission, r.net, r.paid_out, r.payouts]),
-        ...report.totals.map((t) => ["", "TOTAL", t.currency, t.orders, t.gross, t.commission, t.net, t.paid_out, t.payouts]),
+        ...report.merchants.map((r) => [r.merchant_id, r.merchant_name, r.currency, r.orders, r.gross, r.subsidy ?? 0, r.commission, r.net, r.paid_out, r.payouts]),
+        ...report.totals.map((t) => ["", "TOTAL", t.currency, t.orders, t.gross, t.subsidy ?? 0, t.commission, t.net, t.paid_out, t.payouts]),
       ],
     );
   }
@@ -80,7 +82,7 @@ export function ReportsTab() {
           </div>
           <div className="ml-auto flex gap-2 pb-0.5">
             {loading && <span className="self-center text-text-muted"><Spinner /></span>}
-            <button className={BTN.outlineSm} onClick={exportCsv} disabled={!report || report.merchants.length === 0}>Export CSV</button>
+            <button className={BTN.outlineSm} onClick={exportCsv} disabled={!report || report.merchants.length === 0}><ExportIcon size={16} />Export CSV</button>
           </div>
         </div>
       </Panel>
@@ -89,7 +91,8 @@ export function ReportsTab() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <SummaryCard label="QR sales" value={formatMoney(total?.gross, cur)} hint={`${total?.orders ?? 0} paid orders`} />
-        <SummaryCard label="Platform commission" tone="success" value={formatMoney(total?.commission, cur)} />
+        <SummaryCard label="Platform commission" tone="success" value={formatMoney(total?.commission, cur)}
+          hint={Number(total?.subsidy ?? 0) > 0 ? `Platform-paid discounts ${formatMoney(total?.subsidy, cur)}` : undefined} />
         <SummaryCard label="Merchant share" tone="primary" value={formatMoney(total?.net, cur)} hint="Earned in period" />
         <SummaryCard label="Paid out" value={formatMoney(total?.paid_out, cur)} hint={`${total?.payouts ?? 0} payouts`} />
         <SummaryCard
