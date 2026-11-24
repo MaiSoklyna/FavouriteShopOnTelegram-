@@ -39,6 +39,8 @@ from app.routes import (
 )
 
 logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL, logging.INFO))
+# Telegram Bot API URLs carry the bot token; keep httpx request lines out of the logs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 _DEFAULT_DEV_ORIGINS = [

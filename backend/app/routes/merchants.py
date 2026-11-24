@@ -20,6 +20,28 @@ from app.models.merchant import MerchantCreate, MerchantUpdate
 
 router = APIRouter(prefix="/merchants", tags=["Merchants"])
 
+# Fields any visitor may see on a shop (an allow-list: new columns stay private by default).
+# Everything else (owner_name, email, phone, telegram_token, telegram_group_id, plan,
+# logo_update_history, ABA payout account, payout verification, commission_rate, ...)
+# is visible only to a super admin, or to the shop's own admin.
+PUBLIC_FIELDS = (
+    "id", "name", "slug", "tagline", "description", "icon_emoji", "accent_color", "logo_url",
+    "is_featured", "status", "fb_page", "instagram", "deep_link_code", "created_at",
+    "address", "latitude", "longitude", "delivery_radius_km", "rating", "rating_count",
+    "shop_category_id", "shop_subcategory_id",
+    "opening_hours", "delivery_base_fee", "delivery_per_km_fee", "min_order_amount",
+)
+
+
+def public_view(merchant: dict) -> dict:
+    return {k: merchant[k] for k in PUBLIC_FIELDS if k in merchant}
+
+
+def sees_private_fields(user: TokenClaims | None, merchant_id: int) -> bool:
+    if not user:
+        return False
+    return user.is_super_admin or (user.role == Role.MERCHANT_ADMIN and user.merchant_id == merchant_id)
+
 # Logo update policy for merchant_admin role: max N updates per rolling window
 LOGO_UPDATE_MAX_PER_WINDOW = 2
 LOGO_UPDATE_WINDOW = timedelta(days=7)
@@ -60,16 +82,22 @@ async def list_merchants(
             orders = await db.from_("orders").eq("merchant_id", m["id"]).select("id")
             m["order_count"] = len(orders)
 
-    return merchants
+    return [
+        m if sees_private_fields(user, m["id"])
+        else {**public_view(m), "product_count": m["product_count"], "order_count": m["order_count"]}
+        for m in merchants
+    ]
 
 
 @router.get("/{merchant_id}")
-async def get_merchant(merchant_id: int):
-    """Get merchant details (public for active merchants)."""
+async def get_merchant(merchant_id: int, user: TokenClaims | None = Depends(get_optional_user)):
+    """Get merchant details. Public visitors see active shops and public fields only."""
     async with SupabaseClient.service_role() as db:
         merchant = await db.from_("merchants").eq("id", merchant_id).select_one()
-        if not merchant:
+        if not merchant or (not (user and user.is_admin) and merchant.get("status") != "active"):
             raise NotFoundError("Merchant", merchant_id)
+        if not sees_private_fields(user, merchant_id):
+            merchant = public_view(merchant)
         products = await db.from_("products").eq("merchant_id", merchant_id).eq("is_active", True).select("id")
         merchant["product_count"] = len(products)
         orders = await db.from_("orders").eq("merchant_id", merchant_id).select("id")
