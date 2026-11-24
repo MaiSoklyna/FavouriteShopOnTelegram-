@@ -34,12 +34,14 @@ NEARBY_PUBLIC_FIELDS = (
     "is_featured", "address", "latitude", "longitude", "delivery_radius_km",
     "min_order_amount", "rating", "rating_count", "shop_category_id", "shop_subcategory_id",
 )
-# Fields any visitor may see on a shop. The rest of the row (owner_name, email,
-# telegram_token, telegram_group_id, plan, logo_update_history) is admin-only.
-# phone stays public: the shop page shows it as the shop's contact number.
+# Fields any visitor may see on a shop (an allow-list: new columns stay private by default).
+# Everything else is owner/super-admin only: owner_name, email, phone, telegram_token,
+# telegram_group_id, plan, logo_update_history, the ABA payout account and its verification,
+# commission_rate, loyalty_enabled. phone is the owner's number from registration; no
+# customer page shows it (drivers get it through their own authenticated job endpoint).
 PUBLIC_FIELDS = (
     "id", "name", "slug", "tagline", "description", "icon_emoji", "accent_color", "logo_url",
-    "is_featured", "status", "phone", "fb_page", "instagram", "deep_link_code", "created_at",
+    "is_featured", "status", "fb_page", "instagram", "deep_link_code", "created_at",
     "address", "latitude", "longitude", "delivery_radius_km", "rating", "rating_count",
     "shop_category_id", "shop_subcategory_id",
     *DELIVERY_SETTING_FIELDS,
@@ -82,10 +84,12 @@ async def validate_shop_category(db, category_id: int | None, subcategory_id: in
 
 
 def sees_private_fields(user: TokenClaims | None, merchant_id: int) -> bool:
-    """Super admin sees every shop's full row; a merchant admin only their own."""
+    """Super admin sees every shop's full row; a shop owner only their own. Staff get the public view."""
     if not user:
         return False
-    return user.is_super_admin or (user.role == Role.MERCHANT_ADMIN and user.merchant_id == merchant_id)
+    if user.is_super_admin:
+        return True
+    return user.role == Role.MERCHANT_ADMIN and not user.is_shop_staff and user.merchant_id == merchant_id
 
 
 # Logo update policy for merchant_admin role: max N updates per rolling window
