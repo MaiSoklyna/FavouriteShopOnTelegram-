@@ -59,7 +59,14 @@ async def telegram_webhook(
         logger.warning("Webhook body was not valid JSON: %s", e)
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
-    bot_app = await _get_bot_app()
+    try:
+        bot_app = await _get_bot_app()
+    except Exception:
+        # Starting the bot calls Telegram (getMe). If that fails (rate limit, revoked token),
+        # answering with an error makes Telegram resend the update, and every resend calls
+        # getMe again: a loop that keeps the bot rate-limited. Drop the update instead.
+        logger.exception("Bot could not start; dropping update so Telegram does not resend it")
+        return {"ok": True, "skipped": "bot unavailable"}
     update = Update.de_json(body, bot_app.bot)
     if update is None:
         return {"ok": True, "skipped": "non-update payload"}
