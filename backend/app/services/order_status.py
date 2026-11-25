@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from app.core.constants import ORDER_STATUS_TRANSITIONS
 from app.core.exceptions import BadRequestError, ConflictError
-from app.services import coupons, inventory, loyalty, notify, settlement
+from app.services import coupons, inventory, loyalty, notify, refunds, settlement
 
 
 async def change_status(
@@ -49,6 +49,8 @@ async def change_status(
         await inventory.release_stock(db, items)
         await coupons.release_for_order(db, order_id)
         await loyalty.on_order_cancelled(db, order_id)  # points it had earned go back
+        # Paid online? The customer is owed the money back (no-op for unpaid and cash orders)
+        await refunds.request(db, order, "order_cancelled", actor_type=actor_type, actor_id=actor_id)
 
     if new_status == "delivered":
         await settlement.on_order_status_changed(db, order_id, new_status, **actor)

@@ -43,6 +43,7 @@ const MENU: MenuItem[] = [
   { href: "/analytics", label: "Analytics", icon: ReportsIcon, perm: "sales.view" },
   { href: "/earnings", label: "Earnings", icon: PayoutIcon, shopOwnerOnly: true },
   { href: "/settlements", label: "Settlements", icon: PayoutIcon, superOnly: true },
+  { href: "/refunds", label: "Refunds", icon: PayoutIcon, superOnly: true },
   { href: "/reviews", label: "Reviews", icon: HiOutlineChatAlt2 },
   { href: "/drivers", label: "Drivers", icon: CustomersIcon },
   { href: "/support", label: "Support", icon: SupportIcon },

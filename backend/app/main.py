@@ -42,6 +42,7 @@ from app.routes import (
     products,
     promos,
     promotions,
+    refunds,
     reviews,
     sellers,
     settlements,
@@ -154,6 +155,7 @@ app.include_router(payments_stripe.router, prefix="/api")
 
 # Merchant settlement (earnings, payouts, payout accounts)
 app.include_router(settlements.router, prefix="/api")
+app.include_router(refunds.router, prefix="/api")
 
 # Promos
 app.include_router(promos.router, prefix="/api")

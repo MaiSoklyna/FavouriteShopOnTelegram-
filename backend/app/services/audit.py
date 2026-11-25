@@ -38,6 +38,7 @@ ACTION_GROUPS: dict[str, tuple[str, ...]] = {
     "coupon": ("coupon.created", "coupon.updated", "coupon.disabled", "coupon.deleted", "coupon.granted"),
     "shop": ("shop.profile_updated", "shop.settings_updated"),
     "payout": ("payout.account_updated", "payout.verification_changed"),
+    "refund": ("refund.requested", "refund.completed"),
     "staff": ("staff.added", "staff.updated", "staff.role_changed", "staff.deactivated", "staff.reactivated",
               "staff.removed"),
     "access": ("account.login", "account.logout"),

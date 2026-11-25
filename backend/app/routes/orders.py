@@ -29,7 +29,8 @@ from app.core.permissions import Perm, denied_message, role_can
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.services import (
-    activity, audit, coupons, deliveries, inventory, notify, order_expiry, order_status, settlement, shop_reviews,
+    activity, audit, coupons, deliveries, inventory, notify, order_expiry, order_status, refunds, settlement,
+    shop_reviews,
 )
 from app.services import promo_schedule
 from app.services.delivery import is_open, quote_delivery, valid_point
@@ -395,6 +396,8 @@ async def get_order(order_id: int, user: TokenClaims = require_role(Role.USER, R
         order["delivery"] = await deliveries.customer_view(db, order_id)
         # The review this order's customer left for the shop (null until they do)
         order["shop_review"] = await shop_reviews.for_order(db, order_id)
+        # Money going back to the customer, if the order was paid and did not go ahead
+        order["refund"] = await refunds.for_order(db, order_id)
     return order
 
 
@@ -425,6 +428,7 @@ async def cancel_order(order_id: int, user: TokenClaims = require_role(Role.USER
         items = await db.from_("order_items").eq("order_id", order_id).select("product_id,quantity,selected_variants")
         await inventory.release_stock(db, items)
         await coupons.release_for_order(db, order_id)
+        await refunds.request(db, order, "order_cancelled", actor_type="user", actor_id=str(db_user["id"]))
         await notify.order_status_changed(db, order_id, "cancelled", by_customer=True)
     return {"success": True, "message": "Order cancelled"}
 

@@ -12,7 +12,7 @@ import { KhqrPayPanel } from "@/components/shop/KhqrPayPanel";
 import { StripePayScreen } from "@/components/shop/StripePayScreen";
 import { Icon } from "@/components/shop/Icon";
 import { EmptyState, OrderStatusHero, OrderTimeline, Pill, ShopReviewCard, Skeleton } from "@/components/shop";
-import { awaitingPayment, isClosedUnsold, isPickup, statusLabel } from "@/lib/orderStatus";
+import { awaitingPayment, formatWhen, isClosedUnsold, isPickup, statusLabel } from "@/lib/orderStatus";
 import { formatKm, staticMapUrl, type LatLng } from "@/lib/mapbox";
 import { formatKhr } from "@/lib/currency";
 import { SuccessIcon } from "@/components/brand/Icons";
@@ -270,6 +270,25 @@ function OrderDetailContent() {
             </p>
           )}
         </section>
+
+        {/* Paid but the order did not go ahead: where the money is */}
+        {order.refund && (
+          <section className="flex items-center gap-3 rounded-hero bg-card p-3.5 shadow-fos-sm" data-testid="order-refund">
+            <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[14px] ${order.refund.status === "refunded" ? "bg-tint-positive text-tone-positive" : "bg-tint-gold text-gold-700"}`}>
+              <Icon name={order.refund.status === "refunded" ? "check" : "clock"} size={22} strokeWidth={2.2} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[14px] font-extrabold text-ink-900">
+                {order.refund.status === "refunded" ? "Refund sent" : "Refund on its way"} · {money(order.refund.amount)}
+              </div>
+              <div className="text-caption text-ink-500">
+                {order.refund.status === "refunded"
+                  ? `Sent ${formatWhen(order.refund.completed_at)}. It can take a few days to show in your account.`
+                  : "You paid for an order that didn't go ahead. We'll send the money back and let you know."}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Delivered: rate the shop (the "How was your order?" notification lands here) */}
         {order.status === "delivered" && <ShopReviewCard order={order} shopName={shopName} onSubmitted={fetchOrder} />}

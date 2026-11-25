@@ -323,6 +323,33 @@ export interface Order {
   delivery?: DeliveryInfo | null;
   /** The customer's review of the shop for this order (null until they leave one). */
   shop_review?: { id: number; rating: number; comment?: string | null; created_at?: string } | null;
+  /** Money going back to the customer when a paid KHQR/card order did not go ahead (null if none). */
+  refund?: OrderRefund | null;
+}
+
+export interface OrderRefund {
+  id: number;
+  amount: string | number;
+  currency?: string;
+  reason: "order_cancelled" | "paid_after_cancellation" | "paid_after_expiry";
+  status: "pending" | "refunded";
+  refund_reference?: string | null;
+  created_at?: string;
+  completed_at?: string | null;
+}
+
+/** A refund in the platform admin's list. */
+export interface Refund extends OrderRefund {
+  order_id: number;
+  order_code?: string | null;
+  merchant_id?: number | null;
+  merchant_name?: string | null;
+  user_id?: number | null;
+  payment_method: string;
+  payment_ref?: string | null;
+  reason_text?: string;
+  note?: string | null;
+  completed_by_name?: string | null;
 }
 
 // ── Coupons ────────────────────────────────────────────────────

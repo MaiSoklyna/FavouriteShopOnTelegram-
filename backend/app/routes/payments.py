@@ -35,7 +35,7 @@ from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.rate_limit import limiter
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.services import notify, order_expiry, payway, settlement
+from app.services import notify, order_expiry, payway, refunds, settlement
 
 EXPIRED_MESSAGE = "The time to pay this order has run out, so it has expired. Please place the order again."
 
@@ -275,6 +275,8 @@ async def mark_order_paid(db, order: dict, *, fields: dict, actor_type: str, act
                 order["status"] = (fresh or {}).get("status") or order.get("status")
         if order.get("status") in CLOSED_UNSOLD_STATUSES:
             logger.error("Order %s was paid while %s — refund required", order["id"], order.get("status"))
+            await refunds.request(db, order, refunds.reason_for_payment_on(order.get("status")),
+                                  actor_type=actor_type, actor_id=actor_id)
         else:
             await _notify_paid(db, order)
 
