@@ -10,6 +10,8 @@ import logging
 import time
 from typing import Any
 
+import httpx
+
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
 from app.core.constants import DEFAULT_PAGE_SIZE, Role
@@ -32,7 +34,7 @@ from app.models.product import (
 )
 from pydantic import BaseModel
 
-from app.services import audit
+from app.services import attributes, audit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Products"])
@@ -88,11 +90,16 @@ async def list_products(
         offset = (page - 1) * page_size
         q = q.offset(offset).limit(page_size)
 
-        products = await q.select(
-            "id,merchant_id,category_id,name,description,base_price,"
-            "compare_price,stock,sku,icon_emoji,rating_avg,review_count,"
-            "is_featured,is_active,primary_image,created_at"
-        )
+        columns = ("id,merchant_id,category_id,name,description,base_price,"
+                   "compare_price,stock,sku,icon_emoji,rating_avg,review_count,"
+                   "is_featured,is_active,primary_image,created_at")
+        try:
+            # Product details (migration 036) let the dashboard show how complete each product is
+            products = await q.select(columns + ",attribute_template_id,attributes")
+        except httpx.HTTPStatusError as exc:
+            if not attributes.missing(exc):
+                raise
+            products = await q.select(columns)
 
         # Enrich with shop (owner) and category names
         if products:
@@ -178,6 +185,12 @@ async def get_product(product_id: int):
             v["options"] = options
         product["variants"] = variants
 
+        # Product details: the template's name and the filled fields as label / value rows
+        template = (await attributes.load_template(db, product["attribute_template_id"])
+                    if product.get("attribute_template_id") else None)
+        product["attribute_template"] = {"id": template["id"], "name": template["name"]} if template else None
+        product["attribute_details"] = attributes.details(template, product.get("attributes"))
+
     return product
 
 
@@ -206,8 +219,15 @@ async def create_product(
             merchant_id = _own_merchant_id(user)
         await _check_category(db, body.category_id, merchant_id)
 
-        data = body.model_dump(exclude={"variants", "slug"})
+        data = body.model_dump(exclude={"variants", "slug", "attribute_template_id", "attributes"})
         data["merchant_id"] = merchant_id
+        template = None
+        if body.attribute_template_id or body.attributes:
+            if not body.attribute_template_id:
+                raise BadRequestError("Choose what kind of product this is before filling its details")
+            template = await _template_for_shop(db, body.attribute_template_id, merchant_id)
+            data["attribute_template_id"] = template["id"]
+            data["attributes"] = attributes.validate(template, body.attributes or {})
 
         rows = await db.from_("products").insert(data)
         product = rows[0] if rows else data
@@ -232,6 +252,9 @@ async def create_product(
         new = {k: data.get(k) for k in PRODUCT_LOG_FIELDS if data.get(k) is not None}
         if body.variants:
             new["variants"] = _variant_summary(body.variants)
+        if template:
+            new["Details template"] = template["name"]
+            new.update(attributes.label_changes(None, template, {}, data["attributes"])[1])
         await audit.record(
             db, user, merchant_id=merchant_id, action="product.created", target_type="product",
             target_id=product.get("id"), target_label=product.get("name") or body.name, new=new,
@@ -277,11 +300,55 @@ async def update_product(
                 hint="Pick a category that belongs to the new shop",
             )
 
+        # Product details: a new template, new values, or both
+        data.pop("attribute_template_id", None)
+        data.pop("attributes", None)
+        details_log = None
+        fields_set = body.model_fields_set
+        if "attribute_template_id" in fields_set or "attributes" in fields_set:
+            old_tid = existing.get("attribute_template_id")
+            old_values = existing.get("attributes") or {}
+            new_tid = body.attribute_template_id if "attribute_template_id" in fields_set else old_tid
+            old_template = await attributes.load_template(db, old_tid) if old_tid else None
+            if new_tid is None:
+                if body.attributes:
+                    raise BadRequestError("Choose what kind of product this is before filling its details")
+                new_template, new_values = None, {}
+            else:
+                # Keeping the same template is always allowed, even if the platform has since switched it off
+                new_template = (old_template if new_tid == old_tid and old_template
+                                else await _template_for_shop(db, new_tid, owner))
+                new_values = (attributes.validate(new_template, body.attributes)
+                              if "attributes" in fields_set and body.attributes is not None
+                              else attributes.carry_over(new_template, old_values))
+            data["attribute_template_id"] = new_tid
+            data["attributes"] = new_values
+            details_log = (old_template, new_template, old_values, new_values)
+
         if data:
             await db.from_("products").eq("id", product_id).update(data)
-            await _log_product_update(db, user, existing, data)
+            await _log_product_update(db, user, existing, data, details_log)
 
     return {"success": True}
+
+
+async def _template_for_shop(db, template_id: int, merchant_id: int) -> dict:
+    """A template the shop may use: active and made for the shop's type (any type if the shop has none yet)."""
+    template = await attributes.load_template(db, template_id)
+    if template is None:
+        try:
+            await db.from_(attributes.TEMPLATES).select_one("id")
+        except Exception as exc:
+            if attributes.missing(exc):
+                raise BadRequestError(attributes.MIGRATION_HINT) from exc
+        raise BadRequestError("That kind of product does not exist")
+    if not template.get("is_active"):
+        raise BadRequestError(f"'{template['name']}' is no longer offered. Choose another kind of product.")
+    shop = await db.from_("merchants").eq("id", merchant_id).select_one("id,shop_category_id")
+    shop_type = (shop or {}).get("shop_category_id")
+    if shop_type is not None and template["shop_category_id"] != shop_type:
+        raise BadRequestError(f"'{template['name']}' is for another type of shop")
+    return template
 
 
 # Prices get their own entry so an owner can see every price change at a glance
@@ -292,8 +359,16 @@ PRODUCT_LOG_FIELDS = (
 )
 
 
-async def _log_product_update(db, user: TokenClaims, before: dict, data: dict) -> None:
+async def _log_product_update(db, user: TokenClaims, before: dict, data: dict, details_log=None) -> None:
+    data = {k: v for k, v in data.items() if k not in ("attributes", "attribute_template_id")}
     old, new = audit.diff(before, data)
+    if details_log:
+        old_t, new_t, old_v, new_v = details_log
+        if (old_t or {}).get("id") != (new_t or {}).get("id"):
+            old["Details template"], new["Details template"] = (old_t or {}).get("name"), (new_t or {}).get("name")
+        o, n = attributes.label_changes(old_t, new_t, old_v, new_v)
+        old.update(o)
+        new.update(n)
     if not new:
         return
     common = dict(merchant_id=before["merchant_id"], target_type="product", target_id=before["id"],

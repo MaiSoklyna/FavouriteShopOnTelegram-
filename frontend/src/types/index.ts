@@ -167,6 +167,60 @@ export interface Product {
   images?: ProductImage[];
   variants?: VariantGroup[];
   has_variants?: boolean;
+  /** Product details (migration 036) */
+  attribute_template_id?: number | null;
+  attributes?: Record<string, AttributeValue>;
+  attribute_template?: { id: number; name: string } | null;
+  attribute_details?: { key: string; label: string; value: string }[];
+}
+
+export type AttributeValue = string | number | boolean | string[];
+export type AttributeType = "text" | "number" | "select" | "multi_select" | "boolean";
+
+export interface AttributeField {
+  id: number;
+  template_id: number;
+  key: string;
+  label: string;
+  type: AttributeType;
+  unit: string | null;
+  options: { value: string; label: string }[];
+  filterable: boolean;
+  importance: "recommended" | "optional";
+  help_text: string | null;
+  min_value: number | null;
+  max_value: number | null;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface AttributeTemplate {
+  id: number;
+  key: string;
+  shop_category_id: number;
+  shop_subcategory_ids: number[];
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+  fields: AttributeField[];
+  shop_type?: string;      // super admin list
+  product_count?: number;  // super admin list
+}
+
+/** One detail filter with its values and counts (GET /search/products). */
+export interface SearchFacet {
+  key: string;
+  label: string;
+  type: AttributeType;
+  unit: string | null;
+  help_text: string | null;
+  options?: { value: string; label: string; count: number; selected: boolean }[];
+  min?: number | null;
+  max?: number | null;
+  count?: number;
+  selected?: boolean;
+  selected_min?: number | null;
+  selected_max?: number | null;
 }
 
 export interface ProductImage {

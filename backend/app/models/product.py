@@ -80,8 +80,11 @@ class ProductCreate(BaseModel):
     icon_emoji: str | None = None
     is_featured: bool = False
     variants: list[VariantGroupCreate] = []
+    # Product details (migration 036): the template and its values, {"skin_type": ["oily"], ...}
+    attribute_template_id: int | None = None
+    attributes: dict | None = None
 
-    _category_zero = field_validator("category_id", "merchant_id")(_zero_is_none)
+    _category_zero = field_validator("category_id", "merchant_id", "attribute_template_id")(_zero_is_none)
 
 
 class ProductUpdate(BaseModel):
@@ -99,8 +102,11 @@ class ProductUpdate(BaseModel):
     icon_emoji: str | None = None
     is_featured: bool | None = None
     is_active: bool | None = None
+    # Product details: sending attribute_template_id null (or 0) removes the template and its values
+    attribute_template_id: int | None = None
+    attributes: dict | None = None
 
-    _category_zero = field_validator("category_id", "merchant_id")(_zero_is_none)
+    _category_zero = field_validator("category_id", "merchant_id", "attribute_template_id")(_zero_is_none)
 
 
 class ProductResponse(BaseModel):

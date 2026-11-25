@@ -268,6 +268,8 @@ export default function ProductDetailPage() {
           <TrustTile icon={<><rect x="2" y="6" width="20" height="13" rx="2" /><path d="M2 10h20M6 15h4" /></>}>Cash on delivery</TrustTile>
         </div>
 
+        {product.attribute_details && product.attribute_details.length > 0 && <Details rows={product.attribute_details} />}
+
         {product.description && <Description text={product.description} />}
 
         <Reviews productId={product.id} signedIn={!!user} />
@@ -407,6 +409,23 @@ function TrustTile({ icon, tone = "default", children }: { icon: React.ReactNode
       <svg width="20" height="20" viewBox="0 0 24 24" {...ICON} className={tone === "warn" ? "" : "text-navy-700"} aria-hidden>{icon}</svg>
       <span className="w-full truncate text-[11px] font-bold">{children}</span>
     </div>
+  );
+}
+
+/** The product's structured details (filled fields of its template), as label / value rows. */
+function Details({ rows }: { rows: { key: string; label: string; value: string }[] }) {
+  return (
+    <section className="mt-5" data-testid="product-details">
+      <h2 className="text-section text-ink-900">Details</h2>
+      <dl className="mt-2 overflow-hidden rounded-thumb bg-card shadow-fos-sm">
+        {rows.map((r, i) => (
+          <div key={r.key} className={`grid grid-cols-[minmax(0,40%)_1fr] gap-3 px-3.5 py-2.5 text-[13px] ${i ? "border-t border-line" : ""}`}>
+            <dt className="text-ink-500">{r.label}</dt>
+            <dd className="font-semibold text-ink-900 [overflow-wrap:anywhere]">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 

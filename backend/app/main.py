@@ -22,6 +22,7 @@ from app.routes import (
     addresses,
     ai,
     analytics,
+    attributes,
     auth,
     banners,
     cart,
@@ -52,10 +53,10 @@ from app.routes import (
 )
 
 logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL, logging.INFO))
-logger = logging.getLogger(__name__)
 # httpx logs every request URL at INFO, and Telegram Bot API URLs carry the bot token
 # (api.telegram.org/bot<token>/...). Keep request lines out of the logs.
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
 
 _DEFAULT_DEV_ORIGINS = [
     "http://localhost:3000",
@@ -120,6 +121,7 @@ app.include_router(products.router, prefix="/api")
 app.include_router(banners.router, prefix="/api")
 app.include_router(promotions.router, prefix="/api")
 app.include_router(collections.router, prefix="/api")
+app.include_router(attributes.router, prefix="/api")
 app.include_router(featured_categories.router, prefix="/api")
 
 # Cart
