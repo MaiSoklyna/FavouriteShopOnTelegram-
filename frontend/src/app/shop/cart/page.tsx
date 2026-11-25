@@ -13,6 +13,7 @@ import { useHomeLocation } from "@/lib/useHomeLocation";
 import { lightHaptic } from "@/lib/haptics";
 import type { CartItem } from "@/types";
 import { Icon } from "@/components/shop/Icon";
+import { img, IMG } from "@/lib/img";
 
 interface ShopBrief { id: number; name: string; logo_url?: string | null; icon_emoji?: string | null }
 
@@ -279,7 +280,7 @@ function ShopGroup({ shop, fallbackName, price, located, lines, onQty, onRemove,
       <header className="mb-1 flex items-center gap-2.5">
         <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-[9px] bg-surface text-[14px]">
           {shop?.logo_url
-            ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" />
+            ? <img src={img(shop.logo_url, IMG.LOGO)} alt="" className="h-full w-full object-cover" />
             : shop?.icon_emoji || <span className="text-[12px] font-extrabold text-navy-700">{name[0]?.toUpperCase()}</span>}
         </span>
         <span className="min-w-0 flex-1 truncate text-[14px] font-extrabold text-ink-900">{name}</span>
@@ -346,7 +347,7 @@ function CartLine({ line, onQty, onRemove }: {
     <div className="flex items-center gap-3 py-2">
       <div className="h-20 w-20 shrink-0 overflow-hidden rounded-thumb bg-surface">
         {line.primary_image
-          ? <img src={line.primary_image} alt={line.product_name ?? ""} className="h-full w-full object-cover" />
+          ? <img src={img(line.primary_image, IMG.LOGO)} alt={line.product_name ?? ""} className="h-full w-full object-cover" />
           : <div className="grid h-full w-full place-items-center text-[24px] font-extrabold text-ink-500">{line.icon_emoji || line.product_name?.[0]?.toUpperCase() || "?"}</div>}
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1">

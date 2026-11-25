@@ -9,6 +9,7 @@ import { EmptyState, ProductCard, Skeleton } from "@/components/shop";
 import { Icon } from "@/components/shop/Icon";
 import { coversLabel, discountLabel, expiryDate, expiryLabel, type PromotionRow } from "@/lib/promotions";
 import { savePromo } from "@/lib/quote";
+import { img, IMG } from "@/lib/img";
 
 /**
  * Promotion detail: the offer (discount, code, minimum, expiry), the shop it is
@@ -100,7 +101,7 @@ export default function PromotionPage() {
   return (
     <div className="min-h-screen bg-surface pb-[110px]">
       <div className="relative h-[200px] bg-[linear-gradient(135deg,#081D3C,#103562)]">
-        {promo.image_url && <img src={promo.image_url} alt="" className="h-full w-full object-cover" />}
+        {promo.image_url && <img src={img(promo.image_url, IMG.WIDE)} alt="" className="h-full w-full object-cover" />}
         {back}
       </div>
 
@@ -160,7 +161,7 @@ export default function PromotionPage() {
         {shop && (
           <Link href={shopHref} className="fos-press flex items-center gap-3 rounded-hero bg-card p-3.5 shadow-fos-sm">
             <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-thumb bg-tint-navy text-[16px] font-extrabold text-navy-700">
-              {shop.logo_url ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" /> : shop.icon_emoji || shop.name[0]?.toUpperCase()}
+              {shop.logo_url ? <img src={img(shop.logo_url, IMG.LOGO)} alt="" className="h-full w-full object-cover" /> : shop.icon_emoji || shop.name[0]?.toUpperCase()}
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-caption text-ink-500">Eligible shop</span>

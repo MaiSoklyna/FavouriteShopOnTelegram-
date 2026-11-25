@@ -20,6 +20,7 @@ import { formatKhr } from "@/lib/currency";
 import { areaName, useHomeLocation } from "@/lib/useHomeLocation";
 import { haptic, useMainButton } from "@/lib/telegram";
 import { DeliveryIcon, LocationIcon, PayoutIcon, QrIcon, StoreIcon } from "@/components/brand/Icons";
+import { img, IMG } from "@/lib/img";
 
 // Same look as the map's own loading state, so there is no flash of an empty box
 // Full-screen picker (search places or move the map); nothing to show until it opens
@@ -606,7 +607,7 @@ function CheckoutContent() {
           ) : (
             <section className="mt-3 flex items-center gap-3 rounded-hero bg-card p-3.5 shadow-fos-sm">
               <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-thumb bg-surface text-[22px]">
-                {shop?.logo_url ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" /> : shop?.icon_emoji || <Icon name="store" size={22} className="text-navy-700" />}
+                {shop?.logo_url ? <img src={img(shop.logo_url, IMG.LOGO)} alt="" className="h-full w-full object-cover" /> : shop?.icon_emoji || <Icon name="store" size={22} className="text-navy-700" />}
               </span>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[14px] font-extrabold text-ink-900">{shop?.name || "The shop"}</div>

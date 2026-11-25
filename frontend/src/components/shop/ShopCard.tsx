@@ -3,6 +3,7 @@ import { formatEta, formatKm } from "@/lib/mapbox";
 import { THEMES, type ShopTheme } from "@/lib/shopTheme";
 import { Icon } from "./Icon";
 import { ShopCover } from "./ShopCover";
+import { img, IMG } from "@/lib/img";
 
 export interface ShopCardData {
   id: number;
@@ -73,7 +74,7 @@ export function ShopCard({ shop, variant = "rail", selected = false, located = f
       <div className="flex flex-1 flex-col px-3.5 pb-3.5">
         <div className="relative z-[1] -mt-[26px] flex items-end justify-between">
           <div className="grid h-[52px] w-[52px] place-items-center overflow-hidden rounded-thumb border-[3px] border-card bg-tint-navy text-[17px] font-extrabold text-navy-700">
-            {shop.logo_url ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" /> : (shop.icon_emoji || initials(shop.name) || <Icon name="store" size={22} />)}
+            {shop.logo_url ? <img src={img(shop.logo_url, IMG.LOGO)} alt="" className="h-full w-full object-cover" /> : (shop.icon_emoji || initials(shop.name) || <Icon name="store" size={22} />)}
           </div>
           {shop.rating != null ? (
             <span className="inline-flex h-6 items-center gap-1 rounded-full bg-tint-gold px-2 text-[11px] font-extrabold text-gold-700">

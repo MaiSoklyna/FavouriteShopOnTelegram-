@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { img, IMG } from "@/lib/img";
 
 interface Props {
   href: string;
@@ -21,7 +22,7 @@ export function CategoryPhotoIcon({ href, label, imageUrl, emoji }: Props) {
     <Link href={href} className="fos-press flex min-h-[44px] flex-col items-center gap-1.5">
       <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-cat bg-tint-navy">
         {photo ? (
-          <img src={photo} alt="" loading="lazy" className="h-full w-full object-cover" />
+          <img src={img(photo, IMG.LOGO)} alt="" loading="lazy" className="h-full w-full object-cover" />
         ) : emoji ? (
           <span className="text-[28px] leading-none">{emoji}</span>
         ) : (

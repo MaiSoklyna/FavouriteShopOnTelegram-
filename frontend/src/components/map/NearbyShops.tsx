@@ -6,6 +6,7 @@ import { fetchNearbyShops, type NearbyShop } from "@/lib/addresses";
 import { formatEta, formatKm, getCurrentPosition, searchAddress, type GeocodeHit, type LatLng } from "@/lib/mapbox";
 import { haptic } from "@/lib/telegram";
 import { EmptyStateIcon } from "@/components/brand/Icons";
+import { img, IMG } from "@/lib/img";
 
 type State = "idle" | "loading" | "denied" | "error" | "ready";
 
@@ -139,7 +140,7 @@ function ShopCard({ shop: s, nearest }: { shop: NearbyShop; nearest: boolean }) 
           background: "var(--shop-primary-tint)", display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: 18, fontWeight: 700, color: "var(--shop-primary)",
         }}>
-          {s.logo_url ? <img src={s.logo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials(s.name)}
+          {s.logo_url ? <img src={img(s.logo_url, IMG.LOGO)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials(s.name)}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>

@@ -16,6 +16,7 @@ import { distanceKm, formatEta, formatKm } from "@/lib/mapbox";
 import type { Merchant, Product, VariantGroup } from "@/types";
 import { Icon } from "@/components/shop/Icon";
 import { TelegramLoginPrompt } from "@/components/shop/LoginGate";
+import { img, IMG } from "@/lib/img";
 
 interface Review { id: number; user_name?: string; rating: number; comment?: string; created_at?: string }
 
@@ -171,7 +172,7 @@ export default function ProductDetailPage() {
       <div className="relative h-[420px] bg-surface">
         <div ref={galleryRef} onScroll={onGalleryScroll} className="fos-no-scrollbar flex h-full snap-x snap-mandatory overflow-x-auto">
           {images.length > 0 ? images.map((src, i) => (
-            <img key={src + i} src={src} alt={i === 0 ? product.name : ""} loading={i === 0 ? "eager" : "lazy"}
+            <img key={src + i} src={img(src, IMG.WIDE)} alt={i === 0 ? product.name : ""} loading={i === 0 ? "eager" : "lazy"}
               className="h-full w-full shrink-0 snap-center object-cover" />
           )) : (
             <div className="grid h-full w-full place-items-center text-[72px] font-extrabold text-ink-500">
@@ -209,7 +210,7 @@ export default function ProductDetailPage() {
               return (
                 <button key={src + i} type="button" onClick={() => goToImage(i)} aria-label={`Photo ${i + 1}`}
                   className={`fos-press relative h-11 w-11 overflow-hidden rounded-md border-2 ${imgIdx === i ? "border-card shadow-fos-md" : "border-transparent opacity-80"}`}>
-                  <img src={src} alt="" className="h-full w-full object-cover" />
+                  <img src={img(src, IMG.LOGO)} alt="" className="h-full w-full object-cover" />
                   {extra > 0 && <span className="absolute inset-0 grid place-items-center bg-navy-900/60 text-[13px] font-extrabold text-white">+{extra}</span>}
                 </button>
               );
@@ -246,7 +247,7 @@ export default function ProductDetailPage() {
         <Link href={`/shop/merchant/${product.merchant_id}`} className="fos-press mt-4 flex h-[60px] items-center gap-3 rounded-[18px] bg-surface px-2.5">
           <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-md bg-card text-[18px]">
             {shop?.logo_url || product.merchant_logo_url
-              ? <img src={(shop?.logo_url || product.merchant_logo_url)!} alt="" className="h-full w-full object-cover" />
+              ? <img src={img(shop?.logo_url || product.merchant_logo_url, IMG.LOGO)} alt="" className="h-full w-full object-cover" />
               : shop?.icon_emoji || product.merchant_icon || <span className="text-[15px] font-extrabold text-navy-700">{(product.merchant_name || "S")[0]}</span>}
           </span>
           <div className="min-w-0 flex-1">

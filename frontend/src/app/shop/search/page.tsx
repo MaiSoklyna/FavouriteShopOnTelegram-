@@ -9,6 +9,7 @@ import { useCart } from "@/providers/CartProvider";
 import { ShopRow } from "@/components/shop/ShopRow";
 import { themeFromShopCategory } from "@/lib/shopTheme";
 import type { Product, Category, Merchant } from "@/types";
+import { img, IMG } from "@/lib/img";
 
 export default function SearchPage() {
   return <Suspense><SearchContent /></Suspense>;
@@ -353,7 +354,7 @@ function MiniProductCard({ product, onClick, onAddToCart }: { product: Product; 
     }}>
       <div style={{ position: "relative", paddingTop: "100%", background: "var(--shop-divider)" }}>
         {product.primary_image ? (
-          <img src={product.primary_image} alt={product.name} loading="lazy"
+          <img src={img(product.primary_image, IMG.CARD)} alt={product.name} loading="lazy"
             style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
           <div style={{

@@ -16,6 +16,7 @@ import { awaitingPayment, isPickup, statusLabel } from "@/lib/orderStatus";
 import { formatKm, staticMapUrl, type LatLng } from "@/lib/mapbox";
 import { formatKhr } from "@/lib/currency";
 import { SuccessIcon } from "@/components/brand/Icons";
+import { img as toImg, IMG } from "@/lib/img";
 
 interface ShopInfo {
   id: number;
@@ -208,7 +209,7 @@ function OrderDetailContent() {
           <header className="mb-1 flex items-center gap-2.5">
             <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[10px] bg-surface text-[15px]">
               {shop?.logo_url
-                ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" />
+                ? <img src={toImg(shop.logo_url, IMG.LOGO)} alt="" className="h-full w-full object-cover" />
                 : shop?.icon_emoji || <span className="text-[13px] font-extrabold text-navy-700">{shopName[0]?.toUpperCase()}</span>}
             </span>
             <button type="button" onClick={() => router.push(`/shop/merchant/${order.merchant_id}`)}
@@ -224,7 +225,7 @@ function OrderDetailContent() {
               return (
                 <li key={item.id} className="flex items-center gap-3 border-t border-line py-2.5 first:border-t-0">
                   <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-[14px] bg-surface text-ink-500">
-                    {img ? <img src={img} alt="" className="h-full w-full object-cover" /> : <Icon name="box" size={20} />}
+                    {img ? <img src={toImg(img, IMG.LOGO)} alt="" className="h-full w-full object-cover" /> : <Icon name="box" size={20} />}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[14px] font-bold text-ink-900">{item.product_name}</div>

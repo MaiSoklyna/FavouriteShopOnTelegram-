@@ -6,6 +6,7 @@ import { Icon } from "./Icon";
 import { Skeleton } from "./Skeleton";
 import { expiryDate, expiryLabel, type Promotion } from "@/lib/promotions";
 import { savePromo } from "@/lib/quote";
+import { img, IMG } from "@/lib/img";
 
 /** Every promotion card is this size, whatever it holds, so a rail of them lines up. */
 const CARD = "h-[358px] w-[288px]";
@@ -58,7 +59,7 @@ export function PromotionCard({ promo }: { promo: Promotion }) {
         className="relative block h-[150px] w-full shrink-0 overflow-hidden"
         style={promo.image ? undefined : { background: `linear-gradient(135deg, ${color} 0%, #081D3C 100%)` }}>
         {promo.image ? (
-          <img src={promo.image} alt="" loading="lazy" className="h-full w-full bg-surface object-cover" />
+          <img src={img(promo.image, IMG.WIDE)} alt="" loading="lazy" className="h-full w-full bg-surface object-cover" />
         ) : (
           <>
             <span aria-hidden className="absolute -right-10 -top-12 h-40 w-40 rounded-full border-[18px] border-white/10" />
@@ -72,7 +73,7 @@ export function PromotionCard({ promo }: { promo: Promotion }) {
               </span>
               <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white text-[26px] ring-2 ring-gold-400/70">
                 {promo.brand?.logo
-                  ? <img src={promo.brand.logo} alt="" loading="lazy" className="h-full w-full object-cover" />
+                  ? <img src={img(promo.brand.logo, IMG.LOGO)} alt="" loading="lazy" className="h-full w-full object-cover" />
                   : promo.brand?.emoji || <Icon name={offer ? "ticket" : "gift"} size={24} strokeWidth={2} className="text-[#081D3C]" />}
               </span>
             </span>

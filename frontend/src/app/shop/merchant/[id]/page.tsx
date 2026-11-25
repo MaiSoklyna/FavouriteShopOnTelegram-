@@ -17,6 +17,7 @@ import type { Merchant, Product, Category } from "@/types";
 import { Icon } from "@/components/shop/Icon";
 import { PromoAppliedBanner } from "@/components/shop/PromoAppliedBanner";
 import { ShopOffers } from "@/components/shop/ShopOffers";
+import { img as toImg, IMG } from "@/lib/img";
 
 /** This shop as seen from the customer's location (GET /merchants/nearby). */
 interface NearbyInfo {
@@ -140,7 +141,7 @@ export default function MerchantDetailPage() {
         {heroImages.length > 0 ? (
           <div className="flex h-full transition-transform duration-500" style={{ width: `${heroImages.length * 100}%`, transform: `translateX(-${heroIdx * (100 / heroImages.length)}%)` }}>
             {heroImages.map((img) => (
-              <img key={img.id} src={img.url} alt="" className="h-full object-cover" style={{ width: `${100 / heroImages.length}%` }} />
+              <img key={img.id} src={toImg(img.url, IMG.WIDE)} alt="" className="h-full object-cover" style={{ width: `${100 / heroImages.length}%` }} />
             ))}
           </div>
         ) : (
@@ -173,7 +174,7 @@ export default function MerchantDetailPage() {
         <div className="flex items-end gap-3">
           <span className="-mt-9 grid h-[76px] w-[76px] shrink-0 place-items-center overflow-hidden rounded-[22px] border-4 border-card bg-card shadow-fos-md">
             {merchant.logo_url
-              ? <img src={merchant.logo_url} alt="" className="h-full w-full object-cover" />
+              ? <img src={toImg(merchant.logo_url, IMG.LOGO)} alt="" className="h-full w-full object-cover" />
               : <CategoryIcon icon={merchant.icon_emoji} size={34} fallback="shop" alt={merchant.name} />}
           </span>
           <div className="flex flex-1 justify-end gap-2 pt-3">

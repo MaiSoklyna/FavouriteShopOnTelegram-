@@ -13,6 +13,7 @@ import { haptic } from "@/lib/telegram";
 import { CategoryChips, LocationSheet, ShopCard, ShopCardSkeleton, ShopCover, type ShopCardData } from "@/components/shop";
 import { useShopCategories } from "@/lib/useShopCategories";
 import { Icon } from "@/components/shop/Icon";
+import { img, IMG } from "@/lib/img";
 
 const ShopsMap = dynamic(() => import("@/components/map/ShopsMap"), {
   ssr: false,
@@ -204,7 +205,7 @@ export default function NearbyPage() {
                   <Link href={`/shop/merchant/${s.id}`} className="fos-press flex items-center gap-3 py-3">
                     <span className="relative h-16 w-16 shrink-0 overflow-hidden rounded-thumb">
                       <ShopCover theme={s.theme ?? "general"} url={s.cover_url} />
-                      {s.logo_url && <img src={s.logo_url} alt="" className="absolute bottom-1 right-1 h-7 w-7 rounded-lg border-2 border-card object-cover" />}
+                      {s.logo_url && <img src={img(s.logo_url, IMG.LOGO)} alt="" className="absolute bottom-1 right-1 h-7 w-7 rounded-lg border-2 border-card object-cover" />}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">

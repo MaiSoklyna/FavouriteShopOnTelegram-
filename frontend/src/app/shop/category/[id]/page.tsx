@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { useCart } from "@/providers/CartProvider";
 import { ProductCard } from "@/components/shop";
 import type { Product, Category, CategoryBanner } from "@/types";
+import { img, IMG } from "@/lib/img";
 
 export default function CategoryPage() {
   const router = useRouter();
@@ -117,7 +118,7 @@ export default function CategoryPage() {
                 flexShrink: 0, width: "100%", height: 176, borderRadius: 8,
                 position: "relative", overflow: "hidden", scrollSnapAlign: "start",
               }}>
-                <img src={banner.image_url!} alt={banner.title}
+                <img src={img(banner.image_url, IMG.WIDE)} alt={banner.title}
                   style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 <div style={{
                   position: "absolute", inset: 0,
@@ -146,7 +147,7 @@ export default function CategoryPage() {
             width: "100%", height: 160, borderRadius: 8,
             overflow: "hidden", background: "var(--shop-surface)",
           }}>
-            <img src={category.image_url} alt={category.name}
+            <img src={img(category.image_url, IMG.WIDE)} alt={category.name}
               style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           </div>
         </div>

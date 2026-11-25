@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { img, IMG } from "@/lib/img";
 
 export interface HeroSlide {
   key: string | number;
@@ -66,7 +67,7 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
           );
           return (
             <div key={s.key} className="relative h-[176px] w-full shrink-0 snap-start overflow-hidden bg-grad-hero">
-              {s.image && <img src={s.image} alt="" className="absolute inset-0 h-full w-full object-cover" />}
+              {s.image && <img src={img(s.image, IMG.WIDE)} alt="" className="absolute inset-0 h-full w-full object-cover" />}
               {s.image && <div className="absolute inset-0 bg-gradient-to-r from-navy-900/70 via-navy-900/25 to-transparent" />}
               <div className="relative flex h-full flex-col items-start justify-center gap-1 px-5 pb-5">
                 {s.label && <span className="text-[12px] font-bold text-gold-400">{s.label}</span>}

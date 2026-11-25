@@ -1,6 +1,7 @@
 "use client";
 
 import type { CartItem as CartItemType } from "@/types";
+import { img, IMG } from "@/lib/img";
 
 interface CartItemProps {
   item: CartItemType;
@@ -25,7 +26,7 @@ export function CartItemCard({ item, onUpdateQuantity, onRemove }: CartItemProps
         }}
       >
         {item.primary_image ? (
-          <img src={item.primary_image} alt={item.product_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <img src={img(item.primary_image, IMG.LOGO)} alt={item.product_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
           <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, color: "var(--shop-muted, #8A8F9C)" }}>
             {item.product_name?.[0]?.toUpperCase() || "?"}

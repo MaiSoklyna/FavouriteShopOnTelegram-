@@ -11,6 +11,7 @@ import { Icon } from "@/components/shop/Icon";
 import { EmptyState, OrderProgress, Pill, Skeleton } from "@/components/shop";
 import { ACTIVE_STATUSES, awaitingPayment, formatWhen, headline, statusLabel } from "@/lib/orderStatus";
 import { formatKhr } from "@/lib/currency";
+import { img, IMG } from "@/lib/img";
 
 interface ShopBrief { id: number; name: string; logo_url?: string | null; icon_emoji?: string | null }
 
@@ -111,7 +112,7 @@ function OrderCard({ order, shop }: { order: Order; shop?: ShopBrief }) {
       <div className="flex items-center gap-2.5">
         <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-[12px] bg-surface text-[16px]">
           {shop?.logo_url
-            ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" />
+            ? <img src={img(shop.logo_url, IMG.LOGO)} alt="" className="h-full w-full object-cover" />
             : shop?.icon_emoji || <span className="text-[14px] font-extrabold text-navy-700">{name[0]?.toUpperCase()}</span>}
         </span>
         <div className="min-w-0 flex-1">
