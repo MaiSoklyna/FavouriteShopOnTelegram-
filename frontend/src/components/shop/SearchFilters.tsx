@@ -89,9 +89,9 @@ export function SearchFilterSheet({ open, onClose, value, onApply, facets, total
 
   return (
     <div onClick={onClose} role="dialog" aria-modal="true" aria-label="Filters"
-      style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end" }}>
+      style={{ position: "fixed", inset: 0, zIndex: 110 /* above the tab bar (z 100) */, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-end" }}>
       <div onClick={(e) => e.stopPropagation()} data-testid="filter-sheet"
-        style={{ width: "100%", maxHeight: "85vh", overflowY: "auto", background: "var(--shop-bg)", borderRadius: "20px 20px 0 0", padding: "16px 20px 20px" }}>
+        style={{ width: "100%", maxHeight: "85vh", overflowY: "auto", background: "var(--shop-bg)", borderRadius: "20px 20px 0 0", padding: "16px 20px calc(20px + env(safe-area-inset-bottom, 0px))" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: "var(--shop-text)" }}>Filters</span>
           <button onClick={() => setDraft({ ...EMPTY_FILTERS, type: draft.type, sort: draft.sort })}
