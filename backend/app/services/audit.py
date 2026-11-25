@@ -41,7 +41,7 @@ ACTION_GROUPS: dict[str, tuple[str, ...]] = {
     "refund": ("refund.requested", "refund.completed"),
     "staff": ("staff.added", "staff.updated", "staff.role_changed", "staff.deactivated", "staff.reactivated",
               "staff.removed"),
-    "access": ("account.login", "account.logout"),
+    "access": ("account.login", "account.logout", "account.password_reset"),
 }
 ACTIONS = frozenset(a for group in ACTION_GROUPS.values() for a in group)
 
