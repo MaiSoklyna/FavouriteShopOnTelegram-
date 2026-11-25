@@ -82,6 +82,9 @@ class Settings(BaseModel):
     # sk_test_... / whsec_... — never put live keys here for the demo.
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+    # Card release switch (app/services/payment_methods.py): off | testers | on
+    CARD_PAYMENTS: str = "testers"
+    CARD_TESTER_USER_IDS: str = ""   # users.id of the customers who may pay by card while testing
 
     # ── Scheduled jobs ──────────────────────────────────────────
     # Shared secret for POST /api/orders/expire-due, called by an external scheduler
@@ -193,7 +196,7 @@ def _load_settings() -> Settings:
         "PAYWAY_CALLBACK_URL", "PAYWAY_QR_LIFETIME_MINUTES",
         "PLATFORM_COMMISSION_PERCENT",
         "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
-        "CRON_SECRET",
+        "CRON_SECRET", "CARD_PAYMENTS", "CARD_TESTER_USER_IDS",
     ]
     for key in simple_keys:
         val = os.getenv(key)

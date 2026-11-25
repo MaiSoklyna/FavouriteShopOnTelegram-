@@ -25,7 +25,7 @@ export const isEnabled = (m: OnlineMethod) => ENABLED_ONLINE.includes(m);
  * (GET /payments/methods: it has the keys). Empty until the server answers, so checkout never offers a
  * method that can't be paid (2026-11-25: card was shown while production had no Stripe key).
  */
-export function useOnlineMethods(): { methods: OnlineMethod[]; loaded: boolean } {
+export function useOnlineMethods(customerKey?: string | number | null): { methods: OnlineMethod[]; loaded: boolean } {
   const [state, setState] = useState<{ methods: OnlineMethod[]; loaded: boolean }>({ methods: [], loaded: false });
   useEffect(() => {
     let live = true;
@@ -33,7 +33,7 @@ export function useOnlineMethods(): { methods: OnlineMethod[]; loaded: boolean }
       .then((r) => { if (live) setState({ methods: ENABLED_ONLINE.filter((m) => r.data.methods.includes(m)), loaded: true }); })
       .catch(() => { if (live) setState({ methods: [], loaded: true }); });
     return () => { live = false; };
-  }, []);
+  }, [customerKey]); // card can be released per customer, so ask again once they are signed in
   return state;
 }
 

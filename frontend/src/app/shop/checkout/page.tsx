@@ -77,7 +77,7 @@ function CheckoutContent() {
   const [paidSummary, setPaidSummary] = useState<{ amount: number | null; eta: string | null }>({ amount: null, eta: null });
   const [form, setForm] = useState({ name: "", phone: "", address: "", note: "" });
   // Only methods the server can take; cash until it answers, then the first online one (if the customer hasn't picked)
-  const online = useOnlineMethods();
+  const online = useOnlineMethods((user as { id?: string | number } | null)?.id ?? null);
   const [payment, setPayment] = useState<PaymentMethod>("cod");
   const pickedPayment = useRef(false);
   useEffect(() => {
@@ -85,7 +85,7 @@ function CheckoutContent() {
     if (!pickedPayment.current && online.methods[0]) setPayment(online.methods[0]);
     else if (payment !== "cod" && !online.methods.includes(payment)) setPayment("cod");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online.loaded]);
+  }, [online.loaded, online.methods.join()]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [placing, setPlacing] = useState(false);
   const [orderError, setOrderError] = useState("");

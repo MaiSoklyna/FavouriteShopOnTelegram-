@@ -23,6 +23,12 @@ from app.core.security import TokenClaims
 from app.routes import payments_stripe as route
 from app.services import stripe_pay
 
+
+@pytest.fixture(autouse=True)
+def card_released(monkeypatch):
+    """These tests are about the intent itself: card is released to everyone here."""
+    monkeypatch.setattr(settings, "CARD_PAYMENTS", "on")
+
 USER = TokenClaims(sub="1", role=Role.USER, telegram_id=111)
 TOTAL = 21.60
 

@@ -58,15 +58,18 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
     if not merchant_id or not delivery_address:
         raise BadRequestError("merchant_id and delivery_address are required")
     # Never take an order that can't be paid: an online method needs its keys on the server
-    why_not = payment_methods.unavailable_message(request_body.get("payment_method") or "cod")
-    if why_not:
-        raise BadRequestError(why_not)
+    # (card is also released per customer while it is being tested: payment_methods.card_mode)
+    if payment_methods.unavailable_message(request_body.get("payment_method") or "cod", None) == "Unknown payment method":
+        raise BadRequestError("Unknown payment method")
 
     async with SupabaseClient.service_role() as db:
         # Abandoned online orders give their stock back before this order asks for it
         await order_expiry.sweep_if_due(db)
         db_user = await _get_db_user(db, user)
         user_id = db_user["id"]
+        why_not = payment_methods.unavailable_message(request_body.get("payment_method") or "cod", user_id)
+        if why_not:
+            raise BadRequestError(why_not)
 
         # ── Price the cart (same computation as /orders/quote) ──
         promo_code = (request_body.get("promo_code") or "").strip() or None

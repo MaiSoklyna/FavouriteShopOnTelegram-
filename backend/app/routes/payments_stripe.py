@@ -29,7 +29,7 @@ from app.core.rate_limit import limiter
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.routes.payments import EXPIRED_MESSAGE, _ORDER_COLUMNS, _get_own_order, mark_order_paid
-from app.services import order_expiry, stripe_pay
+from app.services import order_expiry, payment_methods, stripe_pay
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments/stripe", tags=["Payments"])
@@ -81,6 +81,8 @@ async def ensure_payment_intent(db, order_id: int, user: TokenClaims) -> dict:
             return {"payment_status": "paid"}
         if order.get("payment_method") != METHOD:
             raise BadRequestError("This order is not set up for card payment")
+        if not payment_methods.card_allowed(order.get("user_id")):
+            raise BadRequestError("Card payment is not available right now. Please choose cash on delivery.")
         if order.get("status") == order_expiry.EXPIRED:
             raise BadRequestError(EXPIRED_MESSAGE)
         if order.get("status") != "pending":
