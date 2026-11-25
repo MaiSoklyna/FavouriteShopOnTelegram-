@@ -11,6 +11,7 @@ import { completeness, filled } from "@/lib/attributes";
 import { BrandLoader } from "@/components/ui/Spinner";
 import { usePermissions } from "@/lib/permissions";
 import { AddIcon, DeleteIcon, EditIcon, FilterIcon } from "@/components/brand/Icons";
+import { copyLink, productLink } from "@/lib/deeplink";
 
 export default function ProductsPage() {
   const { can } = usePermissions();
@@ -279,7 +280,7 @@ export default function ProductsPage() {
                   <td style={{ color: p.stock === 0 ? "var(--danger)" : p.stock < 5 ? "var(--warning)" : "var(--text)", fontWeight: p.stock < 5 ? 600 : 400 }}>{p.stock}</td>
                   {allTemplates.length > 0 && <td><DetailsBadge template={p.attribute_template_id ? templateById.get(p.attribute_template_id) : undefined} values={p.attributes} /></td>}
                   <td><div onClick={() => toggleActive(p)} style={{ width: 40, height: 22, borderRadius: 11, background: p.is_active ? "var(--success)" : "#d1d5db", cursor: "pointer", position: "relative", transition: "background 0.2s" }}><div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: p.is_active ? 20 : 2, transition: "left 0.2s" }} /></div></td>
-                  <td><div style={{ display: "flex", gap: 4 }}><button onClick={() => openEdit(p)} title="Edit" aria-label="Edit" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent, #103562)", padding: 4 }}><EditIcon size={18} /></button>{can("products.delete") && <button onClick={() => deleteProduct(p.id)} title="Delete" aria-label="Delete" style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", padding: 4 }}><DeleteIcon size={18} /></button>}</div></td>
+                  <td><div style={{ display: "flex", gap: 4 }}><button onClick={() => openEdit(p)} title="Edit" aria-label="Edit" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent, #103562)", padding: 4 }}><EditIcon size={18} /></button><button onClick={async () => flash((await copyLink(productLink(p.id))) ? "Telegram link copied: share it in your channel or chats" : productLink(p.id), true)} title="Copy Telegram link" aria-label={`Copy Telegram link to ${p.name}`} data-testid={`link-${p.id}`} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent, #103562)", padding: 4, fontSize: 15 }}>🔗</button>{can("products.delete") && <button onClick={() => deleteProduct(p.id)} title="Delete" aria-label="Delete" style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", padding: 4 }}><DeleteIcon size={18} /></button>}</div></td>
                 </tr>
               ))}
             </tbody>

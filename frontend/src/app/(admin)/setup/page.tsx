@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useShopCategories } from "@/lib/useShopCategories";
 import { BrandLoader } from "@/components/ui/Spinner";
+import { copyLink, shopLink } from "@/lib/deeplink";
 import { HeroImagesEditor } from "@/components/admin/HeroImagesEditor";
 import {
   ALWAYS_OPEN, DAYS, DAY_LABEL, STEPS, isAlwaysOpen, stepDone,
@@ -483,6 +484,16 @@ function Extras({ data, owner, saved, flash }: StepProps) {
     <div>
       <h2 style={h2}>Extras (optional)</h2>
       <p style={hint}>Not needed to go live, but they help customers trust and find your shop.</p>
+      <div style={{ background: "var(--bg-secondary)", borderRadius: 10, padding: 12, marginBottom: 16 }} data-testid="shop-link">
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>Your shop&apos;s Telegram link</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <code style={{ fontSize: 13, wordBreak: "break-all", flex: 1 }}>{shopLink(data.shop.id)}</code>
+          <button className="btn-outline" onClick={async () => flash((await copyLink(shopLink(data.shop.id))) ? "Link copied" : "Copy it from the box", true)}>Copy</button>
+        </div>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6 }}>
+          Share it in your Telegram channel, groups or bio: it opens your shop inside Telegram.{!data.checklist.live && " It works once your shop is live."} Each product has its own link too (🔗 on the Products page).
+        </p>
+      </div>
       <label style={label}>{tick("description")}Tagline
         <input className="admin-input" value={tagline} onChange={(e) => setTagline(e.target.value)} maxLength={300} disabled={!owner} placeholder="One line about your shop" />
       </label>

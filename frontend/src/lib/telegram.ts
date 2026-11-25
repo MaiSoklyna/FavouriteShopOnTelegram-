@@ -22,6 +22,8 @@ interface TelegramWebApp {
     user?: TelegramUser;
     auth_date?: number;
     hash?: string;
+    /** The value after ?startapp= in a t.me link that opened the Mini App. */
+    start_param?: string;
   };
   ready: () => void;
   expand: () => void;

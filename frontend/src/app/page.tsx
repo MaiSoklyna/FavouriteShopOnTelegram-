@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/providers/AuthProvider";
 import { isInTelegram } from "@/lib/telegram";
+import { takeDeepLinkPath } from "@/lib/deeplink";
 
 export default function RootPage() {
   const router = useRouter();
@@ -13,7 +14,8 @@ export default function RootPage() {
     if (loading) return;
 
     if (isInTelegram()) {
-      router.replace("/shop");
+      // A product or shop link (t.me/<bot>?startapp=p_123) opens that page directly
+      router.replace(takeDeepLinkPath() ?? "/shop");
     } else if (user && isAdmin) {
       router.replace("/dashboard");
     } else {

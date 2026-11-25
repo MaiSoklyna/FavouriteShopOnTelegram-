@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { CartProvider } from "@/providers/CartProvider";
 import { initTelegram } from "@/lib/telegram";
+import { takeDeepLinkPath } from "@/lib/deeplink";
 import { TabBar } from "@/components/shop/TabBar";
 
 // Screens that own the bottom of the screen (sticky action bars) — no tab bar there.
@@ -11,8 +12,13 @@ const HIDE_TAB_BAR_ON = ["/shop/checkout", "/shop/product/", "/shop/order/", "/s
 
 export default function ShopLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   useEffect(() => {
     initTelegram();
+    // Opened from a product or shop link (t.me/<bot>?startapp=p_123): go straight there
+    const target = takeDeepLinkPath();
+    if (target && target !== window.location.pathname) router.replace(target);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const showTabBar = !HIDE_TAB_BAR_ON.some((p) => pathname.startsWith(p));
