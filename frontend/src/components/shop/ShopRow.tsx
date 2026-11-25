@@ -4,6 +4,7 @@ import { ShopCover } from "./ShopCover";
 import type { ShopCardData } from "./ShopCard";
 import { THEMES } from "@/lib/shopTheme";
 import { formatEta, formatKm } from "@/lib/mapbox";
+import { img, IMG } from "@/lib/img";
 
 /**
  * List-size shop card (343 × 96): cover thumb with the logo on it, name and
@@ -18,7 +19,7 @@ export function ShopRow({ shop, ribbon }: { shop: ShopCardData; ribbon?: "New" |
       <span className={`relative h-[76px] w-[76px] shrink-0 overflow-hidden rounded-thumb ${shop.is_open === false ? "saturate-[.6]" : ""}`}>
         <ShopCover url={shop.cover_url} theme={theme} />
         <span className="absolute bottom-1.5 left-1.5 grid h-7 w-7 place-items-center overflow-hidden rounded-[9px] border-2 border-card bg-card text-[11px] font-extrabold text-navy-700">
-          {shop.logo_url ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" /> : (shop.icon_emoji || shop.name[0]?.toUpperCase())}
+          {shop.logo_url ? <img src={img(shop.logo_url, IMG.LOGO)} alt="" className="h-full w-full object-cover" /> : (shop.icon_emoji || shop.name[0]?.toUpperCase())}
         </span>
         {ribbon && <span className="absolute left-0 top-1.5 rounded-r-full bg-positive-500 px-1.5 py-0.5 text-[9px] font-extrabold text-white">{ribbon}</span>}
       </span>

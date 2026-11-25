@@ -16,7 +16,9 @@ import { distanceKm, formatEta, formatKm } from "@/lib/mapbox";
 import type { Merchant, Product, VariantGroup } from "@/types";
 import { Icon } from "@/components/shop/Icon";
 import { TelegramLoginPrompt } from "@/components/shop/LoginGate";
+import { img, IMG } from "@/lib/img";
 
+import { productLink, shareLink } from "@/lib/deeplink";
 interface Review { id: number; user_name?: string; rating: number; comment?: string; created_at?: string }
 
 const ICON = { fill: "none", stroke: "currentColor", strokeWidth: 1.75, strokeLinecap: "round", strokeLinejoin: "round" } as const;
@@ -143,10 +145,13 @@ export default function ProductDetailPage() {
     }
   }
 
-  function share() {
-    const url = window.location.href;
-    if (navigator.share) navigator.share({ title: product!.name, url }).catch(() => {});
-    else navigator.clipboard?.writeText(url).then(() => setNotice({ text: "Link copied", tone: "ok" })).catch(() => {});
+  // Share the product's Telegram link (opens it in the Mini App), never the page address
+  async function share() {
+    const p = product!;
+    const price = `$${Number(p.base_price).toFixed(2)}`;
+    const text = `${p.name} · ${price}${p.merchant_name ? ` at ${p.merchant_name}` : ""} on Byme24`;
+    const how = await shareLink(productLink(p.id), text);
+    if (how === "copied") setNotice({ text: "Link copied", tone: "ok" });
   }
 
   function onGalleryScroll() {
@@ -171,7 +176,7 @@ export default function ProductDetailPage() {
       <div className="relative h-[420px] bg-surface">
         <div ref={galleryRef} onScroll={onGalleryScroll} className="fos-no-scrollbar flex h-full snap-x snap-mandatory overflow-x-auto">
           {images.length > 0 ? images.map((src, i) => (
-            <img key={src + i} src={src} alt={i === 0 ? product.name : ""} loading={i === 0 ? "eager" : "lazy"}
+            <img key={src + i} src={img(src, IMG.WIDE)} alt={i === 0 ? product.name : ""} loading={i === 0 ? "eager" : "lazy"}
               className="h-full w-full shrink-0 snap-center object-cover" />
           )) : (
             <div className="grid h-full w-full place-items-center text-[72px] font-extrabold text-ink-500">
@@ -209,7 +214,7 @@ export default function ProductDetailPage() {
               return (
                 <button key={src + i} type="button" onClick={() => goToImage(i)} aria-label={`Photo ${i + 1}`}
                   className={`fos-press relative h-11 w-11 overflow-hidden rounded-md border-2 ${imgIdx === i ? "border-card shadow-fos-md" : "border-transparent opacity-80"}`}>
-                  <img src={src} alt="" className="h-full w-full object-cover" />
+                  <img src={img(src, IMG.LOGO)} alt="" className="h-full w-full object-cover" />
                   {extra > 0 && <span className="absolute inset-0 grid place-items-center bg-navy-900/60 text-[13px] font-extrabold text-white">+{extra}</span>}
                 </button>
               );
@@ -246,7 +251,7 @@ export default function ProductDetailPage() {
         <Link href={`/shop/merchant/${product.merchant_id}`} className="fos-press mt-4 flex h-[60px] items-center gap-3 rounded-[18px] bg-surface px-2.5">
           <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-md bg-card text-[18px]">
             {shop?.logo_url || product.merchant_logo_url
-              ? <img src={(shop?.logo_url || product.merchant_logo_url)!} alt="" className="h-full w-full object-cover" />
+              ? <img src={img(shop?.logo_url || product.merchant_logo_url, IMG.LOGO)} alt="" className="h-full w-full object-cover" />
               : shop?.icon_emoji || product.merchant_icon || <span className="text-[15px] font-extrabold text-navy-700">{(product.merchant_name || "S")[0]}</span>}
           </span>
           <div className="min-w-0 flex-1">
@@ -267,6 +272,8 @@ export default function ProductDetailPage() {
           <TrustTile icon={<><rect x="4" y="10" width="16" height="11" rx="3" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>}>KHQR safe</TrustTile>
           <TrustTile icon={<><rect x="2" y="6" width="20" height="13" rx="2" /><path d="M2 10h20M6 15h4" /></>}>Cash on delivery</TrustTile>
         </div>
+
+        {product.attribute_details && product.attribute_details.length > 0 && <Details rows={product.attribute_details} />}
 
         {product.description && <Description text={product.description} />}
 
@@ -407,6 +414,23 @@ function TrustTile({ icon, tone = "default", children }: { icon: React.ReactNode
       <svg width="20" height="20" viewBox="0 0 24 24" {...ICON} className={tone === "warn" ? "" : "text-navy-700"} aria-hidden>{icon}</svg>
       <span className="w-full truncate text-[11px] font-bold">{children}</span>
     </div>
+  );
+}
+
+/** The product's structured details (filled fields of its template), as label / value rows. */
+function Details({ rows }: { rows: { key: string; label: string; value: string }[] }) {
+  return (
+    <section className="mt-5" data-testid="product-details">
+      <h2 className="text-section text-ink-900">Details</h2>
+      <dl className="mt-2 overflow-hidden rounded-thumb bg-card shadow-fos-sm">
+        {rows.map((r, i) => (
+          <div key={r.key} className={`grid grid-cols-[minmax(0,40%)_1fr] gap-3 px-3.5 py-2.5 text-[13px] ${i ? "border-t border-line" : ""}`}>
+            <dt className="text-ink-500">{r.label}</dt>
+            <dd className="font-semibold text-ink-900 [overflow-wrap:anywhere]">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 

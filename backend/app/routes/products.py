@@ -10,6 +10,8 @@ import logging
 import time
 from typing import Any
 
+import httpx
+
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
 from app.core.constants import DEFAULT_PAGE_SIZE, Role
@@ -30,9 +32,9 @@ from app.models.product import (
     ProductUpdate,
     VariantGroupCreate,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from app.services import audit
+from app.services import attributes, audit, category_bulk, order_expiry, shop_setup
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Products"])
@@ -63,6 +65,8 @@ async def list_products(
       - public/anonymous: respects optional merchant_id filter; only active.
     """
     async with SupabaseClient.service_role() as db:
+        # Stock held by abandoned unpaid orders goes back before it is shown (at most once a minute)
+        await order_expiry.sweep_if_due(db)
         q = db.from_("products").order("created_at", desc=True)
 
         # ── Scoping by caller role ──
@@ -75,6 +79,9 @@ async def list_products(
         # ── Active filter ──
         # Public users always see only active. Admins can opt-in to inactive.
         is_admin = bool(user and user.is_admin)
+        # Customers only see products of shops that are live (active and set up)
+        if not is_admin:
+            q = q.in_("merchant_id", sorted(await shop_setup.visible_shop_ids(db)) or [0])
         if not is_admin or not include_inactive:
             q = q.eq("is_active", True)
 
@@ -88,11 +95,16 @@ async def list_products(
         offset = (page - 1) * page_size
         q = q.offset(offset).limit(page_size)
 
-        products = await q.select(
-            "id,merchant_id,category_id,name,description,base_price,"
-            "compare_price,stock,sku,icon_emoji,rating_avg,review_count,"
-            "is_featured,is_active,primary_image,created_at"
-        )
+        columns = ("id,merchant_id,category_id,name,description,base_price,"
+                   "compare_price,stock,sku,icon_emoji,rating_avg,review_count,"
+                   "is_featured,is_active,primary_image,created_at")
+        try:
+            # Product details (migration 036) let the dashboard show how complete each product is
+            products = await q.select(columns + ",attribute_template_id,attributes")
+        except httpx.HTTPStatusError as exc:
+            if not attributes.missing(exc):
+                raise
+            products = await q.select(columns)
 
         # Enrich with shop (owner) and category names
         if products:
@@ -140,12 +152,15 @@ async def list_products(
 
 
 @router.get("/products/{product_id}")
-async def get_product(product_id: int):
+async def get_product(product_id: int, user: TokenClaims | None = Depends(get_optional_user)):
     """Get a single product with images and variants."""
     async with SupabaseClient.service_role() as db:
+        await order_expiry.sweep_if_due(db)
         product = await db.from_("products").eq("id", product_id).select_one()
         if not product:
             raise NotFoundError("Product", product_id)
+        if not (user and user.is_admin) and product.get("merchant_id") not in await shop_setup.visible_shop_ids(db):
+            raise NotFoundError("Product", product_id)  # its shop is not live
 
         if product.get("merchant_id"):
             m = await db.from_("merchants").eq("id", product["merchant_id"]).select_one("name")
@@ -178,6 +193,12 @@ async def get_product(product_id: int):
             v["options"] = options
         product["variants"] = variants
 
+        # Product details: the template's name and the filled fields as label / value rows
+        template = (await attributes.load_template(db, product["attribute_template_id"])
+                    if product.get("attribute_template_id") else None)
+        product["attribute_template"] = {"id": template["id"], "name": template["name"]} if template else None
+        product["attribute_details"] = attributes.details(template, product.get("attributes"))
+
     return product
 
 
@@ -206,8 +227,15 @@ async def create_product(
             merchant_id = _own_merchant_id(user)
         await _check_category(db, body.category_id, merchant_id)
 
-        data = body.model_dump(exclude={"variants", "slug"})
+        data = body.model_dump(exclude={"variants", "slug", "attribute_template_id", "attributes"})
         data["merchant_id"] = merchant_id
+        template = None
+        if body.attribute_template_id or body.attributes:
+            if not body.attribute_template_id:
+                raise BadRequestError("Choose what kind of product this is before filling its details")
+            template = await _template_for_shop(db, body.attribute_template_id, merchant_id)
+            data["attribute_template_id"] = template["id"]
+            data["attributes"] = attributes.validate(template, body.attributes or {})
 
         rows = await db.from_("products").insert(data)
         product = rows[0] if rows else data
@@ -232,10 +260,14 @@ async def create_product(
         new = {k: data.get(k) for k in PRODUCT_LOG_FIELDS if data.get(k) is not None}
         if body.variants:
             new["variants"] = _variant_summary(body.variants)
+        if template:
+            new["Details template"] = template["name"]
+            new.update(attributes.label_changes(None, template, {}, data["attributes"])[1])
         await audit.record(
             db, user, merchant_id=merchant_id, action="product.created", target_type="product",
             target_id=product.get("id"), target_label=product.get("name") or body.name, new=new,
         )
+        await shop_setup.refresh(db, merchant_id)
 
     return product
 
@@ -277,11 +309,57 @@ async def update_product(
                 hint="Pick a category that belongs to the new shop",
             )
 
+        # Product details: a new template, new values, or both
+        data.pop("attribute_template_id", None)
+        data.pop("attributes", None)
+        details_log = None
+        fields_set = body.model_fields_set
+        if "attribute_template_id" in fields_set or "attributes" in fields_set:
+            old_tid = existing.get("attribute_template_id")
+            old_values = existing.get("attributes") or {}
+            new_tid = body.attribute_template_id if "attribute_template_id" in fields_set else old_tid
+            old_template = await attributes.load_template(db, old_tid) if old_tid else None
+            if new_tid is None:
+                if body.attributes:
+                    raise BadRequestError("Choose what kind of product this is before filling its details")
+                new_template, new_values = None, {}
+            else:
+                # Keeping the same template is always allowed, even if the platform has since switched it off
+                new_template = (old_template if new_tid == old_tid and old_template
+                                else await _template_for_shop(db, new_tid, owner))
+                new_values = (attributes.validate(new_template, body.attributes)
+                              if "attributes" in fields_set and body.attributes is not None
+                              else attributes.carry_over(new_template, old_values))
+            data["attribute_template_id"] = new_tid
+            data["attributes"] = new_values
+            details_log = (old_template, new_template, old_values, new_values)
+
         if data:
             await db.from_("products").eq("id", product_id).update(data)
-            await _log_product_update(db, user, existing, data)
+            await _log_product_update(db, user, existing, data, details_log)
+        if data.get("is_active"):
+            await shop_setup.refresh(db, existing.get("merchant_id"))
 
     return {"success": True}
+
+
+async def _template_for_shop(db, template_id: int, merchant_id: int) -> dict:
+    """A template the shop may use: active and made for the shop's type (any type if the shop has none yet)."""
+    template = await attributes.load_template(db, template_id)
+    if template is None:
+        try:
+            await db.from_(attributes.TEMPLATES).select_one("id")
+        except Exception as exc:
+            if attributes.missing(exc):
+                raise BadRequestError(attributes.MIGRATION_HINT) from exc
+        raise BadRequestError("That kind of product does not exist")
+    if not template.get("is_active"):
+        raise BadRequestError(f"'{template['name']}' is no longer offered. Choose another kind of product.")
+    shop = await db.from_("merchants").eq("id", merchant_id).select_one("id,shop_category_id")
+    shop_type = (shop or {}).get("shop_category_id")
+    if shop_type is not None and template["shop_category_id"] != shop_type:
+        raise BadRequestError(f"'{template['name']}' is for another type of shop")
+    return template
 
 
 # Prices get their own entry so an owner can see every price change at a glance
@@ -292,8 +370,16 @@ PRODUCT_LOG_FIELDS = (
 )
 
 
-async def _log_product_update(db, user: TokenClaims, before: dict, data: dict) -> None:
+async def _log_product_update(db, user: TokenClaims, before: dict, data: dict, details_log=None) -> None:
+    data = {k: v for k, v in data.items() if k not in ("attributes", "attribute_template_id")}
     old, new = audit.diff(before, data)
+    if details_log:
+        old_t, new_t, old_v, new_v = details_log
+        if (old_t or {}).get("id") != (new_t or {}).get("id"):
+            old["Details template"], new["Details template"] = (old_t or {}).get("name"), (new_t or {}).get("name")
+        o, n = attributes.label_changes(old_t, new_t, old_v, new_v)
+        old.update(o)
+        new.update(n)
     if not new:
         return
     common = dict(merchant_id=before["merchant_id"], target_type="product", target_id=before["id"],
@@ -551,6 +637,7 @@ async def create_category(body: CategoryCreate, user: TokenClaims = require_any_
         data = body.model_dump()
         data["merchant_id"] = merchant_id
         rows = await db.from_("categories").insert(data)
+        await shop_setup.refresh(db, merchant_id)
     return rows[0] if rows else data
 
 
@@ -576,18 +663,38 @@ async def update_category(
 
 
 @router.delete("/categories/{category_id}")
-async def delete_category(category_id: int, user: TokenClaims = require_any_admin()):
-    """Soft-delete a category. merchant_admin can only delete their own."""
-    async with SupabaseClient.service_role() as db:
-        existing = await db.from_("categories").eq("id", category_id).select_one("id,merchant_id")
-        if not existing:
-            raise NotFoundError("Category", category_id)
-        if user.role == Role.MERCHANT_ADMIN:
-            if existing.get("merchant_id") != user.merchant_id:
-                raise ForbiddenError("You can only delete your own merchant's categories")
+async def delete_category(category_id: int, move_to: str | None = None, user: TokenClaims = require_any_admin()):
+    """Delete (hide) a category. merchant_admin can only delete their own.
 
-        await db.from_("categories").eq("id", category_id).update({"is_active": False})
-    return {"success": True}
+    If it still holds products, `move_to` says where they go first: another category's id, or
+    "none" for no category. Without it the request is refused (409) with the product count, so
+    no product is left in a hidden category."""
+    async with SupabaseClient.service_role() as db:
+        result = await category_bulk.delete_with_move(db, user, category_id, move_to)
+    return {"success": True, **result}
+
+
+class MoveProductsBody(BaseModel):
+    to_category_id: int | None = None  # None = no category
+
+
+class BulkCategoryBody(BaseModel):
+    product_ids: list[int] = Field(..., min_length=1, max_length=category_bulk.MAX_BULK)
+    category_id: int | None = None  # None = no category
+
+
+@router.post("/categories/{category_id}/move-products")
+async def move_category_products(category_id: int, body: MoveProductsBody, user: TokenClaims = require_any_admin()):
+    """Move every product in this category to another one (merge two categories, or empty one)."""
+    async with SupabaseClient.service_role() as db:
+        return {"success": True, **await category_bulk.move_all(db, user, category_id, body.to_category_id)}
+
+
+@router.post("/products/bulk/category")
+async def bulk_set_category(body: BulkCategoryBody, user: TokenClaims = require_any_admin()):
+    """Put several products in one category at once."""
+    async with SupabaseClient.service_role() as db:
+        return {"success": True, **await category_bulk.set_category(db, user, body.product_ids, body.category_id)}
 
 
 @router.post("/categories/{category_id}/image")

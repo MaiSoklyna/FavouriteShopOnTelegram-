@@ -11,7 +11,9 @@ import { KhqrCard, PaidSuccess, type KhqrData } from "./Khqr";
  * Telegram, or after choosing "Pay Later" at checkout). Polls the backend,
  * which confirms with PayWay, shows the Paid moment, then calls onPaid.
  */
-export function KhqrPayPanel({ orderId, total, onPaid }: { orderId: number; total: number; onPaid: () => void }) {
+export function KhqrPayPanel({ orderId, total, onPaid, onExpired }: {
+  orderId: number; total: number; onPaid: () => void; onExpired?: () => void;
+}) {
   const [qr, setQr] = useState<KhqrData | null>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -47,11 +49,16 @@ export function KhqrPayPanel({ orderId, total, onPaid }: { orderId: number; tota
     let stopped = false;
     const id = setInterval(async () => {
       try {
-        const res = await api.get<{ data: { payment_status: string } }>(`/payments/payway/orders/${orderId}/status`);
+        const res = await api.get<{ data: { payment_status: string; order_status?: string } }>(`/payments/payway/orders/${orderId}/status`);
         if (!stopped && res.data?.payment_status === "paid") {
           stopped = true;
           clearInterval(id);
           setPaid(true);
+        } else if (!stopped && res.data?.order_status === "expired") {
+          // The time to pay ran out: the order page reloads and shows it as expired
+          stopped = true;
+          clearInterval(id);
+          onExpired?.();
         }
       } catch { /* keep polling */ }
     }, 4000);

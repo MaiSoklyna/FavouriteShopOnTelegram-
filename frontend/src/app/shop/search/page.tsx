@@ -8,7 +8,15 @@ import { trackActivity } from "@/lib/activity";
 import { useCart } from "@/providers/CartProvider";
 import { ShopRow } from "@/components/shop/ShopRow";
 import { themeFromShopCategory } from "@/lib/shopTheme";
-import type { Product, Category, Merchant } from "@/types";
+import type { Product, Category, Merchant, SearchFacet } from "@/types";
+import { img, IMG } from "@/lib/img";
+import { useShopCategories } from "@/lib/useShopCategories";
+import {
+  EMPTY_FILTERS, SORTS, SearchFilterSheet, activeFilterCount, filterParams, filtersFromUrl,
+  type SearchFilterState,
+} from "@/components/shop/SearchFilters";
+
+interface SearchResponse { data: Product[]; total: number; facets: SearchFacet[]; shop_type: number | null }
 
 export default function SearchPage() {
   return <Suspense><SearchContent /></Suspense>;
@@ -19,6 +27,8 @@ function SearchContent() {
   const searchParams = useSearchParams();
   const { addToCart } = useCart();
   const inputRef = useRef<HTMLInputElement>(null);
+  // Only the newest search may fill the page: an older, slower answer must not overwrite it
+  const searchSeq = useRef(0);
 
   const [query, setQuery] = useState(searchParams.get("q") || "");
   const [categoryId, setCategoryId] = useState(searchParams.get("category") || "");
@@ -29,6 +39,14 @@ function SearchContent() {
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  // Shop type, price, stock, sort and product-detail filters; kept in the page URL
+  const [filters, setFilters] = useState<SearchFilterState>(() => filtersFromUrl(new URLSearchParams(searchParams.toString())));
+  const [facets, setFacets] = useState<SearchFacet[]>([]);
+  const [total, setTotal] = useState(0);
+  const [scopedType, setScopedType] = useState<number | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const { categories: shopTypes } = useShopCategories();
+  const filterCount = activeFilterCount(filters);
   // Shops are searched too: by name, tagline, or the kind of shop ("fashion", "cake shop")
   const [shops, setShops] = useState<Merchant[]>([]);
   const needle = query.trim().toLowerCase();
@@ -50,14 +68,32 @@ function SearchContent() {
       .catch(() => {});
   }, []);
 
+  const filtersOn = !!filters.type || filterCount > 0 || filters.sort !== "relevance";
+  const isEmptyFilters = !query.trim() && !categoryId && !merchantId && !filtersOn;
+
+  // Keep the address in step, so a filtered search survives a reload and can be shared
   useEffect(() => {
-    if (!query.trim() && !categoryId && !merchantId) { setResults([]); setHasSearched(false); return; }
+    const p = new URLSearchParams(filterParams(filters, false));
+    if (query.trim()) p.set("q", query.trim());
+    if (categoryId) p.set("category", categoryId);
+    if (merchantId) p.set("merchant", merchantId);
+    const qs = p.toString();
+    router.replace(qs ? `/shop/search?${qs}` : "/shop/search", { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, categoryId, merchantId, filters]);
+
+  useEffect(() => {
+    if (isEmptyFilters) { setResults([]); setFacets([]); setTotal(0); setHasSearched(false); return; }
     setSearching(true);
     const timer = setTimeout(() => performSearch(), 350);
     return () => clearTimeout(timer);
-  }, [query, categoryId, merchantId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, categoryId, merchantId, filters]);
 
-  const isEmptyFilters = !query.trim() && !categoryId && !merchantId;
+  /** A new shop type has different product details, so its detail filters start empty. */
+  function pickShopType(id: string) {
+    setFilters((f) => ({ ...f, type: f.type === id ? "" : id, attrs: {} }));
+  }
 
   // Count a search once the customer has stopped typing and results (products or shops) are on screen.
   // A search that found nothing is the most useful kind to see, so the result count goes with it.
@@ -70,17 +106,24 @@ function SearchContent() {
   }, [hasSearched, searching, query, found]);
 
   async function performSearch() {
+    const seq = ++searchSeq.current;
     try {
-      const params: Record<string, string | number> = { page_size: 20 };
-      if (query.trim()) params.search = query.trim();
+      const params: Record<string, string | number> = { page_size: 40, ...filterParams(filters, true) };
+      if (query.trim()) params.q = query.trim();
       if (categoryId) params.category_id = Number(categoryId);
       if (merchantId) params.merchant_id = Number(merchantId);
-      const data = await api.get<Product[]>("/products", { params });
-      setResults(data);
+      const res = await api.get<SearchResponse>("/search/products", { params });
+      if (seq !== searchSeq.current) return;
+      setResults(res.data);
+      setTotal(res.total);
+      setFacets(res.facets || []);
+      setScopedType(res.shop_type ?? null);
       setHasSearched(true);
       if (query.trim()) saveRecentSearch(query.trim());
-    } catch { setResults([]); setHasSearched(true); }
-    finally { setSearching(false); }
+    } catch {
+      if (seq !== searchSeq.current) return;
+      setResults([]); setFacets([]); setTotal(0); setHasSearched(true);
+    } finally { if (seq === searchSeq.current) setSearching(false); }
   }
 
   function saveRecentSearch(term: string) {
@@ -165,6 +208,42 @@ function SearchContent() {
           )}
         </div>
       </div>
+
+      {/* Kind of shop + filters: choosing a kind turns on its product-detail filters */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "12px 20px 0" }}>
+        <button onClick={() => setSheetOpen(true)} data-testid="open-filters"
+          style={{
+            flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 999,
+            border: filterCount ? "1px solid var(--shop-primary)" : "1px solid var(--shop-divider)",
+            background: filterCount ? "var(--shop-primary)" : "var(--shop-surface)",
+            color: filterCount ? "#FFFFFF" : "var(--shop-text)", fontSize: 12, fontWeight: 600, cursor: "pointer",
+          }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+            <path d="M4 6h16M7 12h10M10 18h4" />
+          </svg>
+          Filters{filterCount ? ` · ${filterCount}` : ""}
+        </button>
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", scrollbarWidth: "none" }}>
+          {/* The chosen kind first, so it is in view without scrolling */}
+          {[...shopTypes].sort((x, y) => Number(filters.type === String(y.id)) - Number(filters.type === String(x.id))).map((t) => {
+            const on = filters.type === String(t.id);
+            return (
+              <button key={t.id} onClick={() => pickShopType(String(t.id))} data-testid={`shop-type-${t.id}`}
+                style={{
+                  flexShrink: 0, padding: "6px 12px", borderRadius: 999, whiteSpace: "nowrap", fontSize: 12, cursor: "pointer",
+                  fontWeight: on ? 600 : 500,
+                  border: on ? "1px solid #103562" : "1px solid var(--shop-divider)",
+                  background: on ? "#103562" : "var(--shop-surface)", color: on ? "#FFFFFF" : "var(--shop-text)",
+                }}>
+                {t.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <SearchFilterSheet open={sheetOpen} onClose={() => setSheetOpen(false)} value={filters} onApply={setFilters}
+        facets={facets} total={total} typeChosen={scopedType != null} />
 
       {/* Category pills */}
       {categories.length > 0 && (
@@ -299,10 +378,16 @@ function SearchContent() {
         {/* Results */}
         {!searching && hasSearched && results.length > 0 && (
           <div>
-            <p style={{ fontSize: 13, color: "var(--shop-muted)", marginBottom: 12, fontFamily: "'Inter', sans-serif" }}>
-              Found <strong style={{ color: "var(--shop-text)" }}>{results.length}</strong> results
-              {query && <> for <strong style={{ color: "var(--shop-text)" }}>&apos;{query}&apos;</strong></>}
-            </p>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
+              <p style={{ fontSize: 13, color: "var(--shop-muted)", fontFamily: "'Inter', sans-serif" }} data-testid="result-count">
+                Found <strong style={{ color: "var(--shop-text)" }}>{total}</strong> {total === 1 ? "result" : "results"}
+                {query && <> for <strong style={{ color: "var(--shop-text)" }}>&apos;{query}&apos;</strong></>}
+              </p>
+              <select value={filters.sort} onChange={(e) => setFilters((f) => ({ ...f, sort: e.target.value }))} aria-label="Sort"
+                style={{ fontSize: 12, border: "1px solid var(--shop-divider)", borderRadius: 8, padding: "4px 6px", background: "var(--shop-surface)", color: "var(--shop-text)" }}>
+                {SORTS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+              </select>
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
               {results.map(p => (
                 <MiniProductCard key={p.id} product={p} onClick={() => router.push(`/shop/product/${p.id}`)}
@@ -332,6 +417,12 @@ function SearchContent() {
               No products found
             </h3>
             <p style={{ fontSize: 13, color: "var(--shop-muted)" }}>Try different keywords or categories</p>
+            {filterCount > 0 && (
+              <button onClick={() => setFilters((f) => ({ ...EMPTY_FILTERS, type: f.type, sort: f.sort }))}
+                style={{ marginTop: 12, background: "none", border: "none", color: "var(--shop-primary)", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                Clear filters
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -353,7 +444,7 @@ function MiniProductCard({ product, onClick, onAddToCart }: { product: Product; 
     }}>
       <div style={{ position: "relative", paddingTop: "100%", background: "var(--shop-divider)" }}>
         {product.primary_image ? (
-          <img src={product.primary_image} alt={product.name} loading="lazy"
+          <img src={img(product.primary_image, IMG.CARD)} alt={product.name} loading="lazy"
             style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
           <div style={{

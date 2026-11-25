@@ -28,8 +28,8 @@ from app.core.exceptions import BadRequestError
 from app.core.rate_limit import limiter
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.routes.payments import _ORDER_COLUMNS, _get_own_order, mark_order_paid
-from app.services import stripe_pay
+from app.routes.payments import EXPIRED_MESSAGE, _ORDER_COLUMNS, _get_own_order, mark_order_paid
+from app.services import order_expiry, stripe_pay
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments/stripe", tags=["Payments"])
@@ -81,8 +81,18 @@ async def ensure_payment_intent(db, order_id: int, user: TokenClaims) -> dict:
             return {"payment_status": "paid"}
         if order.get("payment_method") != METHOD:
             raise BadRequestError("This order is not set up for card payment")
+        if order.get("status") == order_expiry.EXPIRED:
+            raise BadRequestError(EXPIRED_MESSAGE)
         if order.get("status") != "pending":
             raise BadRequestError("Only pending orders can be paid")
+        # Past the deadline: expire it (this also checks Stripe one last time and cancels the
+        # open intent) instead of handing out a way to pay
+        if order_expiry.is_overdue(order):
+            if await order_expiry.expire_order(db, order):
+                raise BadRequestError(EXPIRED_MESSAGE)
+            fresh = await _get_own_order(db, order_id, user)
+            if fresh.get("payment_status") == "paid":
+                return {"payment_status": "paid"}
 
         existing = order.get("stripe_payment_intent_id")
         replaces = None
@@ -155,7 +165,9 @@ async def payment_status(request: Request, order_id: int, user: TokenClaims = re
                 status = await _settle(db, order, intent)
             except stripe_pay.StripeError:
                 logger.warning("Stripe status check failed for order %s", order_id, exc_info=True)
-    return {"data": {"order_id": order_id, "payment_status": status}}
+        if status != "paid" and order_expiry.is_overdue(order):
+            await order_expiry.expire_order(db, order)
+    return {"data": {"order_id": order_id, "payment_status": status, "order_status": order.get("status")}}
 
 
 @router.post("/webhook")

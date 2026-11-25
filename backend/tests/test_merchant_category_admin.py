@@ -78,6 +78,18 @@ def test_merchant_admin_cannot_change_their_own_shops_category(db):
     assert cat_of(db, 4) == (None, None)          # discovery placement is a super-admin decision
 
 
+def test_owner_chooses_the_shop_type_while_setting_up(db):
+    db.merchant(4)["setup_completed_at"] = None    # not live yet (migration 041)
+    update(4, user=OWN_SHOP_ADMIN, shop_category_id=2, shop_subcategory_id=3)
+    assert cat_of(db, 4) == (2, 3)
+
+
+def test_owner_cannot_change_the_type_once_live(db):
+    db.merchant(4)["setup_completed_at"] = "2026-11-25T00:00:00Z"
+    update(4, user=OWN_SHOP_ADMIN, shop_category_id=2, shop_subcategory_id=3, tagline="Live")
+    assert cat_of(db, 4) == (None, None) and db.merchant(4)["tagline"] == "Live"
+
+
 def test_create_with_a_valid_category(db):
     body = MerchantCreate(name="New Cafe", slug="new-cafe", owner_name="O", email="o@x.com",
                           shop_category_id=1, shop_subcategory_id=2)

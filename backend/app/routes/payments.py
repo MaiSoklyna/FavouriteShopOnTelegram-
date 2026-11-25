@@ -29,13 +29,15 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Request
 
 from app.config import settings
-from app.core.constants import Role
+from app.core.constants import CLOSED_UNSOLD_STATUSES, PAYWAY_MIN_QR_LIFETIME_MINUTES, Role
 from app.core.dependencies import require_role
 from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.rate_limit import limiter
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.services import notify, payway, settlement
+from app.services import notify, order_expiry, payway, refunds, settlement
+
+EXPIRED_MESSAGE = "The time to pay this order has run out, so it has expired. Please place the order again."
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments/payway", tags=["Payments"])
@@ -47,7 +49,7 @@ _ORDER_COLUMNS = (
     "id,user_id,merchant_id,order_code,total,status,payment_method,"
     "payment_status,payway_tran_id,customer_name,delivery_name,delivery_phone,"
     "delivery_fee,commission_rate,payout_mode,platform_discount_amount,"
-    "stripe_payment_intent_id"
+    "stripe_payment_intent_id,payment_expires_at"
 )
 
 
@@ -70,6 +72,8 @@ async def create_qr(request: Request, order_id: int, user: TokenClaims = require
             return {"data": {"payment_status": "paid"}}
         if order.get("payment_method") != QR_PAYMENT_METHOD:
             raise BadRequestError("This order is not set up for QR payment")
+        if order.get("status") == order_expiry.EXPIRED:
+            raise BadRequestError(EXPIRED_MESSAGE)
         if order.get("status") != "pending":
             raise BadRequestError("Only pending orders can be paid by QR")
 
@@ -78,6 +82,16 @@ async def create_qr(request: Request, order_id: int, user: TokenClaims = require
         if order.get("payway_tran_id"):
             if await _settle(db, order, order["payway_tran_id"]) == "paid":
                 return {"data": {"payment_status": "paid"}}
+
+        # Past the payment deadline: expire it now (stock goes back) instead of issuing a QR
+        if order_expiry.is_overdue(order):
+            await order_expiry.expire_order(db, order)
+            raise BadRequestError(EXPIRED_MESSAGE)
+        # A QR must not outlive the order's deadline, so it cannot be paid after the stock is released
+        lifetime = settings.PAYWAY_QR_LIFETIME_MINUTES
+        left = order_expiry.seconds_left(order)
+        if left is not None:
+            lifetime = max(PAYWAY_MIN_QR_LIFETIME_MINUTES, min(lifetime, left // 60))
 
         amount = payway.to_money(order["total"])
         merchant = await db.from_("merchants").eq("id", order["merchant_id"]).select_one(
@@ -104,6 +118,7 @@ async def create_qr(request: Request, order_id: int, user: TokenClaims = require
                 last_name=last_name,
                 phone=(order.get("delivery_phone") or "").replace("+855", "0"),
                 payout=payout,
+                lifetime_minutes=lifetime,
             )
         except payway.PayWayError as exc:
             logger.warning("PayWay QR failed for order %s: %s (code=%s)", order_id, exc, exc.code)
@@ -131,7 +146,8 @@ async def create_qr(request: Request, order_id: int, user: TokenClaims = require
             "qr_image": qr.get("qrImage"),
             "qr_string": qr.get("qrString"),
             "deeplink": qr.get("abapay_deeplink"),
-            "expires_in": settings.PAYWAY_QR_LIFETIME_MINUTES * 60,
+            "expires_in": lifetime * 60,
+            "payment_expires_at": order.get("payment_expires_at"),
         }
     }
 
@@ -145,7 +161,9 @@ async def payment_status(request: Request, order_id: int, user: TokenClaims = re
         status = order.get("payment_status") or "pending"
         if status != "paid" and order.get("payway_tran_id"):
             status = await _settle(db, order, order["payway_tran_id"])
-    return {"data": {"order_id": order_id, "payment_status": status}}
+        if status != "paid" and order_expiry.is_overdue(order):
+            await order_expiry.expire_order(db, order)
+    return {"data": {"order_id": order_id, "payment_status": status, "order_status": order.get("status")}}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -245,15 +263,21 @@ async def mark_order_paid(db, order: dict, *, fields: dict, actor_type: str, act
     )
     if updated:
         logger.info("Order %s paid (%s)", order["id"], actor_type)
-        # Advance a pending order; a cancelled one stays cancelled and
-        # needs a manual refund.
+        # Advance a pending order. A cancelled or expired one stays as it is: its stock is
+        # already back on sale, so the customer must be refunded.
         if order.get("status") == "pending":
-            await db.from_("orders").eq("id", order["id"]).eq("status", "pending").update(
+            advanced = await db.from_("orders").eq("id", order["id"]).eq("status", "pending").update(
                 {"status": "confirmed"}
             )
-        elif order.get("status") == "cancelled":
-            logger.error("Order %s was paid after cancellation — refund required", order["id"])
-        if order.get("status") != "cancelled":
+            if not advanced:
+                # Expired (or cancelled) between our read and this update
+                fresh = await db.from_("orders").eq("id", order["id"]).select_one("status")
+                order["status"] = (fresh or {}).get("status") or order.get("status")
+        if order.get("status") in CLOSED_UNSOLD_STATUSES:
+            logger.error("Order %s was paid while %s — refund required", order["id"], order.get("status"))
+            await refunds.request(db, order, refunds.reason_for_payment_on(order.get("status")),
+                                  actor_type=actor_type, actor_id=actor_id)
+        else:
             await _notify_paid(db, order)
 
     # Record the merchant's earning. Idempotent, so it also repairs a
@@ -277,10 +301,8 @@ async def _notify_paid(db, order: dict) -> None:
     """
     await notify.order_paid(db, order["id"])  # in-app: customer receipt + shop alert (never raises)
     try:
-        from bot.notifications import (
-            send_order_placed_to_merchant_group,
-            send_payment_received_to_customer,
-        )
+        from bot.notifications import send_payment_received_to_customer
+        from app.services import order_group
 
         merchant = await db.from_("merchants").eq("id", order["merchant_id"]).select_one(
             "name,telegram_group_id"
@@ -301,22 +323,8 @@ async def _notify_paid(db, order: dict) -> None:
             payment_method=order.get("payment_method") or "khqr",
         )
         if merchant.get("telegram_group_id"):
-            items = await db.from_("order_items").eq("order_id", order["id"]).select(
-                "product_name,quantity,unit_price,subtotal"
-            )
-            await send_order_placed_to_merchant_group(
-                merchant["telegram_group_id"],
-                order_id=order["id"],
-                order_code=order["order_code"],
-                merchant_name=merchant.get("name") or "Shop",
-                items=items,
-                total=total,
-                payment_method=order.get("payment_method") or "khqr",
-                delivery_address=full.get("delivery_address") or "",
-                customer_name=full.get("customer_name") or full.get("delivery_name"),
-                customer_phone=full.get("customer_phone") or full.get("delivery_phone"),
-                paid=True,
-            )
+            # Paid orders arrive accepted; the shop can still cancel & refund from the group
+            await order_group.post_new(db, order["id"])
     except Exception:
         logger.exception("Paid-order notification failed for order %s (non-fatal)", order["id"])
 

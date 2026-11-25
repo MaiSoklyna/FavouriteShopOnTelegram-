@@ -6,6 +6,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import type { Category } from "@/types";
 import { classifyShop, THEMES, type ShopTheme } from "@/lib/shopTheme";
+import { img, IMG } from "@/lib/img";
 
 export default function CategoriesPage() {
   const router = useRouter();
@@ -122,7 +123,7 @@ export default function CategoriesPage() {
                   overflow: "hidden", marginBottom: 8,
                 }}>
                   {(cat.image_url || (cat.icon_emoji && /^https?:\/\//i.test(cat.icon_emoji))) ? (
-                    <img src={cat.image_url || cat.icon_emoji!} alt={cat.name}
+                    <img src={img(cat.image_url, IMG.LOGO) || cat.icon_emoji!} alt={cat.name}
                       style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                   ) : cat.icon_emoji ? (
                     <span style={{ fontSize: 28, lineHeight: 1 }}>{cat.icon_emoji}</span>

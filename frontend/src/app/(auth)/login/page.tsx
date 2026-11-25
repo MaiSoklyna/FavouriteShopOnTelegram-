@@ -119,6 +119,9 @@ function LoginContent() {
               style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 14 }}
               placeholder="Enter password"
             />
+            <div style={{ textAlign: "right", marginTop: 6 }}>
+              <a href="/forgot-password" style={{ fontSize: 12, color: "var(--accent, #0088cc)", textDecoration: "none" }}>Forgot password?</a>
+            </div>
           </div>
 
           <button
@@ -200,6 +203,12 @@ function LoginContent() {
             </div>
           </div>
         )}
+
+        <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: "var(--text-muted)" }}>
+          <a href="/shop/terms" style={{ color: "inherit" }}>Terms of Service</a>
+          {" · "}
+          <a href="/shop/privacy" style={{ color: "inherit" }}>Privacy Policy</a>
+        </div>
       </div>
     </div>
   );

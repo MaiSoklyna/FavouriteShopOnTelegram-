@@ -8,6 +8,7 @@ import { HeroImagesEditor } from "@/components/admin/HeroImagesEditor";
 
 const MapPicker = dynamic(() => import("@/components/map/MapPicker"), { ssr: false });
 import type { Merchant, ShopCategory } from "@/types";
+import { ALWAYS_OPEN, isAlwaysOpen, type Hours } from "@/lib/setup";
 import { BrandLoader } from "@/components/ui/Spinner";
 import { AddIcon, EditIcon } from "@/components/brand/Icons";
 
@@ -48,15 +49,16 @@ const EMPTY_FORM = {
 
 /** Stored weekly hours -> the simple form (one window applied to the chosen days). */
 function hoursToForm(h: Merchant["opening_hours"]) {
+  if (isAlwaysOpen(h as Hours)) return { hours_custom: false, hours_open: "08:00", hours_close: "20:00", hours_days: [...DAYS] as string[] };
   const days = h ? DAYS.filter(d => h[d]?.length) : [];
   if (!h || !days.length) return { hours_custom: false, hours_open: "08:00", hours_close: "20:00", hours_days: [...DAYS] as string[] };
   const [open, close] = h[days[0]][0];
   return { hours_custom: true, hours_open: open, hours_close: close, hours_days: days as string[] };
 }
 
-/** The form -> stored hours; null = always open. */
+/** The form -> stored hours; "always open" is stored as 24/7 (every day 00:00-00:00), which counts as set. */
 function formToHours(f: { hours_custom: boolean; hours_open: string; hours_close: string; hours_days: string[] }) {
-  if (!f.hours_custom) return null;
+  if (!f.hours_custom) return ALWAYS_OPEN;
   return Object.fromEntries(DAYS.map(d => [d, f.hours_days.includes(d) ? [[f.hours_open, f.hours_close]] : []]));
 }
 
@@ -80,6 +82,19 @@ function slugify(name: string): string {
 export default function MerchantsPage() {
   const { isSuperAdmin } = useAuth();
   const [merchants, setMerchants] = useState<Merchant[]>([]);
+  // Setup progress per shop (platform admin): live or not, and what is missing
+  const [setup, setSetup] = useState<Record<number, { live: boolean; done: number; total: number; missing: string[] }>>({});
+  async function loadSetup() {
+    try {
+      const r = await api.get<{ data: { merchant_id: number; live: boolean; done: number; total: number; missing: string[] }[] }>("/merchant-setup/overview");
+      setSetup(Object.fromEntries(r.data.map(s => [s.merchant_id, s])));
+    } catch { /* before migration 041 or not a platform admin */ }
+  }
+  async function publish(m: Merchant) {
+    if (!confirm(`Make "${m.name}" visible to customers now, even though its setup is not complete?`)) return;
+    try { await api.post(`/merchant-setup/${m.id}/publish`); loadSetup(); }
+    catch (e: any) { alert(e?.detail || "Could not publish"); }
+  }
   const [shopCats, setShopCats] = useState<ShopCategory[]>([]);
   const autoAddress = useRef("");
   const [loading, setLoading] = useState(true);
@@ -109,6 +124,7 @@ export default function MerchantsPage() {
 
   async function load() { try { setMerchants(await api.get<Merchant[]>("/merchants", { params: search ? { search } : undefined })); } catch { /* */ } finally { setLoading(false); } }
   useEffect(() => { load(); }, []);
+  useEffect(() => { if (isSuperAdmin) loadSetup(); }, [isSuperAdmin]);
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [search]);
   // Shop categories for the editor's pickers (all of them, including ones nobody sells under yet)
   useEffect(() => {
@@ -481,7 +497,7 @@ export default function MerchantsPage() {
       <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? <BrandLoader /> : (
           <table className="admin-table">
-            <thead><tr><th>Logo</th><th>Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Products</th><th>Orders</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Logo</th><th>Name</th><th>Owner</th><th>Email</th><th>Plan</th><th>Products</th><th>Orders</th><th>Status</th>{isSuperAdmin && <th>Setup</th>}<th>Actions</th></tr></thead>
             <tbody>
               {merchants.length === 0 ? <tr><td colSpan={9} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>No merchants</td></tr> :
               merchants.map(m => (
@@ -504,6 +520,17 @@ export default function MerchantsPage() {
                   <td>{m.product_count || 0}</td>
                   <td>{m.order_count || 0}</td>
                   <td><span className={`badge ${m.status === "active" ? "badge-delivered" : "badge-cancelled"}`}>{m.status}</span></td>
+                  {isSuperAdmin && (
+                    <td data-testid={`setup-${m.id}`} title={setup[m.id]?.missing?.length ? `Missing: ${setup[m.id].missing.join(", ")}` : ""}>
+                      {setup[m.id] ? (
+                        <>
+                          <span className={`badge ${setup[m.id].live ? "badge-delivered" : "badge-pending"}`}>{setup[m.id].live ? "Live" : "Setting up"}</span>
+                          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{setup[m.id].done}/{setup[m.id].total} done</div>
+                          {!setup[m.id].live && <button onClick={() => publish(m)} style={{ ...actionBtn("var(--success)"), marginTop: 4 }}>Publish now</button>}
+                        </>
+                      ) : "—"}
+                    </td>
+                  )}
                   <td><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button onClick={() => setDetail(m)} style={actionBtn("var(--info)")}>View</button>
                     {isSuperAdmin && (
@@ -799,7 +826,7 @@ export default function MerchantsPage() {
                 <label style={{ ...lbl, marginTop: 12 }}>Opening hours (Cambodia time)</label>
                 <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, marginBottom: 8 }}>
                   <input type="checkbox" checked={form.hours_custom} onChange={e => setForm({ ...form, hours_custom: e.target.checked })} />
-                  Set opening hours (otherwise the shop is always open)
+                  Set opening hours (otherwise the shop is open 24/7)
                 </label>
                 {form.hours_custom && (
                   <div>

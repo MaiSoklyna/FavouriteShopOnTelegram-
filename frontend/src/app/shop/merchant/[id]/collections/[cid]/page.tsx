@@ -8,6 +8,7 @@ import { EmptyState, ProductCard, Skeleton } from "@/components/shop";
 import { Icon } from "@/components/shop/Icon";
 import { useCart } from "@/providers/CartProvider";
 import type { PublicCollection } from "@/types";
+import { img, IMG } from "@/lib/img";
 
 /** One of a shop's collections: cover, title, description, then its products in the shop's order. */
 export default function ShopCollectionPage() {
@@ -40,7 +41,7 @@ export default function ShopCollectionPage() {
         {data?.cover_url && (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={data.cover_url} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <img src={img(data.cover_url, IMG.WIDE)} alt="" className="absolute inset-0 h-full w-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10" />
           </>
         )}

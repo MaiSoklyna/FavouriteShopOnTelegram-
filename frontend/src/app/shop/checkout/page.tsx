@@ -20,6 +20,7 @@ import { formatKhr } from "@/lib/currency";
 import { areaName, useHomeLocation } from "@/lib/useHomeLocation";
 import { haptic, useMainButton } from "@/lib/telegram";
 import { DeliveryIcon, LocationIcon, PayoutIcon, QrIcon, StoreIcon } from "@/components/brand/Icons";
+import { img, IMG } from "@/lib/img";
 
 // Same look as the map's own loading state, so there is no flash of an empty box
 // Full-screen picker (search places or move the map); nothing to show until it opens
@@ -291,11 +292,16 @@ function CheckoutContent() {
     let stopped = false;
     const id = setInterval(async () => {
       try {
-        const res = await api.get<{ data: { payment_status: string } }>(`/payments/payway/orders/${orderId}/status`);
+        const res = await api.get<{ data: { payment_status: string; order_status?: string } }>(`/payments/payway/orders/${orderId}/status`);
         if (!stopped && res.data?.payment_status === "paid") {
           stopped = true;
           clearInterval(id);
           handlePaid();
+        } else if (!stopped && res.data?.order_status === "expired") {
+          stopped = true;
+          clearInterval(id);
+          setKhqrData(null);
+          setQrError("The time to pay this order ran out, so it expired. Please place the order again.");
         }
       } catch { /* keep polling */ }
     }, 4000);
@@ -606,7 +612,7 @@ function CheckoutContent() {
           ) : (
             <section className="mt-3 flex items-center gap-3 rounded-hero bg-card p-3.5 shadow-fos-sm">
               <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-thumb bg-surface text-[22px]">
-                {shop?.logo_url ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" /> : shop?.icon_emoji || <Icon name="store" size={22} className="text-navy-700" />}
+                {shop?.logo_url ? <img src={img(shop.logo_url, IMG.LOGO)} alt="" className="h-full w-full object-cover" /> : shop?.icon_emoji || <Icon name="store" size={22} className="text-navy-700" />}
               </span>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[14px] font-extrabold text-ink-900">{shop?.name || "The shop"}</div>
@@ -716,6 +722,12 @@ function CheckoutContent() {
         {[...blockers, ...(orderError ? [orderError] : []), ...(quoteError && !outOfArea && quote ? [quoteError] : [])].map((m) => (
           <div key={m} role="alert" className="mt-3 rounded-card bg-tint-caution px-3.5 py-3 text-[13px] font-bold text-caution-500">{m}</div>
         ))}
+
+        <p className="mt-4 text-center text-[12px] leading-5 text-ink-500" data-testid="checkout-legal">
+          By placing this order you agree to the <a href="/shop/terms" className="font-bold text-navy-700 underline">Terms of Service</a>.
+          {payment !== "cod" && " Online orders must be paid within 30 minutes."}
+          {" "}See how we use your details in the <a href="/shop/privacy" className="font-bold text-navy-700 underline">Privacy Policy</a>.
+        </p>
       </div>
 
       {!inTelegram && (

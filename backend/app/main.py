@@ -22,6 +22,7 @@ from app.routes import (
     addresses,
     ai,
     analytics,
+    attributes,
     auth,
     banners,
     cart,
@@ -32,6 +33,7 @@ from app.routes import (
     featured_categories,
     loyalty,
     merchant_dashboard,
+    merchant_setup,
     merchant_staff,
     merchants,
     notifications,
@@ -41,6 +43,7 @@ from app.routes import (
     products,
     promos,
     promotions,
+    refunds,
     reviews,
     sellers,
     settlements,
@@ -52,12 +55,10 @@ from app.routes import (
 )
 
 logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL, logging.INFO))
-# Telegram Bot API URLs carry the bot token; keep httpx request lines out of the logs.
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logger = logging.getLogger(__name__)
 # httpx logs every request URL at INFO, and Telegram Bot API URLs carry the bot token
 # (api.telegram.org/bot<token>/...). Keep request lines out of the logs.
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
 
 _DEFAULT_DEV_ORIGINS = [
     "http://localhost:3000",
@@ -122,6 +123,7 @@ app.include_router(products.router, prefix="/api")
 app.include_router(banners.router, prefix="/api")
 app.include_router(promotions.router, prefix="/api")
 app.include_router(collections.router, prefix="/api")
+app.include_router(attributes.router, prefix="/api")
 app.include_router(featured_categories.router, prefix="/api")
 
 # Cart
@@ -154,6 +156,8 @@ app.include_router(payments_stripe.router, prefix="/api")
 
 # Merchant settlement (earnings, payouts, payout accounts)
 app.include_router(settlements.router, prefix="/api")
+app.include_router(refunds.router, prefix="/api")
+app.include_router(merchant_setup.router, prefix="/api")
 
 # Promos
 app.include_router(promos.router, prefix="/api")

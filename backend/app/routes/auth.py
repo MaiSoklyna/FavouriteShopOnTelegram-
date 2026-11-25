@@ -47,12 +47,14 @@ from app.core.security import (
     verify_telegram_hash,
 )
 from app.db.client import SupabaseClient
-from app.services import audit
+from app.services import audit, password_reset
 from app.models.auth import (
     AdminLoginRequest,
     AdminLoginResponse,
     AdminUser,
     ChangePasswordRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
     CreateMerchantAdminRequest,
     UpdateMerchantAdminRequest,
     LoginSessionRequest,
@@ -581,6 +583,53 @@ async def change_password(request: Request, body: ChangePasswordRequest, user: T
             {"password_hash": hash_password(body.new_password)}
         )
     return {"success": True}
+
+
+# ═══════════════════════════════════════════════════════════════
+#  FORGOT PASSWORD (dashboard accounts, link sent by Telegram)
+# ═══════════════════════════════════════════════════════════════
+
+FORGOT_REPLY = (
+    "If that email belongs to a dashboard account with Telegram linked, we've sent a reset link to that "
+    "Telegram account. It works for 30 minutes."
+)
+
+
+async def _telegram_send(telegram_id: int, text: str) -> bool:
+    from app.utils.bot_manager import send_telegram_message  # late import: starts the bot only when needed
+    return await send_telegram_message(telegram_id, text, parse_mode="HTML", disable_web_page_preview=True) is not None
+
+
+@router.post("/forgot-password")
+@limiter.limit("3/minute")
+async def forgot_password(request: Request, body: ForgotPasswordRequest):
+    """Send a password reset link to the Telegram linked to this email's dashboard account.
+
+    Always gives the same answer, so it cannot be used to find out which emails have accounts."""
+    async with SupabaseClient.service_role() as db:
+        await password_reset.request_reset(db, body.email, _telegram_send)
+    return {"success": True, "message": FORGOT_REPLY}
+
+
+@router.post("/reset-password")
+@limiter.limit("5/minute")
+async def reset_password(request: Request, body: ResetPasswordRequest):
+    """Set a new password with the link from Telegram. The link works once."""
+    async with SupabaseClient.service_role() as db:
+        done = await password_reset.reset_password(db, body.token, body.new_password)
+        account = done["account"]
+        if done["kind"] == "merchant_admin":
+            await audit.record(
+                db, None, merchant_id=account.get("merchant_id"), action="account.password_reset",
+                target_type="staff", target_id=account["id"], target_label=account.get("full_name"),
+                new={"by": "reset link sent to Telegram"},
+            )
+    if account.get("telegram_id"):
+        await _telegram_send(
+            account["telegram_id"],
+            "🔐 Your Byme24 dashboard password was just changed. If this wasn't you, contact the platform admin now.",
+        )
+    return {"success": True, "message": "Your password is changed. You can log in with it now."}
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -134,7 +134,7 @@ class Db:
         self._lock = asyncio.Lock()
         self.tables = {
             "users": [{"id": 1, "telegram_id": 111}, {"id": 2, "telegram_id": 222}, {"id": 3, "telegram_id": 333}],
-            "merchants": [{"id": 3, "name": "Bloom"}, {"id": 4, "name": "Cakes"}],
+            "merchants": [{"id": 3, "name": "Bloom", "status": "active", "setup_completed_at": "2026-01-01T00:00:00Z"}, {"id": 4, "name": "Cakes", "status": "active", "setup_completed_at": "2026-01-01T00:00:00Z"}],
             "promo_codes": [
                 code(10, "SAVE10", per_user_limit=1),
                 code(11, "BIG20", value=20, min_order=20),

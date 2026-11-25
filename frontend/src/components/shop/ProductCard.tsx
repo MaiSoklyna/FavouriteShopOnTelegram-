@@ -9,6 +9,7 @@ import { isOutOfStock, OutOfStockOverlay } from "./OutOfStock";
 import { PriceTag } from "./PriceTag";
 import { RatingPill } from "./Pill";
 import { Icon } from "./Icon";
+import { img, IMG } from "@/lib/img";
 
 interface ProductCardProps {
   product: Product;
@@ -67,7 +68,7 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
       {/* Image 1:1 on a tinted background */}
       <div className="relative aspect-square bg-surface">
         {product.primary_image ? (
-          <img src={product.primary_image} alt={product.name} loading="lazy" className="h-full w-full object-cover" />
+          <img src={img(product.primary_image, IMG.CARD)} alt={product.name} loading="lazy" className="h-full w-full object-cover" />
         ) : (
           <div className="grid h-full w-full place-items-center text-4xl">{product.icon_emoji || <Icon name="box" size={36} className="text-line" />}</div>
         )}

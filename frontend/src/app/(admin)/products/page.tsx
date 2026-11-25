@@ -4,11 +4,14 @@ import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
-import type { Product, Category, Merchant, AdminUser } from "@/types";
+import type { Product, Category, Merchant, AdminUser, AttributeTemplate, AttributeValue } from "@/types";
 import { VariantsEditor, type VariantGroup } from "@/components/admin/VariantsEditor";
+import { DetailsEditor } from "@/components/admin/DetailsEditor";
+import { completeness, filled } from "@/lib/attributes";
 import { BrandLoader } from "@/components/ui/Spinner";
 import { usePermissions } from "@/lib/permissions";
 import { AddIcon, DeleteIcon, EditIcon, FilterIcon } from "@/components/brand/Icons";
+import { copyLink, productLink } from "@/lib/deeplink";
 
 export default function ProductsPage() {
   const { can } = usePermissions();
@@ -23,6 +26,10 @@ export default function ProductsPage() {
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState(0);
   const [filterShop, setFilterShop] = useState(0);
+  // Bulk: tick products, then put them all in one category
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkCat, setBulkCat] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [modal, setModal] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -31,6 +38,11 @@ export default function ProductsPage() {
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [variants, setVariants] = useState<VariantGroup[]>([]);
+  // Product details (attribute templates): all templates for the list's completeness column,
+  // the shop's own templates for the form, and the product's chosen template and values
+  const [allTemplates, setAllTemplates] = useState<AttributeTemplate[]>([]);
+  const [shopTemplates, setShopTemplates] = useState<AttributeTemplate[]>([]);
+  const [details, setDetails] = useState<{ templateId: number; values: Record<string, AttributeValue>; hadTemplate: boolean }>({ templateId: 0, values: {}, hadTemplate: false });
   const fileRef = useRef<HTMLInputElement>(null);
 
   const flash = (msg: string, ok = true) => { setToast({ show: true, msg, ok }); setTimeout(() => setToast(t => ({ ...t, show: false })), 3000); };
@@ -54,22 +66,73 @@ export default function ProductsPage() {
   }
 
   useEffect(() => { load(); }, []);
+  // From Shop setup: /products?new=1 opens the add-product form straight away
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("new") === "1") openCreate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => { api.get<{ data: AttributeTemplate[] }>("/attribute-templates").then(r => setAllTemplates(r.data)).catch(() => setAllTemplates([])); }, []);
+
+  // The templates this product's shop may use, and the suggested one for a new product
+  useEffect(() => {
+    if (!modal) return;
+    if (isSuperAdmin && !form.merchant_id) { setShopTemplates([]); return; }
+    const params = isSuperAdmin ? { merchant_id: form.merchant_id } : undefined;
+    api.get<{ data: AttributeTemplate[]; suggested_id: number | null }>("/attribute-templates/for-shop", { params })
+      .then(r => {
+        setShopTemplates(r.data);
+        if (!editId && r.suggested_id) setDetails(d => (d.templateId ? d : { ...d, templateId: r.suggested_id! }));
+      })
+      .catch(() => setShopTemplates([]));
+  }, [modal, form.merchant_id, isSuperAdmin, editId]);
+
+  const templateById = new Map(allTemplates.map(t => [t.id, t]));
+  // Brand (and other text) values this shop already uses, offered as suggestions
+  const suggestions: Record<string, string[]> = {};
+  for (const p of products) for (const [k, v] of Object.entries(p.attributes || {})) {
+    if (typeof v === "string" && v.trim()) {
+      const list = (suggestions[k] ||= []);
+      if (!list.includes(v)) list.push(v);
+    }
+  }
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [search, filterCat, filterShop]);
   useAutoRefresh(load, { interval: 30000 });
 
   // Category options: global ones plus those of the shop being edited / filtered
   const catsFor = (shopId: number) => categories.filter(c => !c.merchant_id || !shopId || c.merchant_id === shopId);
+
+  const toggle = (id: number) => setSelected(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const allTicked = products.length > 0 && products.every(p => selected.has(p.id));
+  const tickAll = () => setSelected(allTicked ? new Set() : new Set(products.map(p => p.id)));
+  // Products of one shop can go to that shop's categories; a mix of shops only to platform-wide ones
+  const selectedShops = Array.from(new Set(products.filter(p => selected.has(p.id)).map(p => p.merchant_id)));
+  const bulkCats = selectedShops.length === 1 ? catsFor(selectedShops[0]).filter(c => c.merchant_id === selectedShops[0] || !c.merchant_id) : categories.filter(c => !c.merchant_id);
+
+  async function applyBulkCategory() {
+    if (!bulkCat) { flash("Choose a category", false); return; }
+    setBulkBusy(true);
+    try {
+      const res = await api.post<{ changed: number; to: string | null }>("/products/bulk/category", {
+        product_ids: Array.from(selected), category_id: bulkCat === "none" ? null : Number(bulkCat),
+      });
+      flash(`${res.changed} product${res.changed === 1 ? "" : "s"} moved to ${res.to ?? "no category"}`);
+      setSelected(new Set()); setBulkCat(""); load();
+    } catch (e: any) { flash(e?.detail || "Could not change the category", false); }
+    setBulkBusy(false);
+  }
   const shopName = (id: number) => shops.find(s => s.id === id)?.name;
   const ownShopName = products[0]?.merchant_name;
 
   function openCreate() {
     setEditId(null); setForm({ ...EMPTY_FORM, merchant_id: isSuperAdmin ? filterShop : 0 });
-    setFiles([]); setPreviews([]); setVariants([]); setModal(true);
+    setFiles([]); setPreviews([]); setVariants([]); setDetails({ templateId: 0, values: {}, hadTemplate: false }); setModal(true);
   }
 
   async function openEdit(p: Product) {
     setEditId(p.id); setForm({ name: p.name, description: p.description || "", base_price: p.base_price, compare_price: p.compare_price || 0, stock: p.stock, sku: p.sku || "", icon_emoji: p.icon_emoji || "", delivery_days: p.delivery_days || 3, category_id: p.category_id || 0, merchant_id: p.merchant_id, is_active: p.is_active, is_featured: p.is_featured || false });
-    setPreviews(p.primary_image ? [p.primary_image] : []); setFiles([]); setVariants([]); setModal(true);
+    setPreviews(p.primary_image ? [p.primary_image] : []); setFiles([]); setVariants([]);
+    setDetails({ templateId: p.attribute_template_id || 0, values: { ...(p.attributes || {}) }, hadTemplate: !!p.attribute_template_id });
+    setModal(true);
 
     // Fetch full product with variants
     try {
@@ -108,14 +171,18 @@ export default function ProductsPage() {
       }
     }
     setSaving(true);
+    // Details are sent only once the templates exist (migration 036); 0 clears a template
+    const detailPayload = allTemplates.length && (details.templateId || details.hadTemplate)
+      ? { attribute_template_id: details.templateId || 0, attributes: details.templateId ? filled(details.values) : {} }
+      : {};
     try {
       let productId = editId;
       if (editId) {
-        await api.patch(`/products/${editId}`, isSuperAdmin ? form : { ...form, merchant_id: undefined });
+        await api.patch(`/products/${editId}`, { ...(isSuperAdmin ? form : { ...form, merchant_id: undefined }), ...detailPayload });
         // Replace variants on edit
         await api.put(`/products/${editId}/variants`, { variants });
       } else {
-        const p = await api.post<Product>("/products", { ...form, variants });
+        const p = await api.post<Product>("/products", { ...form, variants, ...detailPayload });
         productId = p.id;
       }
       // Upload images
@@ -171,15 +238,32 @@ export default function ProductsPage() {
         </select>
       </div>
 
+      {selected.size > 0 && (
+        <div className="admin-card" data-testid="bulk-bar"
+          style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12, padding: "10px 14px", border: "1px solid var(--accent, #0088cc)" }}>
+          <strong style={{ fontSize: 13 }}>{selected.size} selected</strong>
+          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Move to</span>
+          <select className="admin-input" style={{ maxWidth: 240 }} value={bulkCat} onChange={e => setBulkCat(e.target.value)} data-testid="bulk-category">
+            <option value="">Choose a category…</option>
+            {bulkCats.map(c => <option key={c.id} value={c.id}>{c.icon_emoji} {c.name}{c.merchant_id ? "" : " (platform)"}</option>)}
+            <option value="none">No category</option>
+          </select>
+          <button className="btn-primary" onClick={applyBulkCategory} disabled={bulkBusy} data-testid="bulk-apply">{bulkBusy ? "Moving…" : "Apply"}</button>
+          <button className="btn-outline" onClick={() => setSelected(new Set())}>Clear</button>
+          {selectedShops.length > 1 && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Products from several shops can only go to a platform category.</span>}
+        </div>
+      )}
+
       {/* Table */}
       <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? <BrandLoader /> : (
           <table className="admin-table">
-            <thead><tr><th>Image</th><th>Name</th>{isSuperAdmin && <th>Shop</th>}<th>Category</th><th>Price</th><th>Stock</th><th>Active</th><th>Actions</th></tr></thead>
+            <thead><tr><th style={{ width: 32 }}><input type="checkbox" aria-label="Select all" checked={allTicked} onChange={tickAll} /></th><th>Image</th><th>Name</th>{isSuperAdmin && <th>Shop</th>}<th>Category</th><th>Price</th><th>Stock</th>{allTemplates.length > 0 && <th>Details</th>}<th>Active</th><th>Actions</th></tr></thead>
             <tbody>
-              {products.length === 0 ? <tr><td colSpan={isSuperAdmin ? 8 : 7} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>No products found</td></tr> :
+              {products.length === 0 ? <tr><td colSpan={(isSuperAdmin ? 9 : 8) + (allTemplates.length > 0 ? 1 : 0)} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>No products found</td></tr> :
               products.map(p => (
-                <tr key={p.id}>
+                <tr key={p.id} style={selected.has(p.id) ? { background: "var(--info-light)" } : undefined}>
+                  <td><input type="checkbox" aria-label={`Select ${p.name}`} checked={selected.has(p.id)} onChange={() => toggle(p.id)} data-testid={`pick-${p.id}`} /></td>
                   <td>{p.primary_image ? <img src={p.primary_image} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }} /> : <div style={{ width: 44, height: 44, borderRadius: 8, background: "var(--bg-secondary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{p.icon_emoji || "📦"}</div>}</td>
                   <td><p style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</p>{p.sku && <p style={{ fontSize: 10, fontFamily: "monospace", color: "var(--text-muted)" }}>{p.sku}</p>}</td>
                   {isSuperAdmin && (
@@ -194,8 +278,9 @@ export default function ProductsPage() {
                   <td>{p.category_name || "—"}</td>
                   <td><span style={{ fontWeight: 600, fontFamily: "monospace" }}>${p.base_price}</span>{p.compare_price && p.compare_price > p.base_price && <span style={{ fontSize: 11, textDecoration: "line-through", color: "var(--text-muted)", marginLeft: 4 }}>${p.compare_price}</span>}</td>
                   <td style={{ color: p.stock === 0 ? "var(--danger)" : p.stock < 5 ? "var(--warning)" : "var(--text)", fontWeight: p.stock < 5 ? 600 : 400 }}>{p.stock}</td>
+                  {allTemplates.length > 0 && <td><DetailsBadge template={p.attribute_template_id ? templateById.get(p.attribute_template_id) : undefined} values={p.attributes} /></td>}
                   <td><div onClick={() => toggleActive(p)} style={{ width: 40, height: 22, borderRadius: 11, background: p.is_active ? "var(--success)" : "#d1d5db", cursor: "pointer", position: "relative", transition: "background 0.2s" }}><div style={{ width: 18, height: 18, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: p.is_active ? 20 : 2, transition: "left 0.2s" }} /></div></td>
-                  <td><div style={{ display: "flex", gap: 4 }}><button onClick={() => openEdit(p)} title="Edit" aria-label="Edit" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent, #103562)", padding: 4 }}><EditIcon size={18} /></button>{can("products.delete") && <button onClick={() => deleteProduct(p.id)} title="Delete" aria-label="Delete" style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", padding: 4 }}><DeleteIcon size={18} /></button>}</div></td>
+                  <td><div style={{ display: "flex", gap: 4 }}><button onClick={() => openEdit(p)} title="Edit" aria-label="Edit" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent, #103562)", padding: 4 }}><EditIcon size={18} /></button><button onClick={async () => flash((await copyLink(productLink(p.id))) ? "Telegram link copied: share it in your channel or chats" : productLink(p.id), true)} title="Copy Telegram link" aria-label={`Copy Telegram link to ${p.name}`} data-testid={`link-${p.id}`} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--accent, #103562)", padding: 4, fontSize: 15 }}>🔗</button>{can("products.delete") && <button onClick={() => deleteProduct(p.id)} title="Delete" aria-label="Delete" style={{ background: "none", border: "none", cursor: "pointer", color: "#EF4444", padding: 4 }}><DeleteIcon size={18} /></button>}</div></td>
                 </tr>
               ))}
             </tbody>
@@ -206,7 +291,7 @@ export default function ProductsPage() {
       {/* Modal */}
       {modal && (
         <div className="modal-overlay" onClick={() => setModal(false)}>
-          <div className="modal-content" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+          <div className="modal-content" style={{ maxWidth: 620, maxHeight: "92vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
             <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", marginBottom: 16 }}>{editId ? "Edit Product" : "New Product"}</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 8 }}>
@@ -253,6 +338,16 @@ export default function ProductsPage() {
                   <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Click to upload</p>
                 </div>
               </div>
+              {/* Product details (attribute template) */}
+              {allTemplates.length > 0 && (
+                <div>
+                  <label style={labelS}>Product details</label>
+                  {isSuperAdmin && !form.merchant_id
+                    ? <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Choose the shop first.</p>
+                    : <DetailsEditor templates={shopTemplates} templateId={details.templateId} values={details.values} suggestions={suggestions}
+                        onChange={(templateId, values) => setDetails(d => ({ ...d, templateId, values }))} />}
+                </div>
+              )}
               {/* Variants */}
               <div>
                 <label style={labelS}>Variants (size & color)</label>
@@ -273,6 +368,14 @@ export default function ProductsPage() {
       )}
     </div>
   );
+}
+
+/** "Details missing" or how complete a product's details are. */
+function DetailsBadge({ template, values }: { template?: AttributeTemplate; values?: Record<string, unknown> }) {
+  if (!template) return <span className="badge badge-pending" title="Open the product and choose what kind of product it is">Details missing</span>;
+  const c = completeness(template, values);
+  const cls = c.score >= 80 ? "badge-delivered" : c.score >= 40 ? "badge-confirmed" : "badge-pending";
+  return <span className={`badge ${cls}`} title={`${template.name}: recommended ${c.recommendedFilled}/${c.recommendedTotal}, optional ${c.optionalFilled}/${c.optionalTotal}`}>{c.score}%</span>;
 }
 
 const EMPTY_FORM = { name: "", description: "", base_price: 0, compare_price: 0, stock: 0, sku: "", icon_emoji: "", delivery_days: 3, category_id: 0, merchant_id: 0, is_active: true, is_featured: false };

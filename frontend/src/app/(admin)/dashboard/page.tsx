@@ -7,6 +7,7 @@ import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { DashboardStats, AdminUser, ShopReview, ShopReviewSummary } from "@/types";
 import { RatingSummary } from "@/components/admin/ShopReviewsPanel";
 import { ShopOverview } from "@/components/admin/ShopOverview";
+import { SetupChecklist } from "@/components/admin/SetupChecklist";
 import { HiOutlineShoppingBag, HiOutlineClipboardList, HiOutlineCurrencyDollar, HiOutlineClock, HiOutlineUsers, HiOutlineTrendingUp } from "react-icons/hi";
 
 export default function DashboardPage() {
@@ -60,6 +61,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      {!isSuperAdmin && <SetupChecklist />}
       {!isSuperAdmin && <WorkQueue staff={isShopStaff} />}
 
       {!isSuperAdmin ? <ShopOverview /> : loading ? (

@@ -1,5 +1,6 @@
 import { Icon } from "./Icon";
 import { THEMES, type ShopTheme } from "@/lib/shopTheme";
+import { img, IMG } from "@/lib/img";
 
 // Where the five cover icons sit (% of the cover), how big and how tilted — one hero icon on the right.
 const SPOTS = [
@@ -15,7 +16,7 @@ const SPOTS = [
  * theme colour, a soft halo and the category's line icons scattered across.
  */
 export function ShopCover({ url, theme, className = "" }: { url?: string | null; theme: ShopTheme; className?: string }) {
-  if (url) return <img src={url} alt="" loading="lazy" className={`h-full w-full object-cover ${className}`} />;
+  if (url) return <img src={img(url, IMG.WIDE)} alt="" loading="lazy" className={`h-full w-full object-cover ${className}`} />;
   const t = THEMES[theme];
   return (
     <div className={`fos-gen-cover relative h-full w-full overflow-hidden ${className}`} style={{ background: t.bg, color: t.ink }} aria-hidden="true">

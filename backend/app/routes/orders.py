@@ -6,13 +6,16 @@ preventing the overselling race condition in the old implementation.
 
 from __future__ import annotations
 
+import hmac
 import logging
 import random
 from datetime import datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 
-from fastapi import APIRouter
+import httpx
+from fastapi import APIRouter, Header
 
+from app.config import settings
 from app.core.constants import (
     DEFAULT_DELIVERY_FEE,
     FREE_DELIVERY_THRESHOLD,
@@ -25,7 +28,10 @@ from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, 
 from app.core.permissions import Perm, denied_message, role_can
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.services import activity, audit, coupons, deliveries, inventory, notify, order_status, settlement, shop_reviews
+from app.services import (
+    activity, audit, coupons, deliveries, inventory, notify, order_expiry, order_status, refunds, settlement,
+    order_group, shop_reviews, shop_setup,
+)
 from app.services import promo_schedule
 from app.services.delivery import is_open, quote_delivery, valid_point
 
@@ -53,6 +59,8 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
         raise BadRequestError("merchant_id and delivery_address are required")
 
     async with SupabaseClient.service_role() as db:
+        # Abandoned online orders give their stock back before this order asks for it
+        await order_expiry.sweep_if_due(db)
         db_user = await _get_db_user(db, user)
         user_id = db_user["id"]
 
@@ -111,6 +119,10 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
             order_data["delivery_latitude"], order_data["delivery_longitude"] = dest
         if priced["distance_km"] is not None:
             order_data["distance_km"] = float(priced["distance_km"])
+        # Online payment: the customer has until this moment to pay (migration 038)
+        deadline = order_expiry.payment_deadline(order_data["payment_method"], now)
+        if deadline:
+            order_data["payment_expires_at"] = deadline.isoformat()
 
         # Optional fields — only include if present to avoid schema errors
         for field in ("delivery_province", "customer_note", "delivery_phone", "delivery_name"):
@@ -149,7 +161,7 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
             raise
         order_id = None
         try:
-            rows = await db.from_("orders").insert(order_data)
+            rows = await _insert_order(db, order_data)
             order = rows[0]
             order_id = order["id"]
 
@@ -217,10 +229,7 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
                 "product_name,quantity,unit_price,subtotal"
             )
 
-            from bot.notifications import (
-                send_order_placed_to_customer,
-                send_order_placed_to_merchant_group,
-            )
+            from bot.notifications import send_order_placed_to_customer
             await send_order_placed_to_customer(
                 db_user.get("telegram_id") or user.telegram_id,
                 user_id=db_user.get("id"),
@@ -238,20 +247,9 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
             )
 
             # A QR order reaches the shop only once it is paid
-            # (sent from payments._settle); COD orders go now.
+            # (sent from payments._settle); COD orders go now, with Accept / Reject buttons.
             if merchant_group_id and order_data["payment_method"] not in ("khqr", "stripe"):
-                await send_order_placed_to_merchant_group(
-                    merchant_group_id,
-                    order_id=order_id,
-                    order_code=order_code,
-                    merchant_name=merchant_name,
-                    items=order_items_for_dm,
-                    total=total,
-                    payment_method=order_data["payment_method"],
-                    delivery_address=delivery_address,
-                    customer_name=order_data.get("customer_name") or order_data.get("delivery_name"),
-                    customer_phone=order_data.get("customer_phone") or order_data.get("delivery_phone"),
-                )
+                await order_group.post_new(db, order_id)
         except Exception:
             logger.exception("Order notification dispatch failed (non-fatal)")
 
@@ -269,6 +267,7 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
             "total": total,
             "status": "pending",
             "payment_method": order_data["payment_method"],
+            "payment_expires_at": order.get("payment_expires_at"),
         },
     }
 
@@ -350,6 +349,7 @@ async def list_user_orders(
     """List the current user's orders."""
     async with SupabaseClient.service_role() as db:
         db_user = await _get_db_user(db, user)
+        await order_expiry.expire_overdue(db, user_id=db_user["id"])
         q = db.from_("orders").eq("user_id", db_user["id"]).order("created_at", desc=True)
         if status:
             q = q.eq("status", status)
@@ -364,6 +364,8 @@ async def get_order(order_id: int, user: TokenClaims = require_role(Role.USER, R
         order = await db.from_("orders").eq("id", order_id).select_one()
         if not order:
             raise NotFoundError("Order", order_id)
+        if order_expiry.is_overdue(order) and await order_expiry.expire_overdue(db, order_id=order_id):
+            order = await db.from_("orders").eq("id", order_id).select_one()
 
         # Authorization: user can only see own orders, admin can see merchant orders
         if user.is_user:
@@ -380,6 +382,8 @@ async def get_order(order_id: int, user: TokenClaims = require_role(Role.USER, R
         order["delivery"] = await deliveries.customer_view(db, order_id)
         # The review this order's customer left for the shop (null until they do)
         order["shop_review"] = await shop_reviews.for_order(db, order_id)
+        # Money going back to the customer, if the order was paid and did not go ahead
+        order["refund"] = await refunds.for_order(db, order_id)
     return order
 
 
@@ -410,8 +414,37 @@ async def cancel_order(order_id: int, user: TokenClaims = require_role(Role.USER
         items = await db.from_("order_items").eq("order_id", order_id).select("product_id,quantity,selected_variants")
         await inventory.release_stock(db, items)
         await coupons.release_for_order(db, order_id)
+        await refunds.request(db, order, "order_cancelled", actor_type="user", actor_id=str(db_user["id"]))
         await notify.order_status_changed(db, order_id, "cancelled", by_customer=True)
+        await order_group.sync(db, order_id, order_group.footer_for("cancelled", "the customer", verb="Cancelled"))
     return {"success": True, "message": "Order cancelled"}
+
+
+@router.post("/expire-due")
+async def expire_due_orders(x_cron_secret: str | None = Header(default=None)):
+    """Expire every unpaid online order past its payment deadline, in every shop.
+
+    For an external scheduler (e.g. Supabase pg_cron every 5 minutes). Expiry also happens on
+    ordinary traffic, so this is a backstop. Needs the X-Cron-Secret header to match CRON_SECRET;
+    without a configured secret every call is refused."""
+    secret = settings.CRON_SECRET
+    if not secret or not x_cron_secret or not hmac.compare_digest(secret, x_cron_secret):
+        raise ForbiddenError("Not allowed")
+    async with SupabaseClient.service_role() as db:
+        expired = await order_expiry.expire_overdue(db)
+    return {"success": True, "expired": expired}
+
+
+async def _insert_order(db, order_data: dict) -> list[dict]:
+    """Insert the order. Before migration 038 the deadline column does not exist: place the order
+    without it (it then simply never expires) rather than refusing the customer."""
+    try:
+        return await db.from_("orders").insert(order_data)
+    except httpx.HTTPStatusError as exc:
+        if "payment_expires_at" not in order_data or "payment_expires_at" not in exc.response.text:
+            raise
+        logger.warning("orders.payment_expires_at missing: run supabase/migrations/038_order_expiry.sql")
+        return await db.from_("orders").insert({k: v for k, v in order_data.items() if k != "payment_expires_at"})
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -429,6 +462,10 @@ async def list_orders_admin(
 ):
     """List orders for admin dashboard."""
     async with SupabaseClient.service_role() as db:
+        if user.role == Role.MERCHANT_ADMIN:
+            await order_expiry.expire_overdue(db, merchant_id=user.merchant_id)
+        else:
+            await order_expiry.expire_overdue(db, merchant_id=merchant_id)
         q = db.from_("orders").order("created_at", desc=True)
 
         # Merchant admin can only see their merchant's orders
@@ -484,6 +521,12 @@ async def update_order_status(
             target_type="order", target_id=order_id, target_label=order.get("order_code") or f"#{order_id}",
             old={"status": old_status}, new=new,
         )
+        if new_status in ("confirmed", "cancelled"):
+            fresh = await db.from_("orders").eq("id", order_id).select_one("payment_status")
+            who = user.name or ("the platform" if user.is_super_admin else "the shop")
+            await order_group.sync(db, order_id, order_group.footer_for(
+                new_status, who, reason=body.get("admin_note"), paid=(fresh or {}).get("payment_status") in ("paid", "refunded"),
+                where=" in the dashboard"))
     return {"success": True}
 
 
@@ -525,6 +568,8 @@ async def _price_cart(
         Decimal("0.00"),
     )
     shop = await db.from_("merchants").eq("id", merchant_id).select_one() or {}
+    if not shop_setup.is_visible(shop):
+        raise BadRequestError("This shop isn't taking orders right now")
     distance_km, delivery_fee, eta = _delivery_for(shop, delivery_type, dest)
     if subtotal >= Decimal(str(FREE_DELIVERY_THRESHOLD)):
         delivery_fee = Decimal("0.00")

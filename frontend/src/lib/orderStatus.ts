@@ -31,6 +31,8 @@ const FLOW = ["pending", "confirmed", "processing", "shipped", "delivered"];
 export const ACTIVE_STATUSES = FLOW.slice(0, 4);
 
 export const isPickup = (o: TrackOrder) => o.delivery_type === "pickup";
+/** Over without being delivered: cancelled, or an online order that wasn't paid in time. */
+export const isClosedUnsold = (status: string) => status === "cancelled" || status === "expired";
 /** A KHQR order waits for its payment before the shop sees it. */
 export const awaitingPayment = (o: TrackOrder) =>
   (o.payment_method === "khqr" || o.payment_method === "stripe") && o.payment_status !== "paid" && o.status === "pending";
@@ -76,6 +78,7 @@ export function headline(o: TrackOrder): Headline {
   const shop = o.merchant_name || "the shop";
   const pickup = isPickup(o);
   if (o.status === "cancelled") return { title: "Order cancelled", sub: "Any stock was returned to the shop", icon: "close", tone: "muted" };
+  if (o.status === "expired") return { title: "Order expired", sub: "It wasn't paid in time, so nothing was charged. You can order again any time.", icon: "clock", tone: "muted" };
   if (awaitingPayment(o)) return { title: "Waiting for payment", sub: `${shop} gets your order once it's paid`, icon: "clock", tone: "mango" };
   switch (o.status) {
     case "pending": return { title: "Waiting for the shop", sub: `${shop} will confirm shortly`, icon: "clock", tone: "navy" };
@@ -91,7 +94,7 @@ export function headline(o: TrackOrder): Headline {
 
 /** 0..1 along the status flow — for the small bar on order cards. */
 export function progress(o: TrackOrder): number {
-  if (o.status === "cancelled") return 0;
+  if (isClosedUnsold(o.status)) return 0;
   const i = FLOW.indexOf(o.status);
   return i < 0 ? 0 : (i + 1) / FLOW.length;
 }
@@ -101,7 +104,7 @@ export function statusLabel(o: TrackOrder): string {
   if (awaitingPayment(o)) return "Unpaid";
   const map: Record<string, string> = {
     pending: "Placed", confirmed: "Confirmed", processing: "Preparing",
-    shipped: isPickup(o) ? "Ready" : "On the way", delivered: isPickup(o) ? "Picked up" : "Delivered", cancelled: "Cancelled",
+    shipped: isPickup(o) ? "Ready" : "On the way", delivered: isPickup(o) ? "Picked up" : "Delivered", cancelled: "Cancelled", expired: "Expired",
   };
   return map[o.status] ?? o.status;
 }

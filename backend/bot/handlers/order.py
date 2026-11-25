@@ -75,7 +75,8 @@ async def view_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "preparing": "Preparing",
         "shipped": "Shipped",
         "delivered": "Delivered",
-        "cancelled": "Cancelled"
+        "cancelled": "Cancelled",
+        "expired": "Expired"
     }.get(order["status"], order["status"])
 
     text = f"**Order {order['order_code']}**\n\n"

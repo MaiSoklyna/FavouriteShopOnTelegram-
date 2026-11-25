@@ -33,15 +33,18 @@ const PERM_PATHS: [string, Perm][] = [
 
 const MENU: MenuItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: DashboardIcon },
+  { href: "/setup", label: "Shop setup", icon: SettingsIcon, merchantOnly: true },
   { href: "/products", label: "Products", icon: ProductsIcon },
   { href: "/orders", label: "Orders", icon: OrdersIcon },
   { href: "/categories", label: "Categories", icon: CategoryIcon },
   { href: "/featured-categories", label: "Home Categories", icon: HomeIcon, superOnly: true },
+  { href: "/attribute-templates", label: "Product Details", icon: CategoryIcon, superOnly: true },
   { href: "/promotions", label: "Promotions", icon: PromoIcon, perm: "marketing.manage" },
   { href: "/collections", label: "Collections", icon: CategoryIcon, perm: "marketing.manage" },
   { href: "/analytics", label: "Analytics", icon: ReportsIcon, perm: "sales.view" },
   { href: "/earnings", label: "Earnings", icon: PayoutIcon, shopOwnerOnly: true },
   { href: "/settlements", label: "Settlements", icon: PayoutIcon, superOnly: true },
+  { href: "/refunds", label: "Refunds", icon: PayoutIcon, superOnly: true },
   { href: "/reviews", label: "Reviews", icon: HiOutlineChatAlt2 },
   { href: "/drivers", label: "Drivers", icon: CustomersIcon },
   { href: "/support", label: "Support", icon: SupportIcon },

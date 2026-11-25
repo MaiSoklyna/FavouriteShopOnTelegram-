@@ -39,6 +39,9 @@ export interface NearbyShop {
   shop_subcategory?: string | null;
   /** The shop's own reviews (migration 029): how many, next to the existing `rating` below. */
   rating_count?: number;
+  /** Average of the shop's product reviews (used until it has shop reviews of its own). */
+  product_rating?: number | null;
+  product_review_count?: number;
   /** All computed by the server — the client never derives distance, fee, time or availability. */
   distance_km: number;
   distance_m: number;

@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes
 from app.config import settings
 from app.core.constants import ADMIN_TOKEN_EXPIRY, USER_TOKEN_EXPIRY, Role, shop_role
 from app.core.security import mint_jwt
+from app.services import deeplinks
 from bot.supabase_helpers import sb_get, sb_get_one, sb_post, sb_patch
 
 logger = logging.getLogger(__name__)
@@ -231,6 +232,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+    # Deep link to a product or shop (t.me/<bot>?start=p_123 / s_45): answer with a button that opens it
+    target = deeplinks.parse(session_id)
+    if target:
+        await _open_deep_link(update, db_user, telegram_id, *target)
+        return
+
     # Miniapp customer login
     if session_id:
         token = _make_user_token(db_user["id"], telegram_id)
@@ -269,6 +276,41 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=_build_menu_keyboard(miniapp_url),
         disable_web_page_preview=True,
     )
+
+
+async def _deep_link_target(kind: str, target_id: int) -> str | None:
+    """The name of the product or shop if customers may open it now, else None."""
+    if kind == "product":
+        p = await sb_get_one("products", f"select=id,name,is_active,merchant_id&id=eq.{target_id}")
+        if not p or not p.get("is_active"):
+            return None
+        shop = await sb_get_one("merchants", f"select=id,status,setup_completed_at&id=eq.{p['merchant_id']}")
+        return p["name"] if shop and shop.get("status") == "active" and shop.get("setup_completed_at") else None
+    shop = await sb_get_one("merchants", f"select=id,name,status,setup_completed_at&id=eq.{target_id}")
+    return shop["name"] if shop and shop.get("status") == "active" and shop.get("setup_completed_at") else None
+
+
+async def _open_deep_link(update: Update, db_user: dict, telegram_id: int, kind: str, target_id: int) -> None:
+    try:
+        name = await _deep_link_target(kind, target_id)
+    except Exception as e:
+        logger.warning("Deep link lookup failed for %s %s: %s", kind, target_id, e)
+        name = None
+    token = _make_user_token(db_user["id"], telegram_id)
+    if not name:
+        url = f"{settings.web_app_base}/shop?auth={token}"
+        text = "Sorry, that link no longer works: the item or shop isn't available. Have a look around the shop instead."
+        label = "Open Shop"
+    else:
+        url = f"{settings.web_app_base}{deeplinks.shop_path(kind, target_id)}?auth={token}"
+        text = f"{'🛍' if kind == 'product' else '🏬'} <b>{name}</b>\nTap below to open it."
+        label = "Open product" if kind == "product" else "Open shop"
+    if _is_https(url):
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton(label, web_app=WebAppInfo(url=url))]])
+        await update.message.reply_text(text, parse_mode="HTML", reply_markup=markup)
+    else:
+        await update.message.reply_text(f'{text}\n\n<a href="{url}">{label}</a>', parse_mode="HTML",
+                                        disable_web_page_preview=True)
 
 
 # ── /help command ───────────────────────────────────────────────

@@ -85,7 +85,7 @@ class Db:
         self.rpc_calls, self.rpc_result = [], {}
         self.tables = {
             "users": [{"id": 1, "telegram_id": 111}, {"id": 2, "telegram_id": 222}],
-            "merchants": [{"id": 3, "name": "Bloom", "status": "active"}, {"id": 4, "name": "Shut", "status": "suspended"}],
+            "merchants": [{"id": 3, "name": "Bloom", "status": "active", "setup_completed_at": "2026-01-01T00:00:00Z"}, {"id": 4, "name": "Shut", "status": "suspended", "setup_completed_at": "2026-01-01T00:00:00Z"}],
             "products": [{"id": 10, "merchant_id": 3, "name": "Rose", "is_active": True}, {"id": 11, "merchant_id": 3, "name": "Old", "is_active": False},
                          {"id": 12, "merchant_id": 4, "name": "X", "is_active": True}, {"id": 13, "merchant_id": 3, "name": "Tulip", "is_active": True}],
             "activity_events": [],

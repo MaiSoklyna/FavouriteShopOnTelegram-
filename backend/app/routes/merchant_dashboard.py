@@ -25,7 +25,7 @@ from app.core.permissions import Perm, role_can
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.routes.analytics import ORDER_MONEY, order_revenue
-from app.services import audit
+from app.services import audit, order_expiry
 from app.services.delivery import SHOP_TZ
 
 router = APIRouter(tags=["Shop dashboard"])
@@ -35,7 +35,7 @@ router = APIRouter(tags=["Shop dashboard"])
 WAITING = ("pending",)
 IN_PROGRESS = ("confirmed", "processing", "shipped")
 DONE = ("delivered",)
-CANCELLED = ("cancelled",)
+CANCELLED = ("cancelled", "expired")
 
 TOP_PRODUCTS = 5
 RECENT_ACTIVITY = 8
@@ -75,6 +75,7 @@ async def merchant_dashboard(
     previous_start = period_start - timedelta(days=days)
 
     async with SupabaseClient.service_role() as db:
+        await order_expiry.expire_overdue(db, merchant_id=shop)
         open_orders = await (
             db.from_("orders").eq("merchant_id", shop).in_("status", list(WAITING + IN_PROGRESS))
             .select("id,status")

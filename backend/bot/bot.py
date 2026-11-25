@@ -11,6 +11,8 @@ from bot.handlers.cart import (
 )
 from bot.handlers.order import my_orders, view_order, cancel_order
 from bot.handlers.support import my_profile, support
+from bot.handlers.link import link_group_command
+from bot.handlers.order_actions import order_action_callback
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -85,11 +87,14 @@ def create_bot_app(identity: User | None = None):
     app.add_handler(CommandHandler("cart", view_cart))
     app.add_handler(CommandHandler("profile", my_profile))
     app.add_handler(CommandHandler("support", support))
+    app.add_handler(CommandHandler("link", link_group_command))  # a shop's order group, from Shop setup
 
     # === Callback Query Handlers (order matters for pattern matching!) ===
 
     # Dashboard role selection (must be before main_menu)
     app.add_handler(CallbackQueryHandler(dash_role_callback, pattern=r"^dash_role_"))
+    # Accept / Reject on new-order messages in a shop's order group
+    app.add_handler(CallbackQueryHandler(order_action_callback, pattern=r"^oa:"))
 
     # Main Menu
     app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^main_menu$"))

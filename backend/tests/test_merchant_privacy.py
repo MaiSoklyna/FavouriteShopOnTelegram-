@@ -26,7 +26,7 @@ def merchant(id, status="active"):
         "aba_account": "000111222", "aba_account_name": "PRIVATE OWNER", "payout_enabled": True,
         "payout_verification_status": "verified", "payout_verified_at": "2026-11-01", "payout_verified_by": 1,
         "payout_rejection_reason": None, "commission_rate": "0.05", "loyalty_enabled": True,
-        "some_future_column": "must stay private",
+        "some_future_column": "must stay private", "setup_completed_at": "2026-01-01T00:00:00Z",
     }
 
 
@@ -42,6 +42,9 @@ class FakeQuery:
 
     def ilike(self, *_):
         return self
+
+    def in_(self, col, vals):
+        return FakeQuery([r for r in self.rows if r.get(col) in vals])
 
     async def select(self, *_):
         return [dict(r) for r in self.rows]
@@ -75,7 +78,7 @@ def login_as(role, merchant_id=None, merchant_role=None):
 def assert_public(shop):
     assert not any(k in shop for k in PRIVATE), shop
     # Allow-list: only known public fields plus computed ones, so a new column never leaks
-    allowed = set(merchants_route.PUBLIC_FIELDS) | {"product_count", "order_count", "shop_category", "shop_subcategory"}
+    allowed = set(merchants_route.PUBLIC_FIELDS) | {"product_count", "order_count", "product_rating", "product_review_count", "shop_category", "shop_subcategory"}
     assert set(shop) <= allowed, set(shop) - allowed
 
 

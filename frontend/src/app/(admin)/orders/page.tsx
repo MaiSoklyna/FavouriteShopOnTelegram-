@@ -7,12 +7,12 @@ import type { AssignableDriver, DeliveryInfo, Order } from "@/types";
 import { BrandLoader } from "@/components/ui/Spinner";
 import { usePermissions } from "@/lib/permissions";
 
-const TABS = ["all", "pending", "confirmed", "processing", "shipped", "delivered", "cancelled"];
+const TABS = ["all", "pending", "confirmed", "processing", "shipped", "delivered", "cancelled", "expired"];
 // Database values stay as-is; these are the names shown to merchants.
-const LABEL: Record<string, string> = { all: "All", pending: "Pending", confirmed: "Accepted", processing: "Preparing", shipped: "Out for Delivery", delivered: "Delivered", cancelled: "Cancelled" };
+const LABEL: Record<string, string> = { all: "All", pending: "Pending", confirmed: "Accepted", processing: "Preparing", shipped: "Out for Delivery", delivered: "Delivered", cancelled: "Cancelled", expired: "Expired (unpaid)" };
 const label = (s: string) => LABEL[s] || s;
 const NEXT: Record<string, string[]> = { pending: ["confirmed", "cancelled"], confirmed: ["processing", "cancelled"], processing: ["shipped", "cancelled"], shipped: ["delivered"] };
-const STATUS_COLORS: Record<string, string> = { pending: "badge-pending", confirmed: "badge-confirmed", processing: "badge-processing", shipped: "badge-shipped", delivered: "badge-delivered", cancelled: "badge-cancelled" };
+const STATUS_COLORS: Record<string, string> = { pending: "badge-pending", confirmed: "badge-confirmed", processing: "badge-processing", shipped: "badge-shipped", delivered: "badge-delivered", cancelled: "badge-cancelled", expired: "badge-expired" };
 
 export default function OrdersPage() {
   const { can } = usePermissions();
@@ -116,10 +116,19 @@ export default function OrdersPage() {
               <div><span style={{ color: "var(--text-muted)" }}>Phone: </span>{detail.customer_phone || "—"}</div>
               <div><span style={{ color: "var(--text-muted)" }}>Subtotal: </span>${Number(detail.subtotal).toFixed(2)}</div>
               <div><span style={{ color: "var(--text-muted)" }}>Total: </span><strong>${Number(detail.total).toFixed(2)}</strong></div>
-              <div><span style={{ color: "var(--text-muted)" }}>Payment: </span>{detail.payment_method || "—"}</div>
+              <div><span style={{ color: "var(--text-muted)" }}>Payment: </span>{detail.payment_method || "—"}{detail.payment_status === "refunded" ? " · refunded" : detail.payment_status === "paid" ? " · paid" : ""}</div>
               <div><span style={{ color: "var(--text-muted)" }}>Date: </span>{detail.created_at ? new Date(detail.created_at).toLocaleString() : "—"}</div>
               {detail.delivery_address && <div style={{ gridColumn: "1/3" }}><span style={{ color: "var(--text-muted)" }}>Address: </span>{detail.delivery_address}</div>}
               {detail.customer_note && <div style={{ gridColumn: "1/3" }}><span style={{ color: "var(--text-muted)" }}>Note: </span><em>{detail.customer_note}</em></div>}
+              {detail.refund && (
+                <div style={{ gridColumn: "1/3" }} data-testid="order-refund">
+                  <span style={{ color: "var(--text-muted)" }}>Refund: </span>
+                  ${Number(detail.refund.amount).toFixed(2)} to the customer ·{" "}
+                  {detail.refund.status === "refunded"
+                    ? <span className="badge badge-delivered">Sent{detail.refund.completed_at ? ` ${new Date(detail.refund.completed_at).toLocaleDateString()}` : ""}</span>
+                    : <span className="badge badge-pending">Being refunded by the platform</span>}
+                </div>
+              )}
             </div>
             {detail.items && detail.items.length > 0 && (
               <div style={{ marginBottom: 16 }}>

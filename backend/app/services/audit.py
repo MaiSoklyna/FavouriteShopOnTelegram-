@@ -29,8 +29,10 @@ MISSING_TABLE = ("PGRST205", "42P01")
 # What the activity page offers as filters, grouped the way an owner thinks about them
 ACTION_GROUPS: dict[str, tuple[str, ...]] = {
     "product": ("product.created", "product.updated", "product.price_changed", "product.deleted",
-                "product.variants_changed", "product.image_added", "product.image_removed"),
-    "order": ("order.accepted", "order.rejected", "order.status_changed",
+                "product.variants_changed", "product.image_added", "product.image_removed",
+                "product.category_changed"),
+    "category": ("category.products_moved", "category.deleted"),
+    "order": ("order.accepted", "order.rejected", "order.status_changed", "order.expired",
               "order.driver_assigned", "order.driver_unassigned"),
     "driver": ("driver.added", "driver.updated", "driver.activated", "driver.deactivated"),
     "promotion": ("promotion.created", "promotion.updated", "promotion.disabled", "promotion.deleted"),
@@ -38,9 +40,10 @@ ACTION_GROUPS: dict[str, tuple[str, ...]] = {
     "coupon": ("coupon.created", "coupon.updated", "coupon.disabled", "coupon.deleted", "coupon.granted"),
     "shop": ("shop.profile_updated", "shop.settings_updated"),
     "payout": ("payout.account_updated", "payout.verification_changed"),
+    "refund": ("refund.requested", "refund.completed"),
     "staff": ("staff.added", "staff.updated", "staff.role_changed", "staff.deactivated", "staff.reactivated",
               "staff.removed"),
-    "access": ("account.login", "account.logout"),
+    "access": ("account.login", "account.logout", "account.password_reset"),
 }
 ACTIONS = frozenset(a for group in ACTION_GROUPS.values() for a in group)
 

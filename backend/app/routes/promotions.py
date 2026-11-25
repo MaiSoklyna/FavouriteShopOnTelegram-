@@ -24,7 +24,7 @@ from app.core.dependencies import require_any_admin
 from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import StorageClient, SupabaseClient
-from app.services import audit, promo_schedule
+from app.services import audit, promo_schedule, shop_setup
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/promotions", tags=["Promotions"])
@@ -201,6 +201,8 @@ async def list_promotions(location: str | None = None, merchant_id: int | None =
                 return []
             raise
         now = datetime.now(timezone.utc)
+        live_shops = await shop_setup.visible_shop_ids(db)
+        all_rows = [r for r in all_rows if r.get("merchant_id") is None or r["merchant_id"] in live_shops]
         rows = [_with_schedule(r, now) for r in all_rows]
         want = "home_promotions" if location == "home_featured" else location
         rows = [r for r in rows if r["is_live"] and (not want or want in ["home_promotions" if x == "home_featured" else x for x in (r.get("display_locations") or [])])]

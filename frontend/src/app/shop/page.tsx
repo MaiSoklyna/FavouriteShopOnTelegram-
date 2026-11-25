@@ -5,7 +5,7 @@ import Link from "next/link";
 import { api } from "@/lib/api";
 import { fetchNearbyShops } from "@/lib/addresses";
 import { useHomeLocation } from "@/lib/useHomeLocation";
-import { SHOP_FILTERS, applyShopFilter, useShopExtras, type ShopFilter } from "@/lib/shopTheme";
+import { SHOP_FILTERS, applyShopFilter, shopCardRating, themeFromShopCategory, useShopExtras, type ShopFilter } from "@/lib/shopTheme";
 import { codeCard, promotionCard, type Promotion, type PromotionRow } from "@/lib/promotions";
 import { useAuth } from "@/providers/AuthProvider";
 import { useCart } from "@/providers/CartProvider";
@@ -104,26 +104,25 @@ export default function ShopHomePage() {
   async function fetchData() {
     setLoadError(false);
     try {
-      const [m, c, p] = await Promise.all([
+      // Everything Home needs, in one wave: waiting for each answer before asking the next cost a
+      // full round trip each (slow on mobile data). The last three are optional and may fail alone.
+      const optional = <T,>(req: Promise<T>) => req.catch(() => null);
+      const [m, c, p, promoData, rows, homeCats] = await Promise.all([
         api.get<Merchant[]>("/merchants"),
         api.get<Category[]>("/categories"),
         api.get<Product[]>("/products", { params: { page_size: PAGE_SIZE } }),
+        optional(api.get<PromoCode[]>("/promos/active")),
+        optional(api.get<PromotionRow[]>("/promotions")),
+        optional(api.get<Category[]>("/featured-categories/home")),
       ]);
       setMerchants(m);
       setCategories(c);
       setProducts(p);
       pageRef.current = 1;
       setHasMore(p.length >= PAGE_SIZE);
-      try {
-        const promoData = await api.get<PromoCode[]>("/promos/active");
-        setPromos(promoData);
-      } catch { /* promos endpoint may not exist yet */ }
-      try {
-        setPromoRows(await api.get<PromotionRow[]>("/promotions"));
-      } catch { /* promotions table not created yet (migration 018) */ }
-      try {
-        setHomeCategories(await api.get<Category[]>("/featured-categories/home"));
-      } catch { /* Home falls back to the categories with the most products */ }
+      if (promoData) setPromos(promoData);
+      if (rows) setPromoRows(rows);
+      if (homeCats) setHomeCategories(homeCats); // else Home falls back to the categories with the most products
     } catch (err) {
       console.error("Load error:", err);
       setLoadError(true);
@@ -169,8 +168,11 @@ export default function ShopHomePage() {
   // without one, the featured shops and a prompt to set it.
   const baseCards: ShopCardData[] = nearby
     ?? featuredShops.map(m => ({ id: m.id, name: m.name, tagline: m.tagline, logo_url: m.logo_url, icon_emoji: m.icon_emoji }));
+  // Category and rating come with the shop list; only a shop missing them (older API) is looked up
+  const shopById = new Map(merchants.map((m) => [m.id, m]));
+  const needExtras = baseCards.filter((c) => { const m = shopById.get(c.id); return !m || (!m.shop_category && m.product_review_count === undefined); });
   // Before the early returns below: hooks must run on every render
-  const extras = useShopExtras(baseCards);
+  const extras = useShopExtras(needExtras);
 
   if (loadError && !loading) {
     return (
@@ -213,7 +215,15 @@ export default function ShopHomePage() {
   const flashDeals = products.filter(p => p.compare_price && p.compare_price > p.base_price);
 
 
-  const enriched = baseCards.map(c => ({ ...c, theme: extras[c.id]?.theme, rating: extras[c.id]?.rating ?? null }));
+  const enriched = baseCards.map(c => {
+    const m = shopById.get(c.id);
+    return {
+      ...c,
+      shop_category: c.shop_category ?? m?.shop_category,
+      theme: themeFromShopCategory(m?.shop_category) ?? extras[c.id]?.theme,
+      rating: (m ? shopCardRating(m) : null) ?? extras[c.id]?.rating ?? null,
+    };
+  });
   const shopCards = nearby ? applyShopFilter(enriched, shopFilter) : enriched;
   // One Promotions section: every live promotion shown on Home (banner or generated card),
   // then any plain shop code not yet turned into a promotion (before migration 021), ending soonest first.

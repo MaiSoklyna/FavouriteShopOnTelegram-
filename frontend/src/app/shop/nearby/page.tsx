@@ -8,11 +8,12 @@ import { useAuth } from "@/providers/AuthProvider";
 import { fetchNearbyShops, type NearbyShop } from "@/lib/addresses";
 import { formatEta, formatKm } from "@/lib/mapbox";
 import { useHomeLocation } from "@/lib/useHomeLocation";
-import { SHOP_FILTERS, THEMES, applyShopFilter, themeFromShopCategory, useShopExtras, type ShopFilter } from "@/lib/shopTheme";
+import { SHOP_FILTERS, THEMES, applyShopFilter, shopCardRating, themeFromShopCategory, useShopExtras, type ShopFilter } from "@/lib/shopTheme";
 import { haptic } from "@/lib/telegram";
 import { CategoryChips, LocationSheet, ShopCard, ShopCardSkeleton, ShopCover, type ShopCardData } from "@/components/shop";
 import { useShopCategories } from "@/lib/useShopCategories";
 import { Icon } from "@/components/shop/Icon";
+import { img, IMG } from "@/lib/img";
 
 const ShopsMap = dynamic(() => import("@/components/map/ShopsMap"), {
   ssr: false,
@@ -25,7 +26,7 @@ const MAP_HEIGHT = "clamp(190px, 28vh, 250px)";
 const SORTS = ["Nearest", "Fastest", "Cheapest"] as const;
 type Sort = (typeof SORTS)[number];
 
-type Shop = ShopCardData & { lat: number; lng: number; shopRating?: number | null };
+type Shop = ShopCardData & { lat: number; lng: number; shopRating?: number | null; hasStats?: boolean };
 
 function sortShops(shops: Shop[], sort: Sort): Shop[] {
   const fee = (s: Shop) => (s.can_deliver === false || s.delivery_fee == null ? Infinity : Number(s.delivery_fee));
@@ -73,12 +74,13 @@ export default function NearbyPage() {
       id: s.id, name: s.name, tagline: s.tagline, logo_url: s.logo_url, icon_emoji: s.icon_emoji,
       shop_category_id: s.shop_category_id, shop_subcategory_id: s.shop_subcategory_id,
       shop_category: s.shop_category, shop_subcategory: s.shop_subcategory,
-      shopRating: (s.rating_count ?? 0) > 0 && s.rating != null ? Number(s.rating) : null,
+      shopRating: shopCardRating(s),
+      hasStats: s.product_review_count !== undefined,
       distance_km: s.distance_km, can_deliver: s.can_deliver, delivery_fee: s.delivery_fee,
       eta_minutes: s.eta_minutes, eta_max_minutes: s.eta_max_minutes, is_open: s.is_open,
       lat: Number(s.latitude), lng: Number(s.longitude),
     })), [rows]);
-  const extras = useShopExtras(base);
+  const extras = useShopExtras(base.filter((s) => !s.shop_category && !s.hasStats));
   const shops = useMemo(
     () => sortShops(applyShopFilter(base, filter), sort).map((s) => ({ ...s, theme: themeFromShopCategory(s.shop_category) ?? extras[s.id]?.theme, rating: s.shopRating ?? extras[s.id]?.rating ?? null })),
     [base, filter, sort, extras],
@@ -204,7 +206,7 @@ export default function NearbyPage() {
                   <Link href={`/shop/merchant/${s.id}`} className="fos-press flex items-center gap-3 py-3">
                     <span className="relative h-16 w-16 shrink-0 overflow-hidden rounded-thumb">
                       <ShopCover theme={s.theme ?? "general"} url={s.cover_url} />
-                      {s.logo_url && <img src={s.logo_url} alt="" className="absolute bottom-1 right-1 h-7 w-7 rounded-lg border-2 border-card object-cover" />}
+                      {s.logo_url && <img src={img(s.logo_url, IMG.LOGO)} alt="" className="absolute bottom-1 right-1 h-7 w-7 rounded-lg border-2 border-card object-cover" />}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">

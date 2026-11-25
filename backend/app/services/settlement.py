@@ -34,6 +34,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from app.config import settings
+from app.core.constants import CLOSED_UNSOLD_STATUSES
 from app.core.exceptions import BadRequestError, NotFoundError
 
 logger = logging.getLogger(__name__)
@@ -174,10 +175,10 @@ async def record_order_earning(db, order: dict, *, actor_type: str = "system",
     platform_collected = order.get("payment_method") in PLATFORM_COLLECTED_METHODS
     if not platform_collected and money(order.get("platform_discount_amount")) <= 0:
         return None
-    if order.get("status") == "cancelled":
-        # Customer paid a cancelled order — the platform owes the customer
+    if order.get("status") in CLOSED_UNSOLD_STATUSES:
+        # Customer paid a cancelled or expired order — the platform owes the customer
         # a refund, not the merchant a payout.
-        logger.error("Order %s paid after cancellation — refund customer, no earning", order["id"])
+        logger.error("Order %s paid while %s — refund customer, no earning", order["id"], order.get("status"))
         return None
 
     if platform_collected:

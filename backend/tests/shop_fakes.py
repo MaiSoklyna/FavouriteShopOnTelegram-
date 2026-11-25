@@ -30,7 +30,7 @@ def shop(id, name, category=None, sub=None, status="active", **extra):
         "email": f"{id}@private.example", "owner_name": "Private Owner",
         "shop_category_id": category, "shop_subcategory_id": sub,
         "latitude": 11.5704 + id * 0.001, "longitude": 104.8996, "delivery_radius_km": 5,
-        "created_at": f"2026-11-0{id}T00:00:00+00:00", **extra,
+        "created_at": f"2026-11-0{id}T00:00:00+00:00", "setup_completed_at": "2026-11-01T00:00:00+00:00", **extra,
     }
 
 
@@ -57,6 +57,7 @@ class FakeQuery:
     def gte(self, col, val): return self._add(col, "gte", val)
     def lte(self, col, val): return self._add(col, "lte", val)
     def ilike(self, col, pattern): return self._add(col, "ilike", pattern.strip("*").lower())
+    def in_(self, col, vals): return self._add(col, "in", list(vals))
 
     def order(self, col, *, desc=False, nulls_last=False):
         self.order_by = (col, desc)
@@ -70,6 +71,7 @@ class FakeQuery:
             if op == "gte" and (have is None or have < val): return False
             if op == "lte" and (have is None or have > val): return False
             if op == "ilike" and val not in str(have or "").lower(): return False
+            if op == "in" and have not in val: return False
         return True
 
     def _rows(self):

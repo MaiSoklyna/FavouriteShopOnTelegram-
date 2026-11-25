@@ -93,7 +93,7 @@ def order_list_keyboard(orders: list):
     for o in orders:
         status_emoji = {
             "pending": "⏳", "confirmed": "✅", "preparing": "👨‍🍳",
-            "shipped": "🚚", "delivered": "📦", "cancelled": "❌"
+            "shipped": "🚚", "delivered": "📦", "cancelled": "❌", "expired": "⌛"
         }.get(o["status"], "❓")
         keyboard.append([InlineKeyboardButton(
             f"{status_emoji} {o['order_code']} - ${o['total']:.2f}",

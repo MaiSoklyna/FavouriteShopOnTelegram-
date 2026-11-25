@@ -126,6 +126,9 @@ export interface Merchant {
   shop_subcategory?: string | null;
   product_count?: number;
   order_count?: number;
+  /** Average of the shop's product reviews, from the shops list (until it has shop reviews of its own). */
+  product_rating?: number | null;
+  product_review_count?: number;
   created_at?: string;
 }
 
@@ -167,6 +170,60 @@ export interface Product {
   images?: ProductImage[];
   variants?: VariantGroup[];
   has_variants?: boolean;
+  /** Product details (migration 036) */
+  attribute_template_id?: number | null;
+  attributes?: Record<string, AttributeValue>;
+  attribute_template?: { id: number; name: string } | null;
+  attribute_details?: { key: string; label: string; value: string }[];
+}
+
+export type AttributeValue = string | number | boolean | string[];
+export type AttributeType = "text" | "number" | "select" | "multi_select" | "boolean";
+
+export interface AttributeField {
+  id: number;
+  template_id: number;
+  key: string;
+  label: string;
+  type: AttributeType;
+  unit: string | null;
+  options: { value: string; label: string }[];
+  filterable: boolean;
+  importance: "recommended" | "optional";
+  help_text: string | null;
+  min_value: number | null;
+  max_value: number | null;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface AttributeTemplate {
+  id: number;
+  key: string;
+  shop_category_id: number;
+  shop_subcategory_ids: number[];
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+  fields: AttributeField[];
+  shop_type?: string;      // super admin list
+  product_count?: number;  // super admin list
+}
+
+/** One detail filter with its values and counts (GET /search/products). */
+export interface SearchFacet {
+  key: string;
+  label: string;
+  type: AttributeType;
+  unit: string | null;
+  help_text: string | null;
+  options?: { value: string; label: string; count: number; selected: boolean }[];
+  min?: number | null;
+  max?: number | null;
+  count?: number;
+  selected?: boolean;
+  selected_min?: number | null;
+  selected_max?: number | null;
 }
 
 export interface ProductImage {
@@ -269,6 +326,33 @@ export interface Order {
   delivery?: DeliveryInfo | null;
   /** The customer's review of the shop for this order (null until they leave one). */
   shop_review?: { id: number; rating: number; comment?: string | null; created_at?: string } | null;
+  /** Money going back to the customer when a paid KHQR/card order did not go ahead (null if none). */
+  refund?: OrderRefund | null;
+}
+
+export interface OrderRefund {
+  id: number;
+  amount: string | number;
+  currency?: string;
+  reason: "order_cancelled" | "paid_after_cancellation" | "paid_after_expiry";
+  status: "pending" | "refunded";
+  refund_reference?: string | null;
+  created_at?: string;
+  completed_at?: string | null;
+}
+
+/** A refund in the platform admin's list. */
+export interface Refund extends OrderRefund {
+  order_id: number;
+  order_code?: string | null;
+  merchant_id?: number | null;
+  merchant_name?: string | null;
+  user_id?: number | null;
+  payment_method: string;
+  payment_ref?: string | null;
+  reason_text?: string;
+  note?: string | null;
+  completed_by_name?: string | null;
 }
 
 // ── Coupons ────────────────────────────────────────────────────
@@ -352,6 +436,8 @@ export interface DeliveryInfo {
   delivered_at?: string | null;
   /** Only in the shop's view. */
   failure_reason?: string | null;
+  /** Only in the customer's view, while the driver is on the way: given to the driver at the door. */
+  confirmation_code?: string | null;
 }
 
 export interface DriverProfile {

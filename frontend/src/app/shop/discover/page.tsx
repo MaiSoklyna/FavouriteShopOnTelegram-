@@ -13,6 +13,7 @@ import { useShopCategories } from "@/lib/useShopCategories";
 import { ShopRow } from "@/components/shop/ShopRow";
 import { Icon } from "@/components/shop/Icon";
 import type { Category } from "@/types";
+import { img, IMG } from "@/lib/img";
 
 interface Banner { id: number; title: string; subtitle?: string | null; image_url?: string | null; category_id: number }
 
@@ -173,7 +174,7 @@ export default function DiscoverPage() {
                     <span className="text-[12px] font-semibold text-ink-500">{g.items} {g.items === 1 ? "item" : "items"}</span>
                   </span>
                   <span className="relative w-[44%] shrink-0">
-                    {g.image ? <img src={g.image} alt="" className="h-full w-full object-cover" /> : <ShopCover theme={g.theme} />}
+                    {g.image ? <img src={img(g.image, IMG.CARD)} alt="" className="h-full w-full object-cover" /> : <ShopCover theme={g.theme} />}
                   </span>
                 </Link>
               ))}
@@ -240,7 +241,7 @@ function CollectionTile({ href, title, tone, shops }: { href: string; title: str
         <span className="flex -space-x-2">
           {shops.slice(0, 3).map((s) => (
             <span key={s.id} className="grid h-7 w-7 place-items-center overflow-hidden rounded-full border-2 border-white/80 bg-white text-[10px] font-extrabold text-[#103562]">
-              {s.logo_url ? <img src={s.logo_url} alt="" className="h-full w-full object-cover" /> : s.name[0]?.toUpperCase()}
+              {s.logo_url ? <img src={img(s.logo_url, IMG.LOGO)} alt="" className="h-full w-full object-cover" /> : s.name[0]?.toUpperCase()}
             </span>
           ))}
         </span>

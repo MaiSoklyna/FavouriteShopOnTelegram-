@@ -65,6 +65,7 @@ class MerchantUpdate(BaseModel):
     delivery_base_fee: float | None = Field(None, ge=0, le=100)
     delivery_per_km_fee: float | None = Field(None, ge=0, le=100)
     min_order_amount: float | None = Field(None, ge=0, le=10000)
+    delivery_fee_mode: str | None = Field(None, pattern=r"^(platform|custom)$")
 
 
 class MerchantResponse(BaseModel):

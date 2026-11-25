@@ -12,10 +12,11 @@ import { KhqrPayPanel } from "@/components/shop/KhqrPayPanel";
 import { StripePayScreen } from "@/components/shop/StripePayScreen";
 import { Icon } from "@/components/shop/Icon";
 import { EmptyState, OrderStatusHero, OrderTimeline, Pill, ShopReviewCard, Skeleton } from "@/components/shop";
-import { awaitingPayment, isPickup, statusLabel } from "@/lib/orderStatus";
+import { awaitingPayment, formatWhen, isClosedUnsold, isPickup, statusLabel } from "@/lib/orderStatus";
 import { formatKm, staticMapUrl, type LatLng } from "@/lib/mapbox";
 import { formatKhr } from "@/lib/currency";
 import { SuccessIcon } from "@/components/brand/Icons";
+import { img as toImg, IMG } from "@/lib/img";
 
 interface ShopInfo {
   id: number;
@@ -151,7 +152,7 @@ function OrderDetailContent() {
   const shopName = shop?.name || order.merchant_name || "Shop";
   const track = { ...order, merchant_name: shopName };
   const pickup = isPickup(order);
-  const cancelled = order.status === "cancelled";
+  const cancelled = isClosedUnsold(order.status);
   const unpaid = awaitingPayment(order);
 
   if (cardOpen) {
@@ -189,7 +190,7 @@ function OrderDetailContent() {
             Pay by card · {money(order.total)}
           </button>
         )}
-        {unpaid && order.payment_method !== "stripe" && <KhqrPayPanel orderId={order.id} total={Number(order.total)} onPaid={fetchOrder} />}
+        {unpaid && order.payment_method !== "stripe" && <KhqrPayPanel orderId={order.id} total={Number(order.total)} onPaid={fetchOrder} onExpired={fetchOrder} />}
 
         <OrderStatusHero order={track} />
 
@@ -208,7 +209,7 @@ function OrderDetailContent() {
           <header className="mb-1 flex items-center gap-2.5">
             <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-[10px] bg-surface text-[15px]">
               {shop?.logo_url
-                ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" />
+                ? <img src={toImg(shop.logo_url, IMG.LOGO)} alt="" className="h-full w-full object-cover" />
                 : shop?.icon_emoji || <span className="text-[13px] font-extrabold text-navy-700">{shopName[0]?.toUpperCase()}</span>}
             </span>
             <button type="button" onClick={() => router.push(`/shop/merchant/${order.merchant_id}`)}
@@ -224,7 +225,7 @@ function OrderDetailContent() {
               return (
                 <li key={item.id} className="flex items-center gap-3 border-t border-line py-2.5 first:border-t-0">
                   <span className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-[14px] bg-surface text-ink-500">
-                    {img ? <img src={img} alt="" className="h-full w-full object-cover" /> : <Icon name="box" size={20} />}
+                    {img ? <img src={toImg(img, IMG.LOGO)} alt="" className="h-full w-full object-cover" /> : <Icon name="box" size={20} />}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[14px] font-bold text-ink-900">{item.product_name}</div>
@@ -269,6 +270,25 @@ function OrderDetailContent() {
             </p>
           )}
         </section>
+
+        {/* Paid but the order did not go ahead: where the money is */}
+        {order.refund && (
+          <section className="flex items-center gap-3 rounded-hero bg-card p-3.5 shadow-fos-sm" data-testid="order-refund">
+            <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-[14px] ${order.refund.status === "refunded" ? "bg-tint-positive text-tone-positive" : "bg-tint-gold text-gold-700"}`}>
+              <Icon name={order.refund.status === "refunded" ? "check" : "clock"} size={22} strokeWidth={2.2} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[14px] font-extrabold text-ink-900">
+                {order.refund.status === "refunded" ? "Refund sent" : "Refund on its way"} · {money(order.refund.amount)}
+              </div>
+              <div className="text-caption text-ink-500">
+                {order.refund.status === "refunded"
+                  ? `Sent ${formatWhen(order.refund.completed_at)}. It can take a few days to show in your account.`
+                  : "You paid for an order that didn't go ahead. We'll send the money back and let you know."}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Delivered: rate the shop (the "How was your order?" notification lands here) */}
         {order.status === "delivered" && <ShopReviewCard order={order} shopName={shopName} onSubmitted={fetchOrder} />}
@@ -420,7 +440,8 @@ function DriverCard({ delivery }: { delivery: DeliveryInfo }) {
   const call = telUrl(delivery.driver.phone);
   const name = delivery.driver.name || "Your driver";
   return (
-    <div data-testid="driver-card" className="mb-3 flex items-center gap-3 rounded-hero bg-card p-3.5 shadow-fos-sm">
+    <div className="mb-3 overflow-hidden rounded-hero bg-card shadow-fos-sm">
+    <div data-testid="driver-card" className="flex items-center gap-3 p-3.5">
       <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-tint-mango text-mango-500"><Icon name="truck" size={22} strokeWidth={2} /></span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[15px] font-extrabold text-ink-900">{name}{delivery.driver.vehicle ? ` · ${delivery.driver.vehicle}` : ""}</span>
@@ -431,6 +452,18 @@ function DriverCard({ delivery }: { delivery: DeliveryInfo }) {
           <Icon name="phone" size={18} />
         </a>
       )}
+    </div>
+    {delivery.confirmation_code && (
+      <div data-testid="delivery-code" className="flex items-center justify-between gap-3 border-t border-line bg-tint-gold px-3.5 py-3">
+        <span className="text-[13px] leading-5 text-ink-900">
+          <span className="block font-extrabold">Your delivery code</span>
+          Give it to the driver when your order arrives. Don&apos;t share it before.
+        </span>
+        <span className="shrink-0 rounded-thumb bg-card px-3 py-1.5 font-mono text-[22px] font-extrabold tracking-[0.25em] text-navy-700" aria-label={`Delivery code ${delivery.confirmation_code.split("").join(" ")}`}>
+          {delivery.confirmation_code}
+        </span>
+      </div>
+    )}
     </div>
   );
 }

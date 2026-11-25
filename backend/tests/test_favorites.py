@@ -90,8 +90,8 @@ class Db:
         self.tables = {
             "users": [{"id": 1, "telegram_id": 111}, {"id": 2, "telegram_id": 222}],
             "merchants": [
-                {"id": 3, "name": "Bloom", "status": "active", "shop_category_id": 1, "shop_subcategory_id": None, "commission_rate": 9, "bank_account": "SECRET", "rating": 4.5},
-                {"id": 4, "name": "Cakes", "status": "active", "shop_category_id": None, "shop_subcategory_id": None},
+                {"id": 3, "name": "Bloom", "status": "active", "setup_completed_at": "2026-01-01T00:00:00Z", "shop_category_id": 1, "shop_subcategory_id": None, "commission_rate": 9, "bank_account": "SECRET", "rating": 4.5},
+                {"id": 4, "name": "Cakes", "status": "active", "setup_completed_at": "2026-01-01T00:00:00Z", "shop_category_id": None, "shop_subcategory_id": None},
                 {"id": 5, "name": "Closed Co", "status": "suspended", "shop_category_id": None, "shop_subcategory_id": None},
             ],
             "products": [

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter
 
-from app.core.constants import Role
+from app.core.constants import CLOSED_UNSOLD_STATUSES, Role
 from app.core.dependencies import require_any_admin
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
@@ -49,7 +49,7 @@ async def get_dashboard_stats(user: TokenClaims = require_any_admin()):
         orders = await oq.select(f"id,status,total,created_at,{ORDER_MONEY}")
 
         for_merchant = bool(merchant_filter)
-        live = [o for o in orders if o.get("status") != "cancelled"]
+        live = [o for o in orders if o.get("status") not in CLOSED_UNSOLD_STATUSES]
         total_revenue = sum(order_revenue(o, for_merchant) for o in live)
         # Discounts split by who paid them
         merchant_discounts = sum(_num(o.get("merchant_discount_amount")) for o in live)
@@ -104,7 +104,7 @@ async def get_order_analytics(
             by_date[date] = {"date": date, "orders": 0, "revenue": 0,
                              "merchant_discounts": 0, "platform_discounts": 0}
         by_date[date]["orders"] += 1
-        if o.get("status") != "cancelled":
+        if o.get("status") not in CLOSED_UNSOLD_STATUSES:
             by_date[date]["revenue"] += order_revenue(o, for_merchant)
             by_date[date]["merchant_discounts"] += _num(o.get("merchant_discount_amount"))
             by_date[date]["platform_discounts"] += _num(o.get("platform_discount_amount"))

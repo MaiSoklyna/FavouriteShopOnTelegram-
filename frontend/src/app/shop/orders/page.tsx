@@ -9,8 +9,9 @@ import { LoginGate } from "@/components/shop/LoginGate";
 import type { Order } from "@/types";
 import { Icon } from "@/components/shop/Icon";
 import { EmptyState, OrderProgress, Pill, Skeleton } from "@/components/shop";
-import { ACTIVE_STATUSES, awaitingPayment, formatWhen, headline, statusLabel } from "@/lib/orderStatus";
+import { ACTIVE_STATUSES, awaitingPayment, formatWhen, headline, isClosedUnsold, statusLabel } from "@/lib/orderStatus";
 import { formatKhr } from "@/lib/currency";
+import { img, IMG } from "@/lib/img";
 
 interface ShopBrief { id: number; name: string; logo_url?: string | null; icon_emoji?: string | null }
 
@@ -18,14 +19,14 @@ const TABS = [
   { key: "all", label: "All" },
   { key: "active", label: "Active" },
   { key: "completed", label: "Completed" },
-  { key: "cancelled", label: "Cancelled" },
+  { key: "cancelled", label: "Cancelled / Expired" },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
 
 const inTab = (o: Order, tab: Tab) =>
   tab === "active" ? ACTIVE_STATUSES.includes(o.status)
     : tab === "completed" ? o.status === "delivered"
-      : tab === "cancelled" ? o.status === "cancelled"
+      : tab === "cancelled" ? isClosedUnsold(o.status)
         : true;
 
 export default function OrdersPage() {
@@ -103,7 +104,7 @@ function OrderCard({ order, shop }: { order: Order; shop?: ShopBrief }) {
   const track = { ...order, merchant_name: name };
   const active = ACTIVE_STATUSES.includes(order.status);
   const unpaid = awaitingPayment(order);
-  const cancelled = order.status === "cancelled";
+  const cancelled = isClosedUnsold(order.status);
   const h = headline(track);
 
   return (
@@ -111,7 +112,7 @@ function OrderCard({ order, shop }: { order: Order; shop?: ShopBrief }) {
       <div className="flex items-center gap-2.5">
         <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-[12px] bg-surface text-[16px]">
           {shop?.logo_url
-            ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" />
+            ? <img src={img(shop.logo_url, IMG.LOGO)} alt="" className="h-full w-full object-cover" />
             : shop?.icon_emoji || <span className="text-[14px] font-extrabold text-navy-700">{name[0]?.toUpperCase()}</span>}
         </span>
         <div className="min-w-0 flex-1">
