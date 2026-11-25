@@ -83,6 +83,11 @@ class Settings(BaseModel):
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
 
+    # ── Scheduled jobs ──────────────────────────────────────────
+    # Shared secret for POST /api/orders/expire-due, called by an external scheduler
+    # (e.g. Supabase pg_cron). Empty = that endpoint refuses every call.
+    CRON_SECRET: str = ""
+
     # ── Settlement ──────────────────────────────────────────────
     # Default platform commission (percent); merchants.commission_rate
     # overrides it per shop. Old env name PAYWAY_PLATFORM_FEE_PERCENT
@@ -188,6 +193,7 @@ def _load_settings() -> Settings:
         "PAYWAY_CALLBACK_URL", "PAYWAY_QR_LIFETIME_MINUTES",
         "PLATFORM_COMMISSION_PERCENT",
         "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
+        "CRON_SECRET",
     ]
     for key in simple_keys:
         val = os.getenv(key)

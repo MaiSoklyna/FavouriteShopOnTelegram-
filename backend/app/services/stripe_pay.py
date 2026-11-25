@@ -101,6 +101,19 @@ async def retrieve_payment_intent(intent_id: str) -> dict:
     return r.json()
 
 
+async def cancel_payment_intent(intent_id: str) -> dict:
+    """Cancel an open intent so the card can no longer be charged. Stripe refuses (StripeError) if
+    the intent already succeeded or is processing; the caller must then re-check it."""
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.post(
+            f"{API}/payment_intents/{intent_id}/cancel",
+            data={"cancellation_reason": "abandoned"}, headers=_headers(),
+        )
+    if r.status_code >= 400:
+        raise StripeError(_error_message(r))
+    return r.json()
+
+
 def verify_webhook(payload: bytes, signature_header: str) -> bool:
     """Check a Stripe-Signature header (t=...,v1=...) against the webhook secret."""
     secret = settings.STRIPE_WEBHOOK_SECRET

@@ -195,7 +195,7 @@ function dot(action: string): string {
   return "var(--info, #3B82F6)";
 }
 
-const STATUS: Record<string, string> = { pending: "New", confirmed: "Accepted", processing: "Preparing", shipped: "On the way", delivered: "Delivered", cancelled: "Cancelled" };
+const STATUS: Record<string, string> = { pending: "New", confirmed: "Accepted", processing: "Preparing", shipped: "On the way", delivered: "Delivered", cancelled: "Cancelled", expired: "Expired" };
 
 function sentence(e: ActivityEntry): string {
   const who = e.actor_name || "Someone";

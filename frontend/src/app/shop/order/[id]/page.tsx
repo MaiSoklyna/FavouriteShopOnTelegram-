@@ -12,7 +12,7 @@ import { KhqrPayPanel } from "@/components/shop/KhqrPayPanel";
 import { StripePayScreen } from "@/components/shop/StripePayScreen";
 import { Icon } from "@/components/shop/Icon";
 import { EmptyState, OrderStatusHero, OrderTimeline, Pill, ShopReviewCard, Skeleton } from "@/components/shop";
-import { awaitingPayment, isPickup, statusLabel } from "@/lib/orderStatus";
+import { awaitingPayment, isClosedUnsold, isPickup, statusLabel } from "@/lib/orderStatus";
 import { formatKm, staticMapUrl, type LatLng } from "@/lib/mapbox";
 import { formatKhr } from "@/lib/currency";
 import { SuccessIcon } from "@/components/brand/Icons";
@@ -152,7 +152,7 @@ function OrderDetailContent() {
   const shopName = shop?.name || order.merchant_name || "Shop";
   const track = { ...order, merchant_name: shopName };
   const pickup = isPickup(order);
-  const cancelled = order.status === "cancelled";
+  const cancelled = isClosedUnsold(order.status);
   const unpaid = awaitingPayment(order);
 
   if (cardOpen) {
@@ -190,7 +190,7 @@ function OrderDetailContent() {
             Pay by card · {money(order.total)}
           </button>
         )}
-        {unpaid && order.payment_method !== "stripe" && <KhqrPayPanel orderId={order.id} total={Number(order.total)} onPaid={fetchOrder} />}
+        {unpaid && order.payment_method !== "stripe" && <KhqrPayPanel orderId={order.id} total={Number(order.total)} onPaid={fetchOrder} onExpired={fetchOrder} />}
 
         <OrderStatusHero order={track} />
 

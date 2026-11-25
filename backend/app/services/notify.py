@@ -34,6 +34,7 @@ STATUS_COPY = {
     "delivered": ("Order delivered", "Order {code} from {shop} was delivered. Enjoy!"),
     "delivered_pickup": ("Order picked up", "Order {code} was picked up at {shop}. Enjoy!"),
     "cancelled": ("Order cancelled", "Order {code} from {shop} was cancelled."),
+    "expired": ("Order expired", "Order {code} from {shop} wasn't paid in time, so it expired. You can order again any time."),
 }
 # Statuses that also go to Telegram (the rest stay in the app, to keep chat quiet)
 PUSH_STATUSES = {"shipped", "delivered", "cancelled"}

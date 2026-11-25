@@ -9,7 +9,7 @@ import { LoginGate } from "@/components/shop/LoginGate";
 import type { Order } from "@/types";
 import { Icon } from "@/components/shop/Icon";
 import { EmptyState, OrderProgress, Pill, Skeleton } from "@/components/shop";
-import { ACTIVE_STATUSES, awaitingPayment, formatWhen, headline, statusLabel } from "@/lib/orderStatus";
+import { ACTIVE_STATUSES, awaitingPayment, formatWhen, headline, isClosedUnsold, statusLabel } from "@/lib/orderStatus";
 import { formatKhr } from "@/lib/currency";
 import { img, IMG } from "@/lib/img";
 
@@ -19,14 +19,14 @@ const TABS = [
   { key: "all", label: "All" },
   { key: "active", label: "Active" },
   { key: "completed", label: "Completed" },
-  { key: "cancelled", label: "Cancelled" },
+  { key: "cancelled", label: "Cancelled / Expired" },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
 
 const inTab = (o: Order, tab: Tab) =>
   tab === "active" ? ACTIVE_STATUSES.includes(o.status)
     : tab === "completed" ? o.status === "delivered"
-      : tab === "cancelled" ? o.status === "cancelled"
+      : tab === "cancelled" ? isClosedUnsold(o.status)
         : true;
 
 export default function OrdersPage() {
@@ -104,7 +104,7 @@ function OrderCard({ order, shop }: { order: Order; shop?: ShopBrief }) {
   const track = { ...order, merchant_name: name };
   const active = ACTIVE_STATUSES.includes(order.status);
   const unpaid = awaitingPayment(order);
-  const cancelled = order.status === "cancelled";
+  const cancelled = isClosedUnsold(order.status);
   const h = headline(track);
 
   return (

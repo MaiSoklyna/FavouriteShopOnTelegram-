@@ -34,7 +34,7 @@ from app.models.product import (
 )
 from pydantic import BaseModel
 
-from app.services import attributes, audit
+from app.services import attributes, audit, order_expiry
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Products"])
@@ -65,6 +65,8 @@ async def list_products(
       - public/anonymous: respects optional merchant_id filter; only active.
     """
     async with SupabaseClient.service_role() as db:
+        # Stock held by abandoned unpaid orders goes back before it is shown (at most once a minute)
+        await order_expiry.sweep_if_due(db)
         q = db.from_("products").order("created_at", desc=True)
 
         # ── Scoping by caller role ──
@@ -150,6 +152,7 @@ async def list_products(
 async def get_product(product_id: int):
     """Get a single product with images and variants."""
     async with SupabaseClient.service_role() as db:
+        await order_expiry.sweep_if_due(db)
         product = await db.from_("products").eq("id", product_id).select_one()
         if not product:
             raise NotFoundError("Product", product_id)

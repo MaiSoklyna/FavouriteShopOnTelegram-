@@ -88,15 +88,40 @@ class OrderStatus(StrEnum):
     SHIPPED = "shipped"
     DELIVERED = "delivered"
     CANCELLED = "cancelled"
+    EXPIRED = "expired"  # unpaid online order past its payment deadline (migration 038)
 
 
-# Which transitions are allowed and by whom
+# Which transitions are allowed and by whom. 'expired' is not here on purpose: only the system
+# expires an order (services/order_expiry.py), never a person through the status endpoint.
 ORDER_STATUS_TRANSITIONS: dict[str, list[str]] = {
     "pending":    ["confirmed", "cancelled"],
     "confirmed":  ["processing", "cancelled"],
     "processing": ["shipped", "cancelled"],
     "shipped":    ["delivered"],
 }
+
+# Statuses in which an order is over without being delivered: it holds no stock, earns nothing and
+# does not count as a sale.
+CLOSED_UNSOLD_STATUSES = frozenset({"cancelled", "expired"})
+
+
+# ── Payment deadlines ───────────────────────────────────────────
+
+# How long a customer has to pay an online order before it expires and its stock goes back.
+# A method that is missing (or None) never expires: cash on delivery is paid at the door.
+# The deadline is stored on the order when it is placed, so a change here only affects new orders.
+PAYMENT_EXPIRY_MINUTES: dict[str, int | None] = {
+    "khqr": 30,
+    "stripe": 30,
+    "cod": None,
+}
+
+# PayWay will not issue a QR that lives shorter than this
+PAYWAY_MIN_QR_LIFETIME_MINUTES = 3
+
+# How often (at most) one server instance sweeps every shop for overdue orders as a side effect of
+# ordinary traffic. Looking at a specific order or order list always checks those orders at once.
+EXPIRY_SWEEP_INTERVAL_SECONDS = 60
 
 
 # ── Pagination ──────────────────────────────────────────────────

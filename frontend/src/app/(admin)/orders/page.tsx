@@ -7,12 +7,12 @@ import type { AssignableDriver, DeliveryInfo, Order } from "@/types";
 import { BrandLoader } from "@/components/ui/Spinner";
 import { usePermissions } from "@/lib/permissions";
 
-const TABS = ["all", "pending", "confirmed", "processing", "shipped", "delivered", "cancelled"];
+const TABS = ["all", "pending", "confirmed", "processing", "shipped", "delivered", "cancelled", "expired"];
 // Database values stay as-is; these are the names shown to merchants.
-const LABEL: Record<string, string> = { all: "All", pending: "Pending", confirmed: "Accepted", processing: "Preparing", shipped: "Out for Delivery", delivered: "Delivered", cancelled: "Cancelled" };
+const LABEL: Record<string, string> = { all: "All", pending: "Pending", confirmed: "Accepted", processing: "Preparing", shipped: "Out for Delivery", delivered: "Delivered", cancelled: "Cancelled", expired: "Expired (unpaid)" };
 const label = (s: string) => LABEL[s] || s;
 const NEXT: Record<string, string[]> = { pending: ["confirmed", "cancelled"], confirmed: ["processing", "cancelled"], processing: ["shipped", "cancelled"], shipped: ["delivered"] };
-const STATUS_COLORS: Record<string, string> = { pending: "badge-pending", confirmed: "badge-confirmed", processing: "badge-processing", shipped: "badge-shipped", delivered: "badge-delivered", cancelled: "badge-cancelled" };
+const STATUS_COLORS: Record<string, string> = { pending: "badge-pending", confirmed: "badge-confirmed", processing: "badge-processing", shipped: "badge-shipped", delivered: "badge-delivered", cancelled: "badge-cancelled", expired: "badge-expired" };
 
 export default function OrdersPage() {
   const { can } = usePermissions();

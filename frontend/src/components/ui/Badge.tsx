@@ -5,6 +5,7 @@ const COLORS: Record<string, { bg: string; color: string }> = {
   shipped:    { bg: "var(--info-light)", color: "var(--info)" },
   delivered:  { bg: "var(--success-light)", color: "var(--success)" },
   cancelled:  { bg: "var(--danger-light)", color: "var(--danger)" },
+  expired:    { bg: "var(--bg-secondary)", color: "var(--text-muted)" },
   active:     { bg: "var(--success-light)", color: "var(--success)" },
   inactive:   { bg: "var(--bg-secondary)", color: "var(--text-muted)" },
   suspended:  { bg: "var(--danger-light)", color: "var(--danger)" },

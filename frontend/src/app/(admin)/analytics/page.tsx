@@ -37,6 +37,7 @@ const STATUS_COLORS: Record<string, string> = {
   shipped: "#0EA5E9",
   delivered: "#22C55E",
   cancelled: "#EF4444",
+  expired: "#9CA3AF",
 };
 
 export default function AnalyticsPage() {

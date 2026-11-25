@@ -68,6 +68,7 @@ def get_order_status_display(status: str) -> dict:
         "shipped": {"emoji": "🚚", "label": "Shipped", "color": "#9C27B0"},
         "delivered": {"emoji": "📦", "label": "Delivered", "color": "#4CAF50"},
         "cancelled": {"emoji": "❌", "label": "Cancelled", "color": "#F44336"},
+        "expired": {"emoji": "⌛", "label": "Expired", "color": "#9E9E9E"},
     }
     return status_map.get(status, {"emoji": "❓", "label": status, "color": "#999"})
 
