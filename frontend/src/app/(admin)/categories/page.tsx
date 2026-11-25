@@ -72,7 +72,50 @@ export default function CategoriesPage() {
     setSaving(false);
   }
 
-  async function deleteCategory(id: number) { if (!confirm("Delete?")) return; await api.delete(`/categories/${id}`); flash("Deleted"); load(); }
+  // Move all products / delete: a category's products always get somewhere to go
+  const [reorg, setReorg] = useState<{ cat: Category; mode: "move" | "delete"; note?: string } | null>(null);
+  const [target, setTarget] = useState<string>("");
+  const [working, setWorking] = useState(false);
+
+  /** Categories this category's products may move to: the same shop's, or platform-wide ones. */
+  const targetsFor = (c: Category) =>
+    categories.filter(o => o.id !== c.id && (o.merchant_id == null || o.merchant_id === c.merchant_id));
+
+  function openReorg(cat: Category, mode: "move" | "delete", note?: string) {
+    setTarget(""); setReorg({ cat, mode, note });
+  }
+
+  async function deleteCategory(c: Category) {
+    if (!c.product_count) {
+      // Empty as far as we can see; the server still refuses if hidden products remain
+      if (!confirm(`Delete "${c.name}"?`)) return;
+      try { await api.delete(`/categories/${c.id}`); flash("Deleted"); load(); }
+      catch (e: any) {
+        if (e?.status === 409) openReorg(c, "delete", e.detail);
+        else flash(e?.detail || "Could not delete", false);
+      }
+      return;
+    }
+    openReorg(c, "delete");
+  }
+
+  async function runReorg() {
+    if (!reorg) return;
+    if (!target) { flash("Choose where the products go", false); return; }
+    setWorking(true);
+    try {
+      if (reorg.mode === "move") {
+        const res = await api.post<{ moved: number }>(`/categories/${reorg.cat.id}/move-products`,
+          { to_category_id: target === "none" ? null : Number(target) });
+        flash(`Moved ${res.moved} product${res.moved === 1 ? "" : "s"}`);
+      } else {
+        const res = await api.delete<{ moved: number }>(`/categories/${reorg.cat.id}?move_to=${target}`);
+        flash(`Deleted${res.moved ? `, ${res.moved} product${res.moved === 1 ? "" : "s"} moved` : ""}`);
+      }
+      setReorg(null); load();
+    } catch (e: any) { flash(e?.detail || "Could not save", false); }
+    setWorking(false);
+  }
 
   return (
     <div>
@@ -188,8 +231,22 @@ export default function CategoriesPage() {
                         >
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><EditIcon size={14} />Edit</span>
                         </button>
+                        {!!c.product_count && (
+                          <button
+                            onClick={() => openReorg(c, "move")}
+                            title="Move all products to another category"
+                            data-testid={`move-cat-${c.id}`}
+                            style={{
+                              background: "rgba(16, 53, 98, 0.08)", border: "none",
+                              cursor: "pointer", borderRadius: 6, padding: "6px 8px",
+                              color: "#103562", fontSize: 13,
+                            }}
+                          >
+                            Move products
+                          </button>
+                        )}
                         <button
-                          onClick={() => deleteCategory(c.id)}
+                          onClick={() => deleteCategory(c)}
                           title="Delete"
                           style={{
                             background: "rgba(239, 68, 68, 0.08)", border: "none",
@@ -215,6 +272,36 @@ export default function CategoriesPage() {
       </div>
 
       {/* Modal */}
+      {reorg && (
+        <div className="modal-overlay" onClick={() => setReorg(null)}>
+          <div className="modal-content" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()} data-testid="reorg-dialog">
+            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>
+              {reorg.mode === "move" ? `Move all products out of "${reorg.cat.name}"` : `Delete "${reorg.cat.name}"`}
+            </h2>
+            <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.5 }}>
+              {reorg.note || (reorg.mode === "move"
+                ? `Its ${reorg.cat.product_count} product(s) go to the category you choose. Use this to merge two categories.`
+                : `It still has ${reorg.cat.product_count} product(s). Choose where they go; then the category is deleted.`)}
+            </p>
+            <label style={{ fontSize: 13, fontWeight: 600 }}>Move the products to
+              <select className="admin-input" value={target} onChange={e => setTarget(e.target.value)} style={{ marginTop: 4 }} data-testid="reorg-target">
+                <option value="">Choose…</option>
+                {targetsFor(reorg.cat).map(o => (
+                  <option key={o.id} value={o.id}>{o.name}{o.merchant_id == null ? " (platform)" : ""}</option>
+                ))}
+                <option value="none">No category</option>
+              </select>
+            </label>
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              <button className="btn-outline" style={{ flex: 1 }} onClick={() => setReorg(null)}>Cancel</button>
+              <button className={reorg.mode === "delete" ? "btn-danger" : "btn-primary"} style={{ flex: 1 }} onClick={runReorg} disabled={working} data-testid="reorg-confirm">
+                {working ? "Working…" : reorg.mode === "move" ? "Move products" : "Move and delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modal && (
         <div className="modal-overlay" onClick={() => setModal(false)}>
           <div className="modal-content" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>

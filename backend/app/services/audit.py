@@ -29,7 +29,9 @@ MISSING_TABLE = ("PGRST205", "42P01")
 # What the activity page offers as filters, grouped the way an owner thinks about them
 ACTION_GROUPS: dict[str, tuple[str, ...]] = {
     "product": ("product.created", "product.updated", "product.price_changed", "product.deleted",
-                "product.variants_changed", "product.image_added", "product.image_removed"),
+                "product.variants_changed", "product.image_added", "product.image_removed",
+                "product.category_changed"),
+    "category": ("category.products_moved", "category.deleted"),
     "order": ("order.accepted", "order.rejected", "order.status_changed", "order.expired",
               "order.driver_assigned", "order.driver_unassigned"),
     "driver": ("driver.added", "driver.updated", "driver.activated", "driver.deactivated"),

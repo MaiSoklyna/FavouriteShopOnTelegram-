@@ -32,9 +32,9 @@ from app.models.product import (
     ProductUpdate,
     VariantGroupCreate,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from app.services import attributes, audit, order_expiry
+from app.services import attributes, audit, category_bulk, order_expiry
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Products"])
@@ -654,18 +654,38 @@ async def update_category(
 
 
 @router.delete("/categories/{category_id}")
-async def delete_category(category_id: int, user: TokenClaims = require_any_admin()):
-    """Soft-delete a category. merchant_admin can only delete their own."""
-    async with SupabaseClient.service_role() as db:
-        existing = await db.from_("categories").eq("id", category_id).select_one("id,merchant_id")
-        if not existing:
-            raise NotFoundError("Category", category_id)
-        if user.role == Role.MERCHANT_ADMIN:
-            if existing.get("merchant_id") != user.merchant_id:
-                raise ForbiddenError("You can only delete your own merchant's categories")
+async def delete_category(category_id: int, move_to: str | None = None, user: TokenClaims = require_any_admin()):
+    """Delete (hide) a category. merchant_admin can only delete their own.
 
-        await db.from_("categories").eq("id", category_id).update({"is_active": False})
-    return {"success": True}
+    If it still holds products, `move_to` says where they go first: another category's id, or
+    "none" for no category. Without it the request is refused (409) with the product count, so
+    no product is left in a hidden category."""
+    async with SupabaseClient.service_role() as db:
+        result = await category_bulk.delete_with_move(db, user, category_id, move_to)
+    return {"success": True, **result}
+
+
+class MoveProductsBody(BaseModel):
+    to_category_id: int | None = None  # None = no category
+
+
+class BulkCategoryBody(BaseModel):
+    product_ids: list[int] = Field(..., min_length=1, max_length=category_bulk.MAX_BULK)
+    category_id: int | None = None  # None = no category
+
+
+@router.post("/categories/{category_id}/move-products")
+async def move_category_products(category_id: int, body: MoveProductsBody, user: TokenClaims = require_any_admin()):
+    """Move every product in this category to another one (merge two categories, or empty one)."""
+    async with SupabaseClient.service_role() as db:
+        return {"success": True, **await category_bulk.move_all(db, user, category_id, body.to_category_id)}
+
+
+@router.post("/products/bulk/category")
+async def bulk_set_category(body: BulkCategoryBody, user: TokenClaims = require_any_admin()):
+    """Put several products in one category at once."""
+    async with SupabaseClient.service_role() as db:
+        return {"success": True, **await category_bulk.set_category(db, user, body.product_ids, body.category_id)}
 
 
 @router.post("/categories/{category_id}/image")

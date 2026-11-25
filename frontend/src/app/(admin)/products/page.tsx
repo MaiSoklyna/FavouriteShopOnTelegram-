@@ -25,6 +25,10 @@ export default function ProductsPage() {
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState(0);
   const [filterShop, setFilterShop] = useState(0);
+  // Bulk: tick products, then put them all in one category
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkCat, setBulkCat] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [modal, setModal] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -90,6 +94,26 @@ export default function ProductsPage() {
 
   // Category options: global ones plus those of the shop being edited / filtered
   const catsFor = (shopId: number) => categories.filter(c => !c.merchant_id || !shopId || c.merchant_id === shopId);
+
+  const toggle = (id: number) => setSelected(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const allTicked = products.length > 0 && products.every(p => selected.has(p.id));
+  const tickAll = () => setSelected(allTicked ? new Set() : new Set(products.map(p => p.id)));
+  // Products of one shop can go to that shop's categories; a mix of shops only to platform-wide ones
+  const selectedShops = Array.from(new Set(products.filter(p => selected.has(p.id)).map(p => p.merchant_id)));
+  const bulkCats = selectedShops.length === 1 ? catsFor(selectedShops[0]).filter(c => c.merchant_id === selectedShops[0] || !c.merchant_id) : categories.filter(c => !c.merchant_id);
+
+  async function applyBulkCategory() {
+    if (!bulkCat) { flash("Choose a category", false); return; }
+    setBulkBusy(true);
+    try {
+      const res = await api.post<{ changed: number; to: string | null }>("/products/bulk/category", {
+        product_ids: Array.from(selected), category_id: bulkCat === "none" ? null : Number(bulkCat),
+      });
+      flash(`${res.changed} product${res.changed === 1 ? "" : "s"} moved to ${res.to ?? "no category"}`);
+      setSelected(new Set()); setBulkCat(""); load();
+    } catch (e: any) { flash(e?.detail || "Could not change the category", false); }
+    setBulkBusy(false);
+  }
   const shopName = (id: number) => shops.find(s => s.id === id)?.name;
   const ownShopName = products[0]?.merchant_name;
 
@@ -208,15 +232,32 @@ export default function ProductsPage() {
         </select>
       </div>
 
+      {selected.size > 0 && (
+        <div className="admin-card" data-testid="bulk-bar"
+          style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12, padding: "10px 14px", border: "1px solid var(--accent, #0088cc)" }}>
+          <strong style={{ fontSize: 13 }}>{selected.size} selected</strong>
+          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Move to</span>
+          <select className="admin-input" style={{ maxWidth: 240 }} value={bulkCat} onChange={e => setBulkCat(e.target.value)} data-testid="bulk-category">
+            <option value="">Choose a category…</option>
+            {bulkCats.map(c => <option key={c.id} value={c.id}>{c.icon_emoji} {c.name}{c.merchant_id ? "" : " (platform)"}</option>)}
+            <option value="none">No category</option>
+          </select>
+          <button className="btn-primary" onClick={applyBulkCategory} disabled={bulkBusy} data-testid="bulk-apply">{bulkBusy ? "Moving…" : "Apply"}</button>
+          <button className="btn-outline" onClick={() => setSelected(new Set())}>Clear</button>
+          {selectedShops.length > 1 && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Products from several shops can only go to a platform category.</span>}
+        </div>
+      )}
+
       {/* Table */}
       <div className="admin-card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? <BrandLoader /> : (
           <table className="admin-table">
-            <thead><tr><th>Image</th><th>Name</th>{isSuperAdmin && <th>Shop</th>}<th>Category</th><th>Price</th><th>Stock</th>{allTemplates.length > 0 && <th>Details</th>}<th>Active</th><th>Actions</th></tr></thead>
+            <thead><tr><th style={{ width: 32 }}><input type="checkbox" aria-label="Select all" checked={allTicked} onChange={tickAll} /></th><th>Image</th><th>Name</th>{isSuperAdmin && <th>Shop</th>}<th>Category</th><th>Price</th><th>Stock</th>{allTemplates.length > 0 && <th>Details</th>}<th>Active</th><th>Actions</th></tr></thead>
             <tbody>
-              {products.length === 0 ? <tr><td colSpan={(isSuperAdmin ? 8 : 7) + (allTemplates.length > 0 ? 1 : 0)} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>No products found</td></tr> :
+              {products.length === 0 ? <tr><td colSpan={(isSuperAdmin ? 9 : 8) + (allTemplates.length > 0 ? 1 : 0)} style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>No products found</td></tr> :
               products.map(p => (
-                <tr key={p.id}>
+                <tr key={p.id} style={selected.has(p.id) ? { background: "var(--info-light)" } : undefined}>
+                  <td><input type="checkbox" aria-label={`Select ${p.name}`} checked={selected.has(p.id)} onChange={() => toggle(p.id)} data-testid={`pick-${p.id}`} /></td>
                   <td>{p.primary_image ? <img src={p.primary_image} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }} /> : <div style={{ width: 44, height: 44, borderRadius: 8, background: "var(--bg-secondary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{p.icon_emoji || "📦"}</div>}</td>
                   <td><p style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</p>{p.sku && <p style={{ fontSize: 10, fontFamily: "monospace", color: "var(--text-muted)" }}>{p.sku}</p>}</td>
                   {isSuperAdmin && (

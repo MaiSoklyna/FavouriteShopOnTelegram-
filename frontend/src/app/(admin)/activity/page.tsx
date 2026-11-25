@@ -14,6 +14,7 @@ const FILTERS: { value: string; label: string }[] = [
   { value: "product", label: "Products" },
   { value: "product.price_changed", label: "Price changes" },
   { value: "product.deleted", label: "Deleted products" },
+  { value: "category", label: "Categories" },
   { value: "order", label: "Orders" },
   { value: "order.accepted", label: "Accepted orders" },
   { value: "order.rejected", label: "Rejected orders" },
@@ -24,6 +25,7 @@ const FILTERS: { value: string; label: string }[] = [
   { value: "collection", label: "Collections" },
   { value: "shop", label: "Shop settings" },
   { value: "payout", label: "Payout account" },
+  { value: "refund", label: "Refunds" },
   { value: "staff", label: "Staff accounts" },
   { value: "staff.role_changed", label: "Role changes" },
   { value: "access", label: "Sign-ins and sign-outs" },
@@ -209,6 +211,12 @@ function sentence(e: ActivityEntry): string {
     case "product.variants_changed": return `${who} changed the options of ${what}`;
     case "product.image_added": return `${who} added a photo to ${what}`;
     case "product.image_removed": return `${who} removed a photo from ${what}`;
+    case "product.category_changed": return `${who} moved ${n.products ?? "some"} product${n.products === 1 ? "" : "s"} to ${n.category || "no category"}`;
+    case "category.products_moved": return `${who} moved ${n.products ?? "the"} product${n.products === 1 ? "" : "s"} from ${what} to ${n.category || "no category"}`;
+    case "category.deleted": return `${who} deleted category ${what}${n.products_moved ? ` (moved its ${n.products_moved} product${n.products_moved === 1 ? "" : "s"})` : ""}`;
+    case "order.expired": return `Order ${what} expired: it wasn't paid in time, so its stock went back`;
+    case "refund.requested": return `A refund of $${n.amount} for order ${what} is due to the customer`;
+    case "refund.completed": return `${who} sent the $${n.amount} refund for order ${what}`;
     case "order.accepted": return `${who} accepted order ${what}`;
     case "order.rejected": return `${who} rejected order ${what}`;
     case "order.status_changed": return `${who} marked order ${what} as ${STATUS[n.status] || n.status}`;
@@ -243,6 +251,7 @@ function sentence(e: ActivityEntry): string {
     case "staff.role_changed": return `${who} changed the role of ${what}`;
     case "account.login": return `${who} signed in${n.method === "telegram" ? " with Telegram" : ""}`;
     case "account.logout": return `${who} signed out`;
+    case "account.password_reset": return `${what || who} reset their password with a Telegram link`;
     default: return `${who}: ${e.action} ${what}`;
   }
 }
@@ -255,7 +264,8 @@ const LABELS: Record<string, string> = {
   payout_verification_status: "Verification", payout_enabled: "Payouts", payout_rejection_reason: "Reason",
   code: "Code", type: "Type", value: "Value", discount_type: "Discount type", discount_value: "Discount",
   min_order: "Minimum order", max_uses: "Max uses", expires_at: "Expires", title: "Title", starts_at: "Starts", ends_at: "Ends",
-  customers: "Customers", variants: "Options", products: "Products", sort_order: "Position", cover_url: "Cover", image: "Photo", hero_image: "Hero image", logo_url: "Logo",
+  customers: "Customers", variants: "Options", products: "Products", product_names: "Which products", products_moved: "Products moved",
+  category: "Category", amount: "Amount", reason: "Reason", reference: "Reference", refund_id: "Refund", sort_order: "Position", cover_url: "Cover", image: "Photo", hero_image: "Hero image", logo_url: "Logo",
   opening_hours: "Opening hours", delivery_base_fee: "Delivery fee", delivery_per_km_fee: "Fee per km",
   delivery_radius_km: "Delivery radius (km)", tagline: "Tagline", address: "Address", role: "Role",
 };
