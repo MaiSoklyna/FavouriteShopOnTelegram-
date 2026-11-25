@@ -126,6 +126,9 @@ export interface Merchant {
   shop_subcategory?: string | null;
   product_count?: number;
   order_count?: number;
+  /** Average of the shop's product reviews, from the shops list (until it has shop reviews of its own). */
+  product_rating?: number | null;
+  product_review_count?: number;
   created_at?: string;
 }
 

@@ -43,6 +43,9 @@ class FakeQuery:
     def ilike(self, *_):
         return self
 
+    def in_(self, col, vals):
+        return FakeQuery([r for r in self.rows if r.get(col) in vals])
+
     async def select(self, *_):
         return [dict(r) for r in self.rows]
 
@@ -75,7 +78,7 @@ def login_as(role, merchant_id=None, merchant_role=None):
 def assert_public(shop):
     assert not any(k in shop for k in PRIVATE), shop
     # Allow-list: only known public fields plus computed ones, so a new column never leaks
-    allowed = set(merchants_route.PUBLIC_FIELDS) | {"product_count", "order_count", "shop_category", "shop_subcategory"}
+    allowed = set(merchants_route.PUBLIC_FIELDS) | {"product_count", "order_count", "product_rating", "product_review_count", "shop_category", "shop_subcategory"}
     assert set(shop) <= allowed, set(shop) - allowed
 
 

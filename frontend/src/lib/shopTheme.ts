@@ -73,7 +73,17 @@ function loadExtras(shop: { id: number; name: string; tagline?: string | null })
   return p;
 }
 
-/** Theme + rating per shop id, filled in as each shop's products arrive. */
+/** The rating a shop card shows: the shop's own reviews once it has some, its products' reviews until then. */
+export function shopCardRating(s: { rating?: number | string | null; rating_count?: number | null; product_rating?: number | string | null; product_review_count?: number | null }): number | null {
+  if ((s.rating_count ?? 0) > 0 && s.rating != null) return Number(s.rating);
+  if ((s.product_review_count ?? 0) > 0 && s.product_rating != null) return Number(s.product_rating);
+  return null;
+}
+
+/**
+ * Theme + rating per shop id, filled in as each shop's products arrive. One request per shop, so
+ * only for shops whose category and rating did not come with the shop list (older API).
+ */
 export function useShopExtras(shops: { id: number; name: string; tagline?: string | null }[]) {
   const [extras, setExtras] = useState<Record<number, ShopExtras>>({});
   const key = shops.map((s) => s.id).join(",");

@@ -28,6 +28,9 @@ class FakeQuery:
     def eq(self, *_):
         return self
 
+    def in_(self, *_):
+        return self
+
     def gte(self, col, v):
         self.filters.append((col, ">=", v))
         return self
@@ -49,8 +52,8 @@ class FakeQuery:
 
 def fake_db(rows):
     class DB:
-        def from_(self, _):
-            return FakeQuery(rows)
+        def from_(self, table):
+            return FakeQuery(rows if table == "merchants" else [])
 
     @asynccontextmanager
     async def service_role():

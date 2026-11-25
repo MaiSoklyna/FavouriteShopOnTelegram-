@@ -57,6 +57,7 @@ class FakeQuery:
     def gte(self, col, val): return self._add(col, "gte", val)
     def lte(self, col, val): return self._add(col, "lte", val)
     def ilike(self, col, pattern): return self._add(col, "ilike", pattern.strip("*").lower())
+    def in_(self, col, vals): return self._add(col, "in", list(vals))
 
     def order(self, col, *, desc=False, nulls_last=False):
         self.order_by = (col, desc)
@@ -70,6 +71,7 @@ class FakeQuery:
             if op == "gte" and (have is None or have < val): return False
             if op == "lte" and (have is None or have > val): return False
             if op == "ilike" and val not in str(have or "").lower(): return False
+            if op == "in" and have not in val: return False
         return True
 
     def _rows(self):

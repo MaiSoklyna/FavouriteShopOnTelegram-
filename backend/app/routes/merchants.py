@@ -134,29 +134,54 @@ async def list_merchants(
 
         merchants = await q.select()
 
-        async def counts(merchant_id: int) -> tuple[int, int]:
-            products, orders = await asyncio.gather(
-                db.from_("products").eq("merchant_id", merchant_id).eq("is_active", True).select("id"),
-                db.from_("orders").eq("merchant_id", merchant_id).select("id"),
-            )
-            return len(products), len(orders)
+        ids = [m["id"] for m in merchants]
 
-        # One wave of requests instead of two sequential round trips per shop
-        (cats, subs), per_shop = await asyncio.gather(
+        async def rows(table: str, columns: str, **eq) -> list[dict]:
+            if not ids:
+                return []
+            q = db.from_(table).in_("merchant_id", ids)
+            for col, val in eq.items():
+                q = q.eq(col, val)
+            return await q.select(columns)
+
+        # Three requests for the whole list, whatever the number of shops
+        (cats, subs), products, orders = await asyncio.gather(
             shop_category_names(db),
-            asyncio.gather(*(counts(m["id"]) for m in merchants)),
+            rows("products", "merchant_id,rating_avg,review_count", is_active=True),
+            rows("orders", "merchant_id"),
         )
-        for m, (product_count, order_count) in zip(merchants, per_shop):
-            m["product_count"], m["order_count"] = product_count, order_count
+        for m in merchants:
+            m.update(shop_stats(m["id"], products, orders))
 
     return [
         with_category_names(
-            m if sees_private_fields(user, m["id"])
-            else {**public_view(m), "product_count": m["product_count"], "order_count": m["order_count"]},
+            m if sees_private_fields(user, m["id"]) else {**public_view(m), **{k: m[k] for k in STAT_FIELDS}},
             cats, subs,
         )
         for m in merchants
     ]
+
+
+STAT_FIELDS = ("product_count", "order_count", "product_rating", "product_review_count")
+
+
+def shop_stats(merchant_id: int, products: list[dict], orders: list[dict]) -> dict:
+    """Counts for a shop card, and the average of its products' reviews. Shop cards show the shop's own
+    rating once it has shop reviews and this product average until then, so they no longer need to
+    download every shop's products to work it out."""
+    mine = [p for p in products if p.get("merchant_id") == merchant_id]
+    total, reviews = 0.0, 0
+    for p in mine:
+        n = int(p.get("review_count") or 0)
+        if n > 0:
+            total += float(p.get("rating_avg") or 0) * n
+            reviews += n
+    return {
+        "product_count": len(mine),
+        "order_count": sum(1 for o in orders if o.get("merchant_id") == merchant_id),
+        "product_rating": round(total / reviews, 2) if reviews else None,
+        "product_review_count": reviews,
+    }
 
 
 @router.get("/nearby")
@@ -197,7 +222,12 @@ async def nearby_merchants(
         if shop_subcategory_id is not None:
             query = query.eq("shop_subcategory_id", shop_subcategory_id)
         rows = await query.select()
-        cats, subs = await shop_category_names(db)
+        ids = [m["id"] for m in rows]
+        (cats, subs), products = await asyncio.gather(
+            shop_category_names(db),
+            db.from_("products").in_("merchant_id", ids).eq("is_active", True).select("merchant_id,rating_avg,review_count")
+            if ids else asyncio.sleep(0, result=[]),
+        )
 
     now = datetime.now(SHOP_TZ)
     shops = []
@@ -206,7 +236,10 @@ async def nearby_merchants(
         if q is None or float(q.distance_km) > radius_km:
             continue
         shop = with_category_names({k: m.get(k) for k in NEARBY_PUBLIC_FIELDS if k in m}, cats, subs)
+        stats = shop_stats(m["id"], products, [])
         shop.update({
+            "product_rating": stats["product_rating"],
+            "product_review_count": stats["product_review_count"],
             "distance_km": float(q.distance_km),
             "distance_m": q.distance_m,
             "can_deliver": q.can_deliver,
