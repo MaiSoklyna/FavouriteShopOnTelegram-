@@ -203,6 +203,7 @@ function sentence(e: ActivityEntry): string {
   const who = e.actor_name || "Someone";
   const what = e.target_label || (e.target_id ? `#${e.target_id}` : "");
   const n = (e.new_value || {}) as Record<string, any>;
+  const via = n.via === "Telegram" ? " in Telegram" : "";
   switch (e.action) {
     case "product.created": return `${who} added product ${what}`;
     case "product.updated": return `${who} edited product ${what}`;
@@ -217,9 +218,9 @@ function sentence(e: ActivityEntry): string {
     case "order.expired": return `Order ${what} expired: it wasn't paid in time, so its stock went back`;
     case "refund.requested": return `A refund of $${n.amount} for order ${what} is due to the customer`;
     case "refund.completed": return `${who} sent the $${n.amount} refund for order ${what}`;
-    case "order.accepted": return `${who} accepted order ${what}`;
-    case "order.rejected": return `${who} rejected order ${what}`;
-    case "order.status_changed": return `${who} marked order ${what} as ${STATUS[n.status] || n.status}`;
+    case "order.accepted": return `${who} accepted order ${what}${via}`;
+    case "order.rejected": return `${who} rejected order ${what}${via}${n.note ? ` (${n.note})` : ""}`;
+    case "order.status_changed": return `${who} marked order ${what} as ${STATUS[n.status] || n.status}${via}${n.note ? ` (${n.note})` : ""}`;
     case "order.driver_assigned": return `${who} gave order ${what} to ${n.driver || "a driver"}`;
     case "order.driver_unassigned": return `${who} took order ${what} back from its driver`;
     case "driver.added": return `${who} added driver ${what}`;
@@ -265,7 +266,7 @@ const LABELS: Record<string, string> = {
   code: "Code", type: "Type", value: "Value", discount_type: "Discount type", discount_value: "Discount",
   min_order: "Minimum order", max_uses: "Max uses", expires_at: "Expires", title: "Title", starts_at: "Starts", ends_at: "Ends",
   customers: "Customers", variants: "Options", products: "Products", product_names: "Which products", products_moved: "Products moved",
-  category: "Category", amount: "Amount", reason: "Reason", reference: "Reference", refund_id: "Refund", sort_order: "Position", cover_url: "Cover", image: "Photo", hero_image: "Hero image", logo_url: "Logo",
+  category: "Category", via: "Done in", amount: "Amount", reason: "Reason", reference: "Reference", refund_id: "Refund", sort_order: "Position", cover_url: "Cover", image: "Photo", hero_image: "Hero image", logo_url: "Logo",
   opening_hours: "Opening hours", delivery_base_fee: "Delivery fee", delivery_per_km_fee: "Fee per km",
   delivery_radius_km: "Delivery radius (km)", tagline: "Tagline", address: "Address", role: "Role",
 };

@@ -301,10 +301,8 @@ async def _notify_paid(db, order: dict) -> None:
     """
     await notify.order_paid(db, order["id"])  # in-app: customer receipt + shop alert (never raises)
     try:
-        from bot.notifications import (
-            send_order_placed_to_merchant_group,
-            send_payment_received_to_customer,
-        )
+        from bot.notifications import send_payment_received_to_customer
+        from app.services import order_group
 
         merchant = await db.from_("merchants").eq("id", order["merchant_id"]).select_one(
             "name,telegram_group_id"
@@ -325,22 +323,8 @@ async def _notify_paid(db, order: dict) -> None:
             payment_method=order.get("payment_method") or "khqr",
         )
         if merchant.get("telegram_group_id"):
-            items = await db.from_("order_items").eq("order_id", order["id"]).select(
-                "product_name,quantity,unit_price,subtotal"
-            )
-            await send_order_placed_to_merchant_group(
-                merchant["telegram_group_id"],
-                order_id=order["id"],
-                order_code=order["order_code"],
-                merchant_name=merchant.get("name") or "Shop",
-                items=items,
-                total=total,
-                payment_method=order.get("payment_method") or "khqr",
-                delivery_address=full.get("delivery_address") or "",
-                customer_name=full.get("customer_name") or full.get("delivery_name"),
-                customer_phone=full.get("customer_phone") or full.get("delivery_phone"),
-                paid=True,
-            )
+            # Paid orders arrive accepted; the shop can still cancel & refund from the group
+            await order_group.post_new(db, order["id"])
     except Exception:
         logger.exception("Paid-order notification failed for order %s (non-fatal)", order["id"])
 

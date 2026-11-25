@@ -30,7 +30,7 @@ from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.services import (
     activity, audit, coupons, deliveries, inventory, notify, order_expiry, order_status, refunds, settlement,
-    shop_reviews, shop_setup,
+    order_group, shop_reviews, shop_setup,
 )
 from app.services import promo_schedule
 from app.services.delivery import is_open, quote_delivery, valid_point
@@ -229,10 +229,7 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
                 "product_name,quantity,unit_price,subtotal"
             )
 
-            from bot.notifications import (
-                send_order_placed_to_customer,
-                send_order_placed_to_merchant_group,
-            )
+            from bot.notifications import send_order_placed_to_customer
             await send_order_placed_to_customer(
                 db_user.get("telegram_id") or user.telegram_id,
                 user_id=db_user.get("id"),
@@ -250,20 +247,9 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
             )
 
             # A QR order reaches the shop only once it is paid
-            # (sent from payments._settle); COD orders go now.
+            # (sent from payments._settle); COD orders go now, with Accept / Reject buttons.
             if merchant_group_id and order_data["payment_method"] not in ("khqr", "stripe"):
-                await send_order_placed_to_merchant_group(
-                    merchant_group_id,
-                    order_id=order_id,
-                    order_code=order_code,
-                    merchant_name=merchant_name,
-                    items=order_items_for_dm,
-                    total=total,
-                    payment_method=order_data["payment_method"],
-                    delivery_address=delivery_address,
-                    customer_name=order_data.get("customer_name") or order_data.get("delivery_name"),
-                    customer_phone=order_data.get("customer_phone") or order_data.get("delivery_phone"),
-                )
+                await order_group.post_new(db, order_id)
         except Exception:
             logger.exception("Order notification dispatch failed (non-fatal)")
 
@@ -430,6 +416,7 @@ async def cancel_order(order_id: int, user: TokenClaims = require_role(Role.USER
         await coupons.release_for_order(db, order_id)
         await refunds.request(db, order, "order_cancelled", actor_type="user", actor_id=str(db_user["id"]))
         await notify.order_status_changed(db, order_id, "cancelled", by_customer=True)
+        await order_group.sync(db, order_id, order_group.footer_for("cancelled", "the customer", verb="Cancelled"))
     return {"success": True, "message": "Order cancelled"}
 
 
@@ -534,6 +521,12 @@ async def update_order_status(
             target_type="order", target_id=order_id, target_label=order.get("order_code") or f"#{order_id}",
             old={"status": old_status}, new=new,
         )
+        if new_status in ("confirmed", "cancelled"):
+            fresh = await db.from_("orders").eq("id", order_id).select_one("payment_status")
+            who = user.name or ("the platform" if user.is_super_admin else "the shop")
+            await order_group.sync(db, order_id, order_group.footer_for(
+                new_status, who, reason=body.get("admin_note"), paid=(fresh or {}).get("payment_status") in ("paid", "refunded"),
+                where=" in the dashboard"))
     return {"success": True}
 
 
