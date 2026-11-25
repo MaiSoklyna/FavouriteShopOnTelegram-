@@ -14,7 +14,7 @@ from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.models.coupon import GrantRequest
 from app.routes.orders import _discount, _eligible_base
-from app.services import audit, coupons, notify, promo_schedule
+from app.services import audit, coupons, loyalty, notify, promo_schedule
 
 router = APIRouter(prefix="/coupons", tags=["Coupons"])
 
@@ -207,9 +207,37 @@ async def eligible_coupons(merchant_id: int, user: TokenClaims = require_role(Ro
                     discount = _discount(code, base)
             rows.append({**_view(code, promotion, shops), "eligible": ok, "reason": reason,
                          "discount": float(discount), "in_wallet": cid in wallet_ids})
+        points = await _points_offer(db, uid, subtotal)
     rows.sort(key=lambda r: (not r["eligible"], -r["discount"], r["min_order"]))
     best = next((r["id"] for r in rows if r["eligible"]), None)
-    return {"data": rows, "best_id": best, "subtotal": float(subtotal)}
+    return {"data": rows, "best_id": best, "subtotal": float(subtotal), "points": points}
+
+
+async def _points_offer(db, user_id: int, subtotal: Decimal) -> dict | None:
+    """Loyalty points the customer could turn into a coupon right here (None if the program is off).
+
+    Offers the largest whole number of "minimum" blocks the customer has, without going over the cart:
+    100 points = $1 with today's settings. Redeeming makes a coupon in their wallet (POST /loyalty/redeem),
+    which checkout then applies. Never raises."""
+    try:
+        ls = await loyalty.get_settings(db)
+        if not ls or not ls.get("is_enabled"):
+            return None
+        minimum = int(ls.get("min_redeem_points") or 1)
+        account = await db.from_("loyalty_accounts").eq("user_id", user_id).select_one("balance")
+        balance = int((account or {}).get("balance") or 0)
+        per_block = loyalty.points_to_dollars(minimum, ls)
+        blocks = balance // minimum
+        if per_block > 0 and subtotal > 0:
+            blocks = min(blocks, int(subtotal // per_block))
+        use = blocks * minimum
+        if use < minimum:
+            reason = f"Need {minimum} loyalty points (you have {balance})" if balance < minimum else "Your order is too small to use points"
+            return {"eligible": False, "balance": balance, "min_points": minimum, "use_points": 0, "value": 0.0, "reason": reason}
+        return {"eligible": True, "balance": balance, "min_points": minimum, "use_points": use,
+                "value": float(loyalty.points_to_dollars(use, ls)), "reason": None}
+    except Exception:
+        return None
 
 
 # ── Shops and the platform: give a coupon to specific customers ─────

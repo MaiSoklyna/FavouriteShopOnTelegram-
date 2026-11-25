@@ -690,6 +690,7 @@ function CheckoutContent() {
         )}
         {couponsOpen && merchantId != null && (
           <CouponSheet merchantId={merchantId} appliedCode={quote?.promo?.applied && !quote.orders[0]?.promo_auto ? quote.promo.code : null}
+            auto={quote?.orders[0]?.promo_auto ? { title: quote.orders[0].promo_title || quote.orders[0].promo_code || "Automatic deal", discount: Number(quote.orders[0].discount) || 0 } : null}
             onApply={applyCoupon} onClose={() => setCouponsOpen(false)} />
         )}
 
