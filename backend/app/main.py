@@ -39,6 +39,7 @@ from app.routes import (
     notifications,
     orders,
     payments,
+    payment_methods,
     payments_stripe,
     products,
     promos,
@@ -153,6 +154,7 @@ app.include_router(payments.router, prefix="/api")
 
 # Stripe test-mode card payments (demo)
 app.include_router(payments_stripe.router, prefix="/api")
+app.include_router(payment_methods.router, prefix="/api")
 
 # Merchant settlement (earnings, payouts, payout accounts)
 app.include_router(settlements.router, prefix="/api")

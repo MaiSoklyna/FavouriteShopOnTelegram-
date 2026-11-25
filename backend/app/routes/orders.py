@@ -32,7 +32,7 @@ from app.services import (
     activity, audit, coupons, deliveries, inventory, notify, order_expiry, order_status, refunds, settlement,
     order_group, shop_reviews, shop_setup,
 )
-from app.services import promo_schedule
+from app.services import payment_methods, promo_schedule
 from app.services.delivery import is_open, quote_delivery, valid_point
 
 logger = logging.getLogger(__name__)
@@ -57,6 +57,10 @@ async def place_order(request_body: dict, user: TokenClaims = require_role(Role.
     delivery_address = request_body.get("delivery_address", "")
     if not merchant_id or not delivery_address:
         raise BadRequestError("merchant_id and delivery_address are required")
+    # Never take an order that can't be paid: an online method needs its keys on the server
+    why_not = payment_methods.unavailable_message(request_body.get("payment_method") or "cod")
+    if why_not:
+        raise BadRequestError(why_not)
 
     async with SupabaseClient.service_role() as db:
         # Abandoned online orders give their stock back before this order asks for it

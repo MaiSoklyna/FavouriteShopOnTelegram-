@@ -9,7 +9,7 @@ import { useCart } from "@/providers/CartProvider";
 import { CouponSheet, EmptyState, KhqrCard, PaidSuccess, Pill, Skeleton } from "@/components/shop";
 import type { KhqrData } from "@/components/shop/Khqr";
 import { StripePayScreen } from "@/components/shop/StripePayScreen";
-import { ENABLED_ONLINE, STRIPE_DEMO_NOTE, isEnabled, type PaymentMethod } from "@/lib/paymentProviders";
+import { STRIPE_DEMO_NOTE, useOnlineMethods, type PaymentMethod } from "@/lib/paymentProviders";
 import { fetchQuote, money, savePromo, savedPromoFor, type CartQuote, type DeliveryChoice } from "@/lib/quote";
 import { deleteAddress, listAddresses, saveAddress, type SavedAddress } from "@/lib/addresses";
 import { distanceKm, staticMapUrl, formatEta, formatKm, getCurrentPosition, type LatLng } from "@/lib/mapbox";
@@ -76,7 +76,16 @@ function CheckoutContent() {
   const [paid, setPaid] = useState(false); // every QR order paid: the success moment before the order page
   const [paidSummary, setPaidSummary] = useState<{ amount: number | null; eta: string | null }>({ amount: null, eta: null });
   const [form, setForm] = useState({ name: "", phone: "", address: "", note: "" });
-  const [payment, setPayment] = useState<PaymentMethod>(ENABLED_ONLINE[0] ?? "cod");
+  // Only methods the server can take; cash until it answers, then the first online one (if the customer hasn't picked)
+  const online = useOnlineMethods();
+  const [payment, setPayment] = useState<PaymentMethod>("cod");
+  const pickedPayment = useRef(false);
+  useEffect(() => {
+    if (!online.loaded) return;
+    if (!pickedPayment.current && online.methods[0]) setPayment(online.methods[0]);
+    else if (payment !== "cod" && !online.methods.includes(payment)) setPayment("cod");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [online.loaded]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [placing, setPlacing] = useState(false);
   const [orderError, setOrderError] = useState("");
@@ -649,17 +658,17 @@ function CheckoutContent() {
 
         {/* Payment */}
         <div role="radiogroup" aria-label="Payment" className="mt-3 flex flex-col gap-2">
-          {isEnabled("stripe") && (
-            <PayOption on={payment === "stripe"} onPick={() => { haptic("select"); setPayment("stripe"); }}
+          {online.methods.includes("stripe") && (
+            <PayOption on={payment === "stripe"} onPick={() => { haptic("select"); pickedPayment.current = true; setPayment("stripe"); }}
               logo={<span className="grid h-10 w-10 place-items-center rounded-md bg-[#635BFF] text-[9px] font-extrabold tracking-tight text-white">CARD</span>}
               title="Credit / debit card" sub={STRIPE_DEMO_NOTE} />
           )}
-          {isEnabled("khqr") && (
-            <PayOption on={payment === "khqr"} onPick={() => { haptic("select"); setPayment("khqr"); }}
+          {online.methods.includes("khqr") && (
+            <PayOption on={payment === "khqr"} onPick={() => { haptic("select"); pickedPayment.current = true; setPayment("khqr"); }}
               logo={<span className="grid h-10 w-10 place-items-center rounded-md bg-[#E1232E] text-[9px] font-extrabold tracking-tight text-white">KHQR</span>}
               title="ABA KHQR" sub="Any bank app" />
           )}
-          <PayOption on={payment === "cod"} onPick={() => { haptic("select"); setPayment("cod"); }}
+          <PayOption on={payment === "cod"} onPick={() => { haptic("select"); pickedPayment.current = true; setPayment("cod"); }}
             logo={<span className="grid h-10 w-10 place-items-center rounded-md bg-positive-500 text-[18px] font-extrabold text-white">$</span>}
             title="Cash on delivery" sub={deliveryType === "pickup" ? "Pay at the shop" : "Pay the rider"} />
         </div>
