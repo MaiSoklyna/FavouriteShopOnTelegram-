@@ -236,8 +236,12 @@ export default function MerchantsPage() {
       merchantPayload.latitude = lat;
       merchantPayload.longitude = lng;
     }
-    if (!Number.isFinite(radius) || radius < 0 || radius > 10) {
-      flash("Delivery radius must be between 0 and 10 km", false);
+    if (!Number.isFinite(radius) || radius < 0 || radius > 30) {
+      flash("Delivery radius must be between 0 and 30 km", false);
+      return;
+    }
+    if (radius > 10 && form.delivery_base_fee.trim() === "") {
+      flash("Over 10 km the shop needs its own delivery fee (platform fees only cover 10 km)", false);
       return;
     }
     merchantPayload.delivery_radius_km = radius;
@@ -258,6 +262,12 @@ export default function MerchantsPage() {
       const same = k === "opening_hours" ? JSON.stringify(before) === JSON.stringify(v) : (before === null ? null : Number(before)) === v;
       if (!same) merchantPayload[k] = v;
     }
+    // A base fee means the shop sets its own delivery fees (needed beyond 10 km); none means platform fees
+    // (an undecided shop stays undecided: the owner chooses in Shop setup)
+    const ownFees = num(form.delivery_base_fee) !== null;
+    const modeBefore = (original as any)?.delivery_fee_mode ?? null;
+    if (ownFees && modeBefore !== "custom") merchantPayload.delivery_fee_mode = "custom";
+    else if (!ownFees && modeBefore === "custom" && radius <= 10) merchantPayload.delivery_fee_mode = "platform";
     if (form.hours_custom && (!form.hours_days.length || form.hours_open === form.hours_close)) {
       flash("Pick at least one open day and different open/close times", false);
       return;

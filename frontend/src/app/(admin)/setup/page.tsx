@@ -234,7 +234,8 @@ function Location({ data, owner, saved, flash, next }: StepProps) {
     if (!pin) { flash("Tap the map where your shop is", false); return; }
     if (!address.trim()) { flash("Enter the shop's address", false); return; }
     const r = Number(radius);
-    if (!(r > 0 && r <= 10)) { flash("Delivery radius must be between 0.5 and 10 km", false); return; }
+    if (!(r > 0 && r <= 30)) { flash("Delivery radius must be between 0.5 and 30 km", false); return; }
+    if (r > 10 && s.delivery_fee_mode === "platform") { flash("Over 10 km you need your own delivery fees: set them in the Delivery step first, or keep 10 km or less", false); return; }
     run(() => api.patch(`/merchants/${s.id}`, { latitude: pin.lat, longitude: pin.lng, address: address.trim(), delivery_radius_km: r }),
       async () => { await saved(); next(); });
   }
@@ -252,6 +253,9 @@ function Location({ data, owner, saved, flash, next }: StepProps) {
       </label>
       <label style={label}>Delivery radius (km)
         <input className="admin-input" inputMode="decimal" value={radius} onChange={(e) => setRadius(e.target.value.replace(/[^\d.]/g, ""))} disabled={!owner} style={{ maxWidth: 140 }} />
+        <span style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--text-muted)", marginTop: 4 }}>
+          Up to 30 km. Over 10 km you set your own delivery fees (Delivery step): platform fees only cover 10 km.
+        </span>
       </label>
       <Footer busy={busy} onSave={owner ? save : undefined} next={next} />
     </div>
@@ -320,7 +324,8 @@ function HoursStep({ data, owner, saved, flash, next }: StepProps) {
 
 function Delivery({ data, owner, saved, flash, next }: StepProps) {
   const s = data.shop;
-  const [mode, setMode] = useState<"platform" | "custom" | "">(s.delivery_fee_mode ?? "");
+  const longDistance = Number(s.delivery_radius_km ?? 5) > 10;   // platform fee bands stop at 10 km
+  const [mode, setMode] = useState<"platform" | "custom" | "">(longDistance && s.delivery_fee_mode === "platform" ? "custom" : (s.delivery_fee_mode ?? ""));
   const [base, setBase] = useState(s.delivery_base_fee != null ? String(s.delivery_base_fee) : "");
   const [perKm, setPerKm] = useState(s.delivery_per_km_fee != null ? String(s.delivery_per_km_fee) : "");
   const [minOrder, setMinOrder] = useState(s.min_order_amount != null ? String(s.min_order_amount) : "");
@@ -338,9 +343,9 @@ function Delivery({ data, owner, saved, flash, next }: StepProps) {
     }), async () => { await saved(); next(); });
   }
 
-  const radio = (v: "platform" | "custom", title: string, text: string) => (
-    <label style={{ display: "flex", gap: 10, padding: 12, borderRadius: 10, border: `1.5px solid ${mode === v ? "var(--accent, #0088cc)" : "var(--border)"}`, cursor: "pointer", marginBottom: 8 }}>
-      <input type="radio" name="fee" checked={mode === v} onChange={() => setMode(v)} disabled={!owner} data-testid={`fee-${v}`} />
+  const radio = (v: "platform" | "custom", title: string, text: string, off = false) => (
+    <label style={{ display: "flex", gap: 10, padding: 12, borderRadius: 10, border: `1.5px solid ${mode === v ? "var(--accent, #0088cc)" : "var(--border)"}`, cursor: off ? "not-allowed" : "pointer", marginBottom: 8, opacity: off ? 0.55 : 1 }}>
+      <input type="radio" name="fee" checked={mode === v} onChange={() => setMode(v)} disabled={!owner || off} data-testid={`fee-${v}`} />
       <span><b style={{ fontSize: 14 }}>{title}</b><br /><span style={{ fontSize: 12, color: "var(--text-muted)" }}>{text}</span></span>
     </label>
   );
@@ -349,7 +354,9 @@ function Delivery({ data, owner, saved, flash, next }: StepProps) {
     <div>
       <h2 style={h2}>Delivery</h2>
       <p style={hint}>How customers pay for delivery. Pickup at your shop is always free. Delivery is only offered within your radius ({s.delivery_radius_km ?? 5} km).</p>
-      {radio("platform", "Platform standard fees", "Byme24's distance-based fee: the further away, the more it costs. Simplest to start.")}
+      {radio("platform", "Platform standard fees", longDistance
+        ? `Only covers deliveries up to 10 km. Your radius is ${s.delivery_radius_km} km, so set your own fees, or lower the radius in Location.`
+        : "Byme24's distance-based fee: the further away, the more it costs (up to 10 km). Simplest to start.", longDistance)}
       {radio("custom", "My own fees", "A base fee plus an amount per km that you choose.")}
       {mode === "custom" && (
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", margin: "4px 0 8px" }}>

@@ -56,8 +56,21 @@ def test_shop_own_fee_is_base_plus_per_km():
     assert delivery_fee(3.2, base_fee=0.5, per_km_fee=0.25) == Decimal("1.30")
 
 
-def test_shop_own_fee_still_capped_by_max_distance():
-    assert delivery_fee(11, base_fee=0.5, per_km_fee=0.25) is None
+def test_beyond_10_km_only_the_shops_own_fees_apply():
+    # Option B (2026-11-25): platform bands stop at 10 km; a shop's own fees go up to 30 km
+    assert delivery_fee(11) is None
+    assert delivery_fee(18, base_fee=1.0, per_km_fee=0.25) == Decimal("5.50")
+    assert delivery_fee(30, base_fee=1.0, per_km_fee=0.25) == Decimal("8.50")
+    assert delivery_fee(30.5, base_fee=1.0, per_km_fee=0.25) is None
+
+
+def test_an_18_km_shop_with_its_own_fees_delivers_18_km():
+    shop = {"latitude": 11.55, "longitude": 104.92, "delivery_radius_km": 18, "delivery_base_fee": 1.0, "delivery_per_km_fee": 0.2}
+    far = (11.55 + 15 / 111.0, 104.92)          # about 15 km north
+    q = quote_delivery(shop, far)
+    assert q.can_deliver and 14.5 < float(q.distance_km) < 15.5 and q.fee == (Decimal("1.0") + Decimal("0.2") * q.distance_km).quantize(Decimal("0.01"))
+    q = quote_delivery({**shop, "delivery_base_fee": None, "delivery_per_km_fee": None}, far)
+    assert not q.can_deliver                     # platform fees don't reach 15 km
 
 
 # ── ETA ─────────────────────────────────────────────────────────

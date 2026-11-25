@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 import httpx
 
 from app.config import settings
+from app.core.constants import PLATFORM_FEE_MAX_KM
 from app.core.security import TokenClaims
 from app.services import audit, notify
 
@@ -102,11 +103,12 @@ def is_group_chat(chat_id) -> bool:
 
 
 def delivery_set(m: dict) -> bool:
+    """A radius and a fee choice. Beyond 10 km only the shop's own fees count (platform bands stop there)."""
     mode = m.get("delivery_fee_mode")
     if not m.get("delivery_radius_km") or float(m["delivery_radius_km"]) <= 0:
         return False
     if mode == "platform":
-        return True
+        return float(m["delivery_radius_km"]) <= PLATFORM_FEE_MAX_KM
     return mode == "custom" and m.get("delivery_base_fee") is not None
 
 

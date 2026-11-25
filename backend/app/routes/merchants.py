@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, UploadFile
 
-from app.core.constants import Role
+from app.core.constants import MAX_DELIVERY_KM, PLATFORM_FEE_MAX_KM, Role
 from app.core.dependencies import get_optional_user, require_any_admin, require_role, require_shop_owner
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError, RateLimitError
 from app.core.security import TokenClaims
@@ -207,7 +207,7 @@ async def nearby_merchants(
     """
     if not valid_point(lat, lng):
         raise BadRequestError("Invalid location")
-    radius_km = max(0.5, min(radius_km, 25))
+    radius_km = max(0.5, min(radius_km, MAX_DELIVERY_KM))
     limit, offset = max(1, min(limit, 50)), max(0, offset)
 
     # Cheap bounding-box prefilter in the database (uses idx_merchants_location),
@@ -339,11 +339,21 @@ async def update_merchant(
             data.pop("is_featured", None)  # super-admin-only flag
         if "opening_hours" in data and data["opening_hours"] is not None:
             _check_hours(data["opening_hours"])
+        _check_long_distance(existing, data)
         if data:
             await db.from_("merchants").eq("id", merchant_id).update(data)
             await _log_shop_change(db, user, existing, data)
         await shop_setup.refresh(db, merchant_id)
     return {"success": True}
+
+
+def _check_long_distance(existing: dict, data: dict) -> None:
+    """Platform standard fees stop at 10 km: a radius beyond that needs the shop's own fees."""
+    radius = data.get("delivery_radius_km", existing.get("delivery_radius_km"))
+    mode = data.get("delivery_fee_mode", existing.get("delivery_fee_mode"))
+    if radius is not None and float(radius) > PLATFORM_FEE_MAX_KM and mode == "platform":
+        raise BadRequestError(f"Platform delivery fees only cover up to {PLATFORM_FEE_MAX_KM:g} km. "
+                              f"To deliver further, choose your own delivery fees (base + per km).")
 
 
 _HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")

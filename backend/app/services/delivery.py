@@ -14,6 +14,7 @@ from app.core.constants import (
     ETA_PREP_MINUTES,
     ETA_WINDOW_MINUTES,
     MAX_DELIVERY_KM,
+    PLATFORM_FEE_MAX_KM,
 )
 
 EARTH_RADIUS_KM = 6371.0088
@@ -34,8 +35,8 @@ def valid_point(lat, lng) -> bool:
 
 
 def fee_for_distance(km: float) -> Decimal | None:
-    """Flat fee for the band `km` falls in, or None when out of range."""
-    if km > MAX_DELIVERY_KM:
+    """Platform standard fee for the band `km` falls in, or None beyond the bands (10 km)."""
+    if km > PLATFORM_FEE_MAX_KM:
         return None
     for max_km, fee in DELIVERY_FEE_TIERS:
         if km <= max_km:
@@ -81,8 +82,8 @@ def eta_for_distance(km: float) -> tuple[int, int]:
 def delivery_fee(km: float, base_fee=None, per_km_fee=None) -> Decimal | None:
     """Fee for `km`, or None when out of range.
 
-    A shop with its own `base_fee` charges base + per_km × km; every other
-    shop uses the platform's distance bands.
+    A shop with its own `base_fee` charges base + per_km × km, up to 30 km; every other
+    shop uses the platform's distance bands, which stop at 10 km.
     """
     if km > MAX_DELIVERY_KM:
         return None
