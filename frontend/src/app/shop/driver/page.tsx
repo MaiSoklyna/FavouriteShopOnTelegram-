@@ -26,6 +26,9 @@ function DriverContent() {
   const [busy, setBusy] = useState<number | null>(null);
   const [failing, setFailing] = useState<number | null>(null);
   const [reason, setReason] = useState("");
+  // "Delivered" asks for the customer's 4-digit code first
+  const [delivering, setDelivering] = useState<number | null>(null);
+  const [code, setCode] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -44,11 +47,11 @@ function DriverContent() {
   useEffect(() => { setLoadingJobs(true); setJobs([]); load(); }, [load]);
   useAutoRefresh(load, { interval: 10000 });
 
-  async function act(job: DriverJob, action: string, body?: { reason: string }) {
+  async function act(job: DriverJob, action: string, body?: { reason?: string; code?: string }) {
     setBusy(job.order.id); setError("");
     try {
       await api.post(`/deliveries/jobs/${job.order.id}/${action}`, body);
-      setFailing(null); setReason("");
+      setFailing(null); setReason(""); setDelivering(null); setCode("");
       await load();
     } catch (e: unknown) {
       setError((e instanceof Error && e.message) || "That didn't work. Please try again.");
@@ -134,6 +137,10 @@ function DriverContent() {
         ) : jobs.map((job) => (
           <JobCard key={job.order.id} job={job} busy={busy === job.order.id} failing={failing === job.order.id}
             reason={reason} setReason={setReason}
+            delivering={delivering === job.order.id} code={code} setCode={setCode}
+            onStartDeliver={() => { setDelivering(job.order.id); setCode(""); setFailing(null); }}
+            onCancelDeliver={() => setDelivering(null)}
+            onDeliver={() => act(job, "deliver", { code })}
             onAct={(a) => act(job, a)} onStartFail={() => { setFailing(job.order.id); setReason(""); }} onCancelFail={() => setFailing(null)}
             onFail={() => act(job, "fail", { reason })} />
         ))}
@@ -163,8 +170,10 @@ function Contact({ label, name, phone, address, place }: {
   );
 }
 
-function JobCard({ job, busy, failing, reason, setReason, onAct, onStartFail, onCancelFail, onFail }: {
+function JobCard({ job, busy, failing, reason, setReason, delivering, code, setCode, onStartDeliver, onCancelDeliver, onDeliver, onAct, onStartFail, onCancelFail, onFail }: {
   job: DriverJob; busy: boolean; failing: boolean; reason: string; setReason: (v: string) => void;
+  delivering: boolean; code: string; setCode: (v: string) => void;
+  onStartDeliver: () => void; onCancelDeliver: () => void; onDeliver: () => void;
   onAct: (a: "accept" | "pickup" | "deliver" | "decline") => void; onStartFail: () => void; onCancelFail: () => void; onFail: () => void;
 }) {
   const status = job.delivery.status;
@@ -204,11 +213,27 @@ function JobCard({ job, busy, failing, reason, setReason, onAct, onStartFail, on
         {status === "failed" && job.delivery.failure_reason && <div style={{ marginTop: 4, color: "#B42318" }}>Not delivered: {job.delivery.failure_reason}</div>}
       </div>
 
-      {!finished && !failing && (
+      {!finished && !failing && !delivering && (
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
           {status === "assigned" && <button type="button" style={btn(false)} disabled={busy} onClick={() => onAct("decline")}>Decline</button>}
           {status === "picked_up" && <button type="button" style={btn(false)} disabled={busy} onClick={onStartFail}>Couldn't deliver</button>}
-          {next && <button type="button" style={btn(true)} disabled={busy} onClick={() => onAct(next.action)}>{busy ? "…" : next.label}</button>}
+          {next && <button type="button" style={btn(true)} disabled={busy}
+            onClick={() => (next.action === "deliver" ? onStartDeliver() : onAct(next.action))}>{busy ? "…" : next.label}</button>}
+        </div>
+      )}
+      {delivering && (
+        <div style={{ marginTop: 12 }} data-testid="code-entry">
+          <label htmlFor={`code-${job.order.id}`} style={{ fontSize: 12, fontWeight: 700 }}>Ask the customer for their 4-digit delivery code</label>
+          <input id={`code-${job.order.id}`} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            inputMode="numeric" autoComplete="one-time-code" maxLength={4} placeholder="••••" autoFocus
+            style={{ width: "100%", marginTop: 6, padding: "10px 12px", borderRadius: 12, border: "1.5px solid var(--shop-divider, #ECEEF3)", fontSize: 24, fontWeight: 800, letterSpacing: "0.4em", textAlign: "center" }} />
+          <p style={{ fontSize: 11, color: "var(--shop-muted, #6B7280)", marginTop: 6 }}>
+            It is on the customer&apos;s order page and in their Telegram message. No code? Call the shop.
+          </p>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button type="button" style={btn(false)} onClick={onCancelDeliver}>Back</button>
+            <button type="button" style={btn(true)} disabled={busy || code.length !== 4} onClick={onDeliver}>{busy ? "…" : "Confirm delivered"}</button>
+          </div>
         </div>
       )}
       {failing && (

@@ -436,6 +436,8 @@ export interface DeliveryInfo {
   delivered_at?: string | null;
   /** Only in the shop's view. */
   failure_reason?: string | null;
+  /** Only in the customer's view, while the driver is on the way: given to the driver at the door. */
+  confirmation_code?: string | null;
 }
 
 export interface DriverProfile {

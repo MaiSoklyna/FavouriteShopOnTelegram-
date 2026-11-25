@@ -440,7 +440,8 @@ function DriverCard({ delivery }: { delivery: DeliveryInfo }) {
   const call = telUrl(delivery.driver.phone);
   const name = delivery.driver.name || "Your driver";
   return (
-    <div data-testid="driver-card" className="mb-3 flex items-center gap-3 rounded-hero bg-card p-3.5 shadow-fos-sm">
+    <div className="mb-3 overflow-hidden rounded-hero bg-card shadow-fos-sm">
+    <div data-testid="driver-card" className="flex items-center gap-3 p-3.5">
       <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-tint-mango text-mango-500"><Icon name="truck" size={22} strokeWidth={2} /></span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[15px] font-extrabold text-ink-900">{name}{delivery.driver.vehicle ? ` · ${delivery.driver.vehicle}` : ""}</span>
@@ -451,6 +452,18 @@ function DriverCard({ delivery }: { delivery: DeliveryInfo }) {
           <Icon name="phone" size={18} />
         </a>
       )}
+    </div>
+    {delivery.confirmation_code && (
+      <div data-testid="delivery-code" className="flex items-center justify-between gap-3 border-t border-line bg-tint-gold px-3.5 py-3">
+        <span className="text-[13px] leading-5 text-ink-900">
+          <span className="block font-extrabold">Your delivery code</span>
+          Give it to the driver when your order arrives. Don&apos;t share it before.
+        </span>
+        <span className="shrink-0 rounded-thumb bg-card px-3 py-1.5 font-mono text-[22px] font-extrabold tracking-[0.25em] text-navy-700" aria-label={`Delivery code ${delivery.confirmation_code.split("").join(" ")}`}>
+          {delivery.confirmation_code}
+        </span>
+      </div>
+    )}
     </div>
   );
 }

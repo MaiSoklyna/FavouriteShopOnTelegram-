@@ -16,10 +16,10 @@ from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, 
 from app.core.security import TokenClaims, mint_jwt
 from app.db.client import SupabaseClient
 from app.main import app
-from app.models.delivery import AssignRequest, AvailabilityUpdate, DriverCreate, DriverUpdate, FailRequest
+from app.models.delivery import AssignRequest, AvailabilityUpdate, DriverCreate, DriverUpdate, JobActionRequest
 from app.routes import deliveries as route
 from app.routes import orders as orders_route
-from app.services import deliveries, notify, order_status
+from app.services import deliveries, delivery_code, notify, order_status
 
 UNIQUE = {"drivers": "user_id", "deliveries": "order_id"}
 NEW_TABLES = ("drivers", "deliveries")
@@ -181,8 +181,11 @@ def assign(db, driver_id, order_id=50, user=BLOOM):
     return run(route.assign_driver(order_id, AssignRequest(driver_id=driver_id), user=user))
 
 
-def act(db, driver_id, action, order_id=50, reason=None):
-    body = FailRequest(reason=reason) if reason else None
+def act(db, driver_id, action, order_id=50, reason=None, code=None):
+    # "deliver" needs the customer's code; by default give the right one
+    if action == "deliver" and code is None:
+        code = delivery_code.code_for(order_id)
+    body = JobActionRequest(reason=reason, code=code) if (reason or code) else None
     return run(route.job_action(order_id, action, body, user=tg(driver_id)))
 
 
@@ -609,3 +612,61 @@ def test_shop_tools_explain_missing_setup_before_migration_028(db):
         with pytest.raises(BadRequestError) as err:
             call()
         assert "not set up" in str(getattr(err.value, "detail", err.value))
+
+
+# ── the delivery confirmation code ─────────────────────────────────
+
+def _out_for_delivery(db):
+    assign(db, 1); act(db, 1, "accept"); act(db, 1, "pickup")
+    db.delivery(50)["code_attempts"] = 0  # migration 040 is in place
+
+
+def test_code_is_four_digits_and_stable_per_order():
+    a, b = delivery_code.code_for(50), delivery_code.code_for(51)
+    assert len(a) == 4 and a.isdigit() and a == delivery_code.code_for(50)
+    assert delivery_code.matches(50, a) and delivery_code.matches(50, f" {a[:2]} {a[2:]} ")  # spaces are fine
+    assert not delivery_code.matches(50, a[:3]) and not delivery_code.matches(50, None)
+    assert a != b or delivery_code.code_for(52) != a  # not the same code for every order
+
+
+def test_delivering_needs_the_customers_code(db):
+    _out_for_delivery(db)
+    with pytest.raises(BadRequestError, match="4-digit"):
+        act(db, 1, "deliver", code=" ")
+    assert db.delivery(50)["status"] == "picked_up" and db.order_status(50) == "shipped"
+    act(db, 1, "deliver")  # the right code
+    assert db.delivery(50)["status"] == "delivered"
+
+
+def test_wrong_codes_are_counted_and_lock_the_driver_out(db):
+    _out_for_delivery(db)
+    wrong = "0000" if delivery_code.code_for(50) != "0000" else "1111"
+    for left in (4, 3, 2, 1):
+        with pytest.raises(BadRequestError, match=f"{left} tr"):
+            act(db, 1, "deliver", code=wrong)
+    with pytest.raises(BadRequestError, match="Call the shop"):
+        act(db, 1, "deliver", code=wrong)
+    assert db.delivery(50)["code_attempts"] == 5
+    with pytest.raises(ForbiddenError, match="Call the shop"):
+        act(db, 1, "deliver")  # even the right code is refused now
+    assert db.order_status(50) == "shipped"
+
+
+def test_only_the_customer_sees_the_code(db):
+    _out_for_delivery(db)
+    code = delivery_code.code_for(50)
+    assert run(deliveries.customer_view(db, 50))["confirmation_code"] == code
+    assert "confirmation_code" not in run(route.order_delivery(50, user=BLOOM))["data"]
+    assert code not in str(run(route.my_jobs(scope="active", user=tg(1))))
+
+
+def test_the_code_disappears_once_delivered(db):
+    _out_for_delivery(db)
+    act(db, 1, "deliver")
+    assert "confirmation_code" not in run(deliveries.customer_view(db, 50))
+
+
+def test_out_for_delivery_message_carries_the_code(db):
+    _out_for_delivery(db)
+    out = next(n for n in db.notes(user_id=1) if n["title"] == "Out for delivery")
+    assert delivery_code.code_for(50) in out["body"]

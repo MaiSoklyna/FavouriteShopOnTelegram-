@@ -52,6 +52,7 @@ const SECTIONS: LegalSection[] = [
     body: (
       <ul>
         <li>Delivery times shown are estimates. The shop or its driver brings the order to the location you pinned; make sure someone can receive it.</li>
+        <li>When a driver brings your order, give them the 4-digit delivery code shown on your order page. It confirms you received the order, so don&apos;t share it before the order is in your hands.</li>
         <li>For pickup orders, collect your order at the shop when it is marked ready.</li>
         <li>Check your order when it arrives and tell us through support straight away if something is wrong or missing.</li>
       </ul>

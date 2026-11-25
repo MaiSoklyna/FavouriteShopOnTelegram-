@@ -114,6 +114,17 @@ async def _order_context(db, order_id: int) -> dict | None:
     return order
 
 
+async def _delivery_code_line(db, order_id: int) -> str:
+    """" Your delivery code is 1234 ..." when a driver is bringing the order, else "". Never raises."""
+    try:
+        from app.services import delivery_code
+        if await db.from_("deliveries").eq("order_id", order_id).in_("status", ["assigned", "accepted", "picked_up"]).select("id"):
+            return f" Your delivery code is {delivery_code.code_for(order_id)}: give it to the driver when your order arrives."
+    except Exception:
+        logger.exception("Could not add the delivery code for order %s", order_id)
+    return ""
+
+
 async def _push(db, order: dict, title: str, body: str) -> None:
     """Telegram copy of an in-app notification. Never raises."""
     try:
@@ -149,6 +160,8 @@ async def order_status_changed(db, order_id: int, status: str, *, by_customer: b
         link = f"/shop/order/{order_id}"
         if not by_customer:
             copy = status_copy(status, pickup=order["pickup"], shop=order["shop"], code=order["order_code"])
+            if copy and status == "shipped" and not order["pickup"]:
+                copy = (copy[0], copy[1] + await _delivery_code_line(db, order_id))
             if copy:
                 created = await notify_user(
                     db, order["user_id"], "order_status", *copy,

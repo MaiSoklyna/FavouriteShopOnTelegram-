@@ -10,7 +10,7 @@ from app.core.dependencies import require_any_admin, require_role
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.models.delivery import AssignRequest, AvailabilityUpdate, DriverCreate, DriverUpdate, FailRequest
+from app.models.delivery import AssignRequest, AvailabilityUpdate, DriverCreate, DriverUpdate, JobActionRequest
 from app.services import audit, deliveries
 from app.services.notify import _error_code
 
@@ -53,12 +53,14 @@ async def my_jobs(scope: str = "active", user: TokenClaims = require_role(Role.U
 
 
 @router.post("/jobs/{order_id}/{action}")
-async def job_action(order_id: int, action: str, body: FailRequest | None = None,
+async def job_action(order_id: int, action: str, body: JobActionRequest | None = None,
                      user: TokenClaims = require_role(Role.USER)):
-    """accept | decline | pickup | deliver | fail one of the caller's own deliveries."""
+    """accept | decline | pickup | deliver | fail one of the caller's own deliveries.
+    "deliver" needs the customer's 4-digit code; "fail" needs a reason."""
     async with SupabaseClient.service_role() as db:
         driver = await deliveries.require_driver(db, user)
-        delivery = await deliveries.driver_action(db, driver, order_id, action, reason=body.reason if body else None)
+        delivery = await deliveries.driver_action(db, driver, order_id, action,
+                                                  reason=body.reason if body else None, code=body.code if body else None)
     return {"success": True, "data": {"status": delivery.get("status")}}
 
 

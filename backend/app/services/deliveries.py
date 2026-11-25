@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 import httpx
 
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
-from app.services import notify, order_status
+from app.services import delivery_code, notify, order_status
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +149,8 @@ async def unassign(db, order: dict) -> None:
 
 # ── the driver side ─────────────────────────────────────────────────
 
-async def driver_action(db, driver: dict, order_id: int, action: str, *, reason: str | None = None) -> dict:
+async def driver_action(db, driver: dict, order_id: int, action: str, *, reason: str | None = None,
+                        code: str | None = None) -> dict:
     """Accept, decline, pick up, deliver or fail one of the driver's own deliveries."""
     if action not in DRIVER_ACTIONS:
         raise BadRequestError("Unknown action")
@@ -188,6 +189,8 @@ async def driver_action(db, driver: dict, order_id: int, action: str, *, reason:
 
     if action == "deliver" and order["status"] != "shipped":
         raise BadRequestError("The order has not left the shop yet")
+    if action == "deliver":
+        await _check_code(db, delivery, order_id, code)
 
     if action == "pickup":
         if order["status"] not in ("confirmed", "processing", "shipped"):
@@ -218,6 +221,23 @@ async def driver_action(db, driver: dict, order_id: int, action: str, *, reason:
         await _tell_shop(db, order, "failed", "Delivery failed",
                          f"{driver['full_name']} could not deliver order {order['order_code']}: {change['failure_reason']}", delivery)
     return claimed[0]
+
+
+async def _check_code(db, delivery: dict, order_id: int, code: str | None) -> None:
+    """The customer's code must match before the driver can mark the order delivered."""
+    attempts = int(delivery.get("code_attempts") or 0)
+    if attempts >= delivery_code.MAX_ATTEMPTS:
+        raise ForbiddenError("Too many wrong codes. Call the shop: they can confirm the delivery.")
+    if not code or not code.strip():
+        raise BadRequestError("Ask the customer for their 4-digit delivery code.")
+    if delivery_code.matches(order_id, code):
+        return
+    left = delivery_code.MAX_ATTEMPTS - attempts - 1
+    if "code_attempts" in delivery:  # counted from migration 040 on
+        await db.from_("deliveries").eq("id", delivery["id"]).eq("code_attempts", attempts).update(
+            {"code_attempts": attempts + 1})
+    raise BadRequestError("That code is not right." + (f" {left} {'try' if left == 1 else 'tries'} left." if left > 0
+                          else " Call the shop: they can confirm the delivery."))
 
 
 # ── keeping a delivery in step with its order (called by order_status) ──
@@ -312,6 +332,9 @@ async def customer_view(db, order_id: int, *, for_shop: bool = False) -> dict | 
         }
         if for_shop:
             view["failure_reason"] = delivery.get("failure_reason")
+        elif delivery["status"] in ACTIVE:
+            # Only the customer sees it: they give it to the driver at the door
+            view["confirmation_code"] = delivery_code.code_for(order_id)
         return view
     except httpx.HTTPStatusError as exc:
         if _is_missing_table(exc):

@@ -33,3 +33,9 @@ class AvailabilityUpdate(BaseModel):
 
 class FailRequest(BaseModel):
     reason: str = Field(..., min_length=3, max_length=300)
+
+
+class JobActionRequest(BaseModel):
+    """Optional details for a driver action: why it failed ("fail"), the customer's code ("deliver")."""
+    reason: str | None = Field(None, max_length=300)
+    code: str | None = Field(None, max_length=12)
