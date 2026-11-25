@@ -59,3 +59,28 @@ export function takeDeepLinkPath(): string | null {
 export async function copyLink(url: string): Promise<boolean> {
   try { await navigator.clipboard.writeText(url); return true; } catch { return false; }
 }
+
+export type ShareResult = "telegram" | "native" | "copied" | "failed";
+
+/**
+ * Share a product or shop link the best way available:
+ * - inside Telegram: the "send to a chat" picker (t.me/share/url), so it lands in a chat as a link that
+ *   opens the Mini App;
+ * - elsewhere: the phone's share sheet, or copy the link.
+ */
+export async function shareLink(url: string, text: string): Promise<ShareResult> {
+  if (typeof window === "undefined") return "failed";
+  text = text.replace(/\s+/g, " ").trim(); // names and taglines may carry stray spaces and line breaks
+  const tg = window.Telegram?.WebApp;
+  if (tg?.initData && tg.openTelegramLink) {
+    try {
+      tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`);
+      return "telegram";
+    } catch { /* older clients: fall through */ }
+  }
+  if (navigator.share) {
+    try { await navigator.share({ title: text, text, url }); return "native"; }
+    catch (e) { if ((e as Error)?.name === "AbortError") return "native"; }
+  }
+  return (await copyLink(url)) ? "copied" : "failed";
+}

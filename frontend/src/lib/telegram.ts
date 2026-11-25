@@ -27,6 +27,8 @@ interface TelegramWebApp {
   };
   ready: () => void;
   expand: () => void;
+  /** Opens a t.me link inside Telegram (e.g. the "send to a chat" picker for t.me/share/url). */
+  openTelegramLink?: (url: string) => void;
   close: () => void;
   MainButton: {
     text: string;

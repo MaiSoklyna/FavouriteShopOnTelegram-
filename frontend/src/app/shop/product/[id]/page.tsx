@@ -18,6 +18,7 @@ import { Icon } from "@/components/shop/Icon";
 import { TelegramLoginPrompt } from "@/components/shop/LoginGate";
 import { img, IMG } from "@/lib/img";
 
+import { productLink, shareLink } from "@/lib/deeplink";
 interface Review { id: number; user_name?: string; rating: number; comment?: string; created_at?: string }
 
 const ICON = { fill: "none", stroke: "currentColor", strokeWidth: 1.75, strokeLinecap: "round", strokeLinejoin: "round" } as const;
@@ -144,10 +145,13 @@ export default function ProductDetailPage() {
     }
   }
 
-  function share() {
-    const url = window.location.href;
-    if (navigator.share) navigator.share({ title: product!.name, url }).catch(() => {});
-    else navigator.clipboard?.writeText(url).then(() => setNotice({ text: "Link copied", tone: "ok" })).catch(() => {});
+  // Share the product's Telegram link (opens it in the Mini App), never the page address
+  async function share() {
+    const p = product!;
+    const price = `$${Number(p.base_price).toFixed(2)}`;
+    const text = `${p.name} · ${price}${p.merchant_name ? ` at ${p.merchant_name}` : ""} on Byme24`;
+    const how = await shareLink(productLink(p.id), text);
+    if (how === "copied") setNotice({ text: "Link copied", tone: "ok" });
   }
 
   function onGalleryScroll() {

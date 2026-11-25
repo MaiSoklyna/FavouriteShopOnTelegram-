@@ -18,6 +18,7 @@ import { Icon } from "@/components/shop/Icon";
 import { PromoAppliedBanner } from "@/components/shop/PromoAppliedBanner";
 import { ShopOffers } from "@/components/shop/ShopOffers";
 import { img as toImg, IMG } from "@/lib/img";
+import { shareLink, shopLink } from "@/lib/deeplink";
 
 /** This shop as seen from the customer's location (GET /merchants/nearby). */
 interface NearbyInfo {
@@ -46,6 +47,14 @@ export default function MerchantDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [heroImages, setHeroImages] = useState<{ id: number; url: string }[]>([]);
+  const [shareNote, setShareNote] = useState("");
+
+  // Share the shop's Telegram link (opens the shop in the Mini App)
+  async function shareShop() {
+    if (!merchant) return;
+    const how = await shareLink(shopLink(merchant.id), `${merchant.name.trim()}${merchant.tagline ? ` · ${merchant.tagline}` : ""} on Byme24`);
+    if (how === "copied") { setShareNote("Link copied"); setTimeout(() => setShareNote(""), 2500); }
+  }
   const [heroIdx, setHeroIdx] = useState(0);
   const [near, setNear] = useState<NearbyInfo | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -135,6 +144,7 @@ export default function MerchantDetailPage() {
 
   return (
     <div className="min-h-screen bg-surface pb-8">
+      {shareNote && <div role="status" className="fixed inset-x-0 top-4 z-[120] mx-auto w-fit rounded-full bg-navy-900 px-4 py-2 text-[13px] font-bold text-white shadow-fos-md">{shareNote}</div>}
       <PromoAppliedBanner merchantId={merchant.id} />
       {/* Cover */}
       <div className="relative h-[210px] overflow-hidden bg-tint-map">
@@ -151,6 +161,12 @@ export default function MerchantDetailPage() {
         <button type="button" onClick={() => router.back()} aria-label="Back"
           className="fos-press absolute left-gutter top-[max(14px,env(safe-area-inset-top))] grid h-10 w-10 place-items-center rounded-full bg-black/35 text-white backdrop-blur">
           <Icon name="back" size={20} strokeWidth={2} />
+        </button>
+        <button type="button" onClick={shareShop} aria-label={`Share ${merchant.name}`} data-testid="share-shop"
+          className="fos-press absolute right-[calc(var(--fos-gutter,16px)_+_48px)] top-[max(14px,env(safe-area-inset-top))] grid h-10 w-10 place-items-center rounded-full bg-black/35 text-white backdrop-blur">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7" /><path d="M16 6l-4-4-4 4" /><path d="M12 2v13" />
+          </svg>
         </button>
         <button type="button" onClick={() => void fav.toggleShop(merchant.id)} aria-pressed={fav.hasShop(merchant.id)}
           aria-label={fav.hasShop(merchant.id) ? "Remove shop from favorites" : "Save shop to favorites"}
