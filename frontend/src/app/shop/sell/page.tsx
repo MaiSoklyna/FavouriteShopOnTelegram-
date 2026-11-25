@@ -248,6 +248,11 @@ function SellContent() {
         )}
       </div>
 
+      <p style={{ fontSize: 12, color: "var(--shop-muted)", textAlign: "center", lineHeight: 1.6, padding: "0 16px 96px" }}>
+        By applying you agree to the <a href="/shop/terms#s9" style={{ color: "var(--shop-primary)", fontWeight: 600 }}>Terms of Service</a> (including the
+        rules for sellers) and the <a href="/shop/privacy" style={{ color: "var(--shop-primary)", fontWeight: 600 }}>Privacy Policy</a>.
+      </p>
+
       {/* Sticky footer nav */}
       <div style={{
         position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 110,

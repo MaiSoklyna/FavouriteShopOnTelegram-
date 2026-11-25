@@ -203,6 +203,12 @@ function LoginContent() {
             </div>
           </div>
         )}
+
+        <div style={{ textAlign: "center", marginTop: 20, fontSize: 12, color: "var(--text-muted)" }}>
+          <a href="/shop/terms" style={{ color: "inherit" }}>Terms of Service</a>
+          {" · "}
+          <a href="/shop/privacy" style={{ color: "inherit" }}>Privacy Policy</a>
+        </div>
       </div>
     </div>
   );

@@ -722,6 +722,12 @@ function CheckoutContent() {
         {[...blockers, ...(orderError ? [orderError] : []), ...(quoteError && !outOfArea && quote ? [quoteError] : [])].map((m) => (
           <div key={m} role="alert" className="mt-3 rounded-card bg-tint-caution px-3.5 py-3 text-[13px] font-bold text-caution-500">{m}</div>
         ))}
+
+        <p className="mt-4 text-center text-[12px] leading-5 text-ink-500" data-testid="checkout-legal">
+          By placing this order you agree to the <a href="/shop/terms" className="font-bold text-navy-700 underline">Terms of Service</a>.
+          {payment !== "cod" && " Online orders must be paid within 30 minutes."}
+          {" "}See how we use your details in the <a href="/shop/privacy" className="font-bold text-navy-700 underline">Privacy Policy</a>.
+        </p>
       </div>
 
       {!inTelegram && (
