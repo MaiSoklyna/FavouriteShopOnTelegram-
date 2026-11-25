@@ -221,7 +221,7 @@ def test_visibility_rule(spy):
     assert not shop_setup.is_visible(new_shop())
     assert shop_setup.is_visible(complete(setup_completed_at="x"))
     assert not shop_setup.is_visible(complete(setup_completed_at="x", status="suspended"))
-    assert shop_setup.is_visible({"status": "active"})   # before migration 041: no column, visible
+    assert not shop_setup.is_visible({"status": "active"})   # setup_completed_at not read: hidden, never leaked
 
 
 def test_customers_do_not_see_a_shop_that_is_not_live(spy, monkeypatch):

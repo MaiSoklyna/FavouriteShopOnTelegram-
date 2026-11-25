@@ -52,9 +52,9 @@ async def _target_is_live(db, kind: str, target_id: int) -> bool:
         row = await db.from_("products").eq("id", target_id).select_one("id,is_active,merchant_id")
         if not row or not row.get("is_active"):
             return False
-        shop = await db.from_("merchants").eq("id", row["merchant_id"]).select_one("id,status")
+        shop = await db.from_("merchants").eq("id", row["merchant_id"]).select_one("id,status,setup_completed_at")
         return bool(shop) and shop_setup.is_visible(shop)
-    row = await db.from_("merchants").eq("id", target_id).select_one("id,status")
+    row = await db.from_("merchants").eq("id", target_id).select_one("id,status,setup_completed_at")
     return bool(row) and shop_setup.is_visible(row)
 
 
@@ -108,7 +108,7 @@ async def products_for(db, user_id: int) -> list[dict]:
     ids = [r["product_id"] for r in rows]
     products = {p["id"]: p for p in await db.from_("products").in_("id", ids).select(PRODUCT_COLUMNS)}
     shop_ids = list({p["merchant_id"] for p in products.values() if p.get("merchant_id")})
-    shops = {m["id"]: m for m in await db.from_("merchants").in_("id", shop_ids).select("id,name,icon_emoji,logo_url,status")} if shop_ids else {}
+    shops = {m["id"]: m for m in await db.from_("merchants").in_("id", shop_ids).select("id,name,icon_emoji,logo_url,status,setup_completed_at")} if shop_ids else {}
     with_variants = {v["product_id"] for v in await db.from_("product_variants").in_("product_id", ids).select("product_id")}
     out = []
     for r in rows:

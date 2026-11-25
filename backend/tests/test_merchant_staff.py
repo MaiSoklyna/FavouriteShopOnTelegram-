@@ -126,7 +126,7 @@ class FakeDb:
         self.broken_log = False
         self.t = {
             "merchants": [
-                {"id": 1, "name": "Cake Shop", "status": "active", "description": "Cakes", "phone": "012",
+                {"id": 1, "name": "Cake Shop", "status": "active", "setup_completed_at": "2026-01-01T00:00:00Z", "description": "Cakes", "phone": "012",
                  "aba_account": "001122334", "aba_account_name": "CAKE SHOP", "payout_verification_status": "verified",
                  "payout_enabled": True, "logo_update_history": []},
                 {"id": 2, "name": "Other Shop", "status": "active"},

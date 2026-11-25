@@ -261,10 +261,10 @@ async def visible_shop_ids(db) -> set[int]:
 
 
 def is_visible(m: dict | None) -> bool:
-    """For a merchant row that was read with status and setup_completed_at."""
-    if not m or m.get("status") != "active":
-        return False
-    return "setup_completed_at" not in m or m.get("setup_completed_at") is not None
+    """For a merchant row read with status AND setup_completed_at (migration 041, applied 2026-11-25).
+    Strict on purpose: a query that forgot to select setup_completed_at hides the shop rather than
+    leaking a shop that is not live."""
+    return bool(m) and m.get("status") == "active" and m.get("setup_completed_at") is not None
 
 
 def sees_hidden_shop(user: TokenClaims | None, merchant_id: int | None) -> bool:

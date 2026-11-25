@@ -30,7 +30,7 @@ def shop(id, name, category=None, sub=None, status="active", **extra):
         "email": f"{id}@private.example", "owner_name": "Private Owner",
         "shop_category_id": category, "shop_subcategory_id": sub,
         "latitude": 11.5704 + id * 0.001, "longitude": 104.8996, "delivery_radius_km": 5,
-        "created_at": f"2026-11-0{id}T00:00:00+00:00", **extra,
+        "created_at": f"2026-11-0{id}T00:00:00+00:00", "setup_completed_at": "2026-11-01T00:00:00+00:00", **extra,
     }
 
 

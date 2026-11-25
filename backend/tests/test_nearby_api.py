@@ -14,7 +14,7 @@ ALL_CLOSED = {d: [] for d in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")}
 
 def shop(id, name, lat, lng, **extra):
     return {
-        "id": id, "name": name, "slug": name.lower(), "status": "active", "latitude": lat, "longitude": lng,
+        "id": id, "name": name, "slug": name.lower(), "status": "active", "setup_completed_at": "2026-01-01T00:00:00Z", "latitude": lat, "longitude": lng,
         "delivery_radius_km": 5, "email": f"{name}@secret.example", "owner_name": "Private Owner", **extra,
     }
 

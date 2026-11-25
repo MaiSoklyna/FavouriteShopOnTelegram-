@@ -93,8 +93,8 @@ class Db:
                 {"id": 2, "telegram_id": 222, "first_name": "Sok", "last_name": None},
                 {"id": 3, "telegram_id": 333, "first_name": "Dara", "last_name": "Chan"},
             ],
-            "merchants": [{"id": 3, "name": "Bloom", "status": "active", "rating": None, "rating_count": 0},
-                          {"id": 4, "name": "Cakes", "status": "active", "rating": None, "rating_count": 0},
+            "merchants": [{"id": 3, "name": "Bloom", "status": "active", "setup_completed_at": "2026-01-01T00:00:00Z", "rating": None, "rating_count": 0},
+                          {"id": 4, "name": "Cakes", "status": "active", "setup_completed_at": "2026-01-01T00:00:00Z", "rating": None, "rating_count": 0},
                           {"id": 5, "name": "Closed", "status": "suspended"}],
             "orders": [], "shop_reviews": [], "notifications": [],
         }
