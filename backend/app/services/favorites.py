@@ -14,7 +14,7 @@ from __future__ import annotations
 import httpx
 
 from app.core.exceptions import BadRequestError, NotFoundError
-from app.services import notify
+from app.services import notify, shop_setup
 
 MAX_PER_KIND = 200
 NOT_SET_UP = ("42P01", "PGRST205", "42703", "PGRST204")
@@ -53,9 +53,9 @@ async def _target_is_live(db, kind: str, target_id: int) -> bool:
         if not row or not row.get("is_active"):
             return False
         shop = await db.from_("merchants").eq("id", row["merchant_id"]).select_one("id,status")
-        return bool(shop) and shop.get("status") == "active"
+        return bool(shop) and shop_setup.is_visible(shop)
     row = await db.from_("merchants").eq("id", target_id).select_one("id,status")
-    return bool(row) and row.get("status") == "active"
+    return bool(row) and shop_setup.is_visible(row)
 
 
 async def add(db, user_id: int, kind: str, target_id: int) -> bool:
@@ -119,7 +119,7 @@ async def products_for(db, user_id: int) -> list[dict]:
         out.append({
             **p, "slug": "", "merchant_name": m.get("name"), "merchant_icon": m.get("icon_emoji"), "merchant_logo_url": m.get("logo_url"),
             "merchant_status": m.get("status"), "has_variants": p["id"] in with_variants,
-            "available": bool(p.get("is_active")) and m.get("status") == "active", "saved_at": r["created_at"],
+            "available": bool(p.get("is_active")) and shop_setup.is_visible(m), "saved_at": r["created_at"],
         })
     return out
 
@@ -138,7 +138,7 @@ async def shops_for(db, user_id: int, public_view, category_names) -> list[dict]
             continue
         view = public_view(m)
         view["shop_category"], view["shop_subcategory"] = cats.get(m.get("shop_category_id")), subs.get(m.get("shop_subcategory_id"))
-        view["available"] = m.get("status") == "active"
+        view["available"] = shop_setup.is_visible(m)
         view["saved_at"] = r["created_at"]
         out.append(view)
     return out

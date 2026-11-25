@@ -12,7 +12,7 @@ from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.models.shop_review import ShopReviewCreate, VisibilityUpdate
-from app.services import shop_reviews
+from app.services import shop_reviews, shop_setup
 
 router = APIRouter(prefix="/shop-reviews", tags=["Shop Reviews"])
 
@@ -57,7 +57,9 @@ async def create_shop_review(body: ShopReviewCreate, user: TokenClaims = require
 @router.get("/shops/{merchant_id}")
 async def shop_reviews_public(merchant_id: int, limit: int = 10, before: int | None = None):
     async with SupabaseClient.service_role() as db:
-        shop = await db.from_("merchants").eq("id", merchant_id).eq("status", "active").select_one("id,name")
+        shop = await db.from_("merchants").eq("id", merchant_id).select_one()
+        if not shop_setup.is_visible(shop):
+            shop = None
         if not shop:
             raise NotFoundError("Merchant", merchant_id)
         summary = await _tolerant(shop_reviews.summary(db, merchant_id), EMPTY_SUMMARY)

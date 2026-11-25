@@ -33,6 +33,7 @@ const PERM_PATHS: [string, Perm][] = [
 
 const MENU: MenuItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: DashboardIcon },
+  { href: "/setup", label: "Shop setup", icon: SettingsIcon, merchantOnly: true },
   { href: "/products", label: "Products", icon: ProductsIcon },
   { href: "/orders", label: "Orders", icon: OrdersIcon },
   { href: "/categories", label: "Categories", icon: CategoryIcon },

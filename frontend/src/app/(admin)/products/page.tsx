@@ -65,6 +65,11 @@ export default function ProductsPage() {
   }
 
   useEffect(() => { load(); }, []);
+  // From Shop setup: /products?new=1 opens the add-product form straight away
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("new") === "1") openCreate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => { api.get<{ data: AttributeTemplate[] }>("/attribute-templates").then(r => setAllTemplates(r.data)).catch(() => setAllTemplates([])); }, []);
 
   // The templates this product's shop may use, and the suggested one for a new product

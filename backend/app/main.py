@@ -33,6 +33,7 @@ from app.routes import (
     featured_categories,
     loyalty,
     merchant_dashboard,
+    merchant_setup,
     merchant_staff,
     merchants,
     notifications,
@@ -156,6 +157,7 @@ app.include_router(payments_stripe.router, prefix="/api")
 # Merchant settlement (earnings, payouts, payout accounts)
 app.include_router(settlements.router, prefix="/api")
 app.include_router(refunds.router, prefix="/api")
+app.include_router(merchant_setup.router, prefix="/api")
 
 # Promos
 app.include_router(promos.router, prefix="/api")

@@ -84,9 +84,9 @@ class AttrDb(FakeDb):
         super().__init__()
         self.migrated = migrated
         self.t["merchants"] = [
-            {"id": 1, "name": "Glow Shop", "status": "active", "shop_category_id": 4, "shop_subcategory_id": 11},
-            {"id": 2, "name": "Cake Place", "status": "active", "shop_category_id": 1, "shop_subcategory_id": 1},
-            {"id": 3, "name": "Closed Beauty", "status": "suspended", "shop_category_id": 4},
+            {"id": 1, "name": "Glow Shop", "status": "active", "shop_category_id": 4, "shop_subcategory_id": 11, "setup_completed_at": "2026-01-01T00:00:00Z"},
+            {"id": 2, "name": "Cake Place", "status": "active", "shop_category_id": 1, "shop_subcategory_id": 1, "setup_completed_at": "2026-01-01T00:00:00Z"},
+            {"id": 3, "name": "Closed Beauty", "status": "suspended", "shop_category_id": 4, "setup_completed_at": "2026-01-01T00:00:00Z"},
         ]
         self.t["shop_categories"] = [{"id": 1, "name": "Food & Beverage"}, {"id": 4, "name": "Health & Beauty"}]
         self.t[attrs.TEMPLATES] = [dict(t) for t in TEMPLATES]

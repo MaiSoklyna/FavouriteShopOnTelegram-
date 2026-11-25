@@ -34,7 +34,7 @@ from app.models.product import (
 )
 from pydantic import BaseModel, Field
 
-from app.services import attributes, audit, category_bulk, order_expiry
+from app.services import attributes, audit, category_bulk, order_expiry, shop_setup
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Products"])
@@ -79,6 +79,9 @@ async def list_products(
         # ── Active filter ──
         # Public users always see only active. Admins can opt-in to inactive.
         is_admin = bool(user and user.is_admin)
+        # Customers only see products of shops that are live (active and set up)
+        if not is_admin:
+            q = q.in_("merchant_id", sorted(await shop_setup.visible_shop_ids(db)) or [0])
         if not is_admin or not include_inactive:
             q = q.eq("is_active", True)
 
@@ -149,13 +152,15 @@ async def list_products(
 
 
 @router.get("/products/{product_id}")
-async def get_product(product_id: int):
+async def get_product(product_id: int, user: TokenClaims | None = Depends(get_optional_user)):
     """Get a single product with images and variants."""
     async with SupabaseClient.service_role() as db:
         await order_expiry.sweep_if_due(db)
         product = await db.from_("products").eq("id", product_id).select_one()
         if not product:
             raise NotFoundError("Product", product_id)
+        if not (user and user.is_admin) and product.get("merchant_id") not in await shop_setup.visible_shop_ids(db):
+            raise NotFoundError("Product", product_id)  # its shop is not live
 
         if product.get("merchant_id"):
             m = await db.from_("merchants").eq("id", product["merchant_id"]).select_one("name")
@@ -262,6 +267,7 @@ async def create_product(
             db, user, merchant_id=merchant_id, action="product.created", target_type="product",
             target_id=product.get("id"), target_label=product.get("name") or body.name, new=new,
         )
+        await shop_setup.refresh(db, merchant_id)
 
     return product
 
@@ -331,6 +337,8 @@ async def update_product(
         if data:
             await db.from_("products").eq("id", product_id).update(data)
             await _log_product_update(db, user, existing, data, details_log)
+        if data.get("is_active"):
+            await shop_setup.refresh(db, existing.get("merchant_id"))
 
     return {"success": True}
 
@@ -629,6 +637,7 @@ async def create_category(body: CategoryCreate, user: TokenClaims = require_any_
         data = body.model_dump()
         data["merchant_id"] = merchant_id
         rows = await db.from_("categories").insert(data)
+        await shop_setup.refresh(db, merchant_id)
     return rows[0] if rows else data
 
 

@@ -12,7 +12,7 @@ from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.models.order import PromoValidateRequest
-from app.services import audit
+from app.services import audit, shop_setup
 
 router = APIRouter(prefix="/promos", tags=["Promos"])
 
@@ -83,7 +83,8 @@ async def list_active_promos(merchant_id: int | None = None):
             owned = {r["promo_code_id"] for r in await db.from_("promotions").not_("promo_code_id", "is", "null").select("promo_code_id")}
         except Exception:  # no promotions table yet: every code is a plain code
             owned = set()
-        promos = [p for p in promos if p["id"] not in owned and p.get("audience") != "private"]
+        live_shops = await shop_setup.visible_shop_ids(db)
+        promos = [p for p in promos if p["id"] not in owned and p.get("audience") != "private" and p.get("merchant_id") in live_shops]
 
     # Filter out expired promos server-side
     now = datetime.now(timezone.utc)

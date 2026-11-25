@@ -23,7 +23,7 @@ from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import StorageClient, SupabaseClient
 from app.models.collection import MAX_COLLECTIONS_PER_SHOP, CollectionIn, CollectionProducts
-from app.services import audit
+from app.services import audit, shop_setup
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Collections"])
@@ -117,8 +117,8 @@ async def _links(db, collection_ids: list[int]) -> dict[int, list[int]]:
 
 
 async def _shop_is_open_for_business(db, merchant_id: int) -> bool:
-    m = await db.from_("merchants").eq("id", merchant_id).select_one("id,status")
-    return bool(m and m.get("status") == "active")
+    m = await db.from_("merchants").eq("id", merchant_id).select_one()
+    return shop_setup.is_visible(m)
 
 
 @router.get("/merchants/{merchant_id}/collections")

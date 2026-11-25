@@ -12,7 +12,7 @@ from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.models.cart import CartItemAdd, CartItemUpdate
-from app.services import activity
+from app.services import activity, shop_setup
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cart", tags=["Cart"])
@@ -73,7 +73,7 @@ async def add_to_cart(body: CartItemAdd, user: TokenClaims = require_role(Role.U
         product = await db.from_("products").eq("id", body.product_id).eq("is_active", True).select_one(
             "id,merchant_id,base_price,stock,name"
         )
-        if not product:
+        if not product or product.get("merchant_id") not in await shop_setup.visible_shop_ids(db):
             raise NotFoundError("Product", body.product_id)
 
         # ── Resolve variant options & validate stock + compute price ──

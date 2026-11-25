@@ -22,7 +22,7 @@ from app.core.dependencies import require_any_admin, require_super_admin
 from app.core.exceptions import BadRequestError, NotFoundError
 from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
-from app.services import attributes
+from app.services import attributes, shop_setup
 
 router = APIRouter(tags=["Product details"])
 
@@ -357,7 +357,7 @@ async def search_products(
             shops_q = shops_q.eq("id", merchant_id)
         if shop_type is not None:
             shops_q = shops_q.eq("shop_category_id", shop_type)
-        shops = {m["id"]: m for m in await shops_q.select("id,name,icon_emoji,logo_url,status,shop_category_id")}
+        shops = {m["id"]: m for m in await shops_q.select() if shop_setup.is_visible(m)}
         # Detail filters need one shop type: the one asked for, or the shop's own
         scope_type = shop_type if shop_type is not None else (
             shops[merchant_id].get("shop_category_id") if merchant_id in shops else None)

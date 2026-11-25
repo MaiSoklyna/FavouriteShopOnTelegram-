@@ -30,7 +30,7 @@ from app.core.security import TokenClaims
 from app.db.client import SupabaseClient
 from app.services import (
     activity, audit, coupons, deliveries, inventory, notify, order_expiry, order_status, refunds, settlement,
-    shop_reviews,
+    shop_reviews, shop_setup,
 )
 from app.services import promo_schedule
 from app.services.delivery import is_open, quote_delivery, valid_point
@@ -575,6 +575,8 @@ async def _price_cart(
         Decimal("0.00"),
     )
     shop = await db.from_("merchants").eq("id", merchant_id).select_one() or {}
+    if not shop_setup.is_visible(shop):
+        raise BadRequestError("This shop isn't taking orders right now")
     distance_km, delivery_fee, eta = _delivery_for(shop, delivery_type, dest)
     if subtotal >= Decimal(str(FREE_DELIVERY_THRESHOLD)):
         delivery_fee = Decimal("0.00")

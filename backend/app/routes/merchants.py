@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 
 import math
+import re
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -20,13 +21,13 @@ from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, 
 from app.core.security import TokenClaims
 from app.db.client import StorageClient, SupabaseClient
 from app.models.merchant import MerchantCreate, MerchantUpdate
-from app.services import audit
+from app.services import audit, shop_setup
 from app.services.delivery import SHOP_TZ, is_open, quote_delivery, valid_point
 
 router = APIRouter(prefix="/merchants", tags=["Merchants"])
 
 # Per-shop delivery settings (migration 017); null means "use the platform default"
-DELIVERY_SETTING_FIELDS = ("opening_hours", "delivery_base_fee", "delivery_per_km_fee", "min_order_amount")
+DELIVERY_SETTING_FIELDS = ("opening_hours", "delivery_base_fee", "delivery_per_km_fee", "min_order_amount", "delivery_fee_mode")
 
 # Fields the public "nearby" list may expose — merchants rows also hold owner contact details
 NEARBY_PUBLIC_FIELDS = (
@@ -133,6 +134,8 @@ async def list_merchants(
             q = q.eq("shop_subcategory_id", shop_subcategory_id)
 
         merchants = await q.select()
+        if not is_admin:  # customers only see shops that finished setting up
+            merchants = [m for m in merchants if shop_setup.is_visible(m)]
 
         ids = [m["id"] for m in merchants]
 
@@ -221,7 +224,7 @@ async def nearby_merchants(
             query = query.eq("shop_category_id", shop_category_id)
         if shop_subcategory_id is not None:
             query = query.eq("shop_subcategory_id", shop_subcategory_id)
-        rows = await query.select()
+        rows = [m for m in await query.select() if shop_setup.is_visible(m)]
         ids = [m["id"] for m in rows]
         (cats, subs), products = await asyncio.gather(
             shop_category_names(db),
@@ -260,7 +263,7 @@ async def get_merchant(merchant_id: int, user: TokenClaims | None = Depends(get_
     """Get merchant details. Public visitors see active shops and public fields only."""
     async with SupabaseClient.service_role() as db:
         merchant = await db.from_("merchants").eq("id", merchant_id).select_one()
-        if not merchant or (not (user and user.is_admin) and merchant.get("status") != "active"):
+        if not merchant or (not (user and user.is_admin) and not shop_setup.is_visible(merchant)):
             raise NotFoundError("Merchant", merchant_id)
         if not sees_private_fields(user, merchant_id):
             merchant = public_view(merchant)
@@ -310,9 +313,12 @@ async def update_merchant(
         data = body.model_dump(exclude_none=True)
         data.pop("shop_category_id", None)
         data.pop("shop_subcategory_id", None)
-        # The shop's category decides where customers find it, so only a super admin sets it.
+        # The shop's category decides where customers find it: the platform sets it, and the owner may
+        # choose it while setting up, before the shop is live (decision 2026-11-25).
         # Sending null clears it; changing the category without a subcategory clears the subcategory.
-        if user.role == Role.SUPER_ADMIN and {"shop_category_id", "shop_subcategory_id"} & body.model_fields_set:
+        owner_may_choose = user.role == Role.MERCHANT_ADMIN and existing.get("setup_completed_at") is None             and "setup_completed_at" in existing
+        # Otherwise a type sent by the owner is ignored (forms send it back unchanged), as before.
+        if (user.role == Role.SUPER_ADMIN or owner_may_choose) and {"shop_category_id", "shop_subcategory_id"} & body.model_fields_set:
             category = body.shop_category_id if "shop_category_id" in body.model_fields_set else existing.get("shop_category_id")
             if "shop_subcategory_id" in body.model_fields_set:
                 subcategory = body.shop_subcategory_id
@@ -331,10 +337,26 @@ async def update_merchant(
             data.pop("logo_url", None)
             data.pop("status", None)
             data.pop("is_featured", None)  # super-admin-only flag
+        if "opening_hours" in data and data["opening_hours"] is not None:
+            _check_hours(data["opening_hours"])
         if data:
             await db.from_("merchants").eq("id", merchant_id).update(data)
             await _log_shop_change(db, user, existing, data)
+        await shop_setup.refresh(db, merchant_id)
     return {"success": True}
+
+
+_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def _check_hours(hours: dict) -> None:
+    """Weekly hours: {"mon": [["08:00","20:00"]], ...}; 24/7 is every day ["00:00","00:00"]."""
+    for day, windows in hours.items():
+        if day not in shop_setup.DAYS:
+            raise BadRequestError(f"Unknown day '{day}' in opening hours")
+        for w in windows:
+            if len(w) != 2 or not all(_HHMM.match(str(t)) for t in w):
+                raise BadRequestError(f"Opening hours for {day} must be like 08:00-20:00")
 
 
 SECRET_SHOP_FIELDS = {"telegram_token"}
@@ -453,6 +475,7 @@ async def upload_merchant_logo(
             target_id=merchant_id, target_label=merchant.get("name"),
             old={"logo_url": merchant.get("logo_url")}, new={"logo_url": public_url},
         )
+        await shop_setup.refresh(db, merchant_id)
 
     return {"logo_url": public_url}
 

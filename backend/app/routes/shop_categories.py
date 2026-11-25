@@ -12,6 +12,7 @@ from collections import Counter
 from fastapi import APIRouter
 
 from app.db.client import SupabaseClient
+from app.services import shop_setup
 
 router = APIRouter(prefix="/shop-categories", tags=["Shop Categories"])
 
@@ -28,8 +29,9 @@ async def list_shop_categories(with_shops: bool = False):
         cats, subs, shops = await asyncio.gather(
             db.from_("shop_categories").order("sort_order").select("id,name"),
             db.from_("shop_subcategories").order("sort_order").select("id,category_id,name"),
-            db.from_("merchants").eq("status", "active").select("shop_category_id,shop_subcategory_id"),
+            db.from_("merchants").eq("status", "active").select(),
         )
+    shops = [s for s in shops if shop_setup.is_visible(s)]  # only shops customers can open
 
     per_category = Counter(s["shop_category_id"] for s in shops if s.get("shop_category_id") is not None)
     per_subcategory = Counter(s["shop_subcategory_id"] for s in shops if s.get("shop_subcategory_id") is not None)
