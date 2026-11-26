@@ -31,15 +31,46 @@ export type VariantGroup = {
   options: VariantOption[];
 };
 
-// ── Size scale presets ─────────────────────────────────────────
-type SizeScale = "none" | "women" | "kids" | "baby" | "shoes" | "custom";
+// ── First option group presets, by kind of shop ───────────────
+// The first group is stored as type "size", but its name follows what the shop sells: clothes have
+// sizes, skincare has a volume or who it is for, cakes have a cake size, phones have storage.
+export type ShopKind = "fashion" | "beauty" | "food" | "electronics" | "home";
+type Preset = { id: string; menu: string; group: string; labels: string[] };
+type SizeScale = "none" | "custom" | string;
 
-const SIZE_PRESETS: Record<Exclude<SizeScale, "none" | "custom">, string[]> = {
-  women: ["XS", "S", "M", "L", "XL", "XXL"],
-  kids: ["2y", "3y", "4y", "6y", "8y", "10y", "12y"],
-  baby: ["0–3m", "3–6m", "6–9m", "9–12m", "12–18m", "18–24m"],
-  shoes: ["35", "36", "37", "38", "39", "40", "41", "42"],
+const PRESETS: Record<ShopKind, Preset[]> = {
+  fashion: [
+    { id: "women", menu: "Women (XS–XXL)", group: "Size", labels: ["XS", "S", "M", "L", "XL", "XXL"] },
+    { id: "men", menu: "Men (S–3XL)", group: "Size", labels: ["S", "M", "L", "XL", "XXL", "3XL"] },
+    { id: "kids", menu: "Kids (2y–12y)", group: "Size", labels: ["2y", "3y", "4y", "6y", "8y", "10y", "12y"] },
+    { id: "baby", menu: "Baby (0–24m)", group: "Size", labels: ["0–3m", "3–6m", "6–9m", "9–12m", "12–18m", "18–24m"] },
+    { id: "shoes", menu: "Shoes (EU 35–42)", group: "Size", labels: ["35", "36", "37", "38", "39", "40", "41", "42"] },
+    { id: "free", menu: "Free size", group: "Size", labels: ["Free size"] },
+  ],
+  beauty: [
+    { id: "ml", menu: "Volume (ml)", group: "Volume", labels: ["15ml", "30ml", "50ml", "100ml", "150ml", "200ml"] },
+    { id: "g", menu: "Weight (g)", group: "Weight", labels: ["10g", "30g", "50g", "100g", "200g"] },
+    { id: "for", menu: "For: Women / Men / Unisex", group: "For", labels: ["Women", "Men", "Unisex"] },
+    { id: "kids_for", menu: "For: Girl / Boy", group: "For", labels: ["Girl", "Boy"] },
+    { id: "age", menu: "Age group", group: "Age", labels: ["Kids", "Teens", "Adults", "40+"] },
+  ],
+  food: [
+    { id: "cake", menu: "Cake size (inch)", group: "Size", labels: ['4"', '6"', '8"', '10"'] },
+    { id: "portion", menu: "Portion (S / M / L)", group: "Portion", labels: ["Small", "Medium", "Large"] },
+    { id: "cup", menu: "Cup size", group: "Cup", labels: ["Small", "Medium", "Large"] },
+  ],
+  electronics: [
+    { id: "storage", menu: "Storage", group: "Storage", labels: ["64GB", "128GB", "256GB", "512GB", "1TB"] },
+    { id: "ram", menu: "Memory (RAM)", group: "Memory", labels: ["8GB", "16GB", "32GB"] },
+  ],
+  home: [
+    { id: "sml", menu: "Small / Medium / Large", group: "Size", labels: ["Small", "Medium", "Large"] },
+  ],
 };
+const KIND_LABEL: Record<ShopKind, string> = {
+  fashion: "Clothes & shoes", beauty: "Beauty & skincare", food: "Food & drinks", electronics: "Electronics", home: "Home",
+};
+const ALL_PRESETS = Object.values(PRESETS).flat();
 
 // ── Color palette ──────────────────────────────────────────────
 const COLOR_PALETTE: { label: string; hex: string }[] = [
@@ -64,9 +95,11 @@ const COLOR_PALETTE: { label: string; hex: string }[] = [
 interface Props {
   value: VariantGroup[];
   onChange: (next: VariantGroup[]) => void;
+  /** The shop's kind: only its presets are offered. Unknown (e.g. super admin, no shop yet): all, grouped. */
+  kind?: ShopKind | null;
 }
 
-export function VariantsEditor({ value, onChange }: Props) {
+export function VariantsEditor({ value, onChange, kind }: Props) {
   const sizeGroup = useMemo(() => value.find(g => g.type === "size") || null, [value]);
   const colorGroup = useMemo(() => value.find(g => g.type === "color") || null, [value]);
 
@@ -78,15 +111,14 @@ export function VariantsEditor({ value, onChange }: Props) {
   function detectScale(g: VariantGroup | null): SizeScale {
     if (!g) return "none";
     const labels = g.options.map(o => o.label);
-    for (const [key, preset] of Object.entries(SIZE_PRESETS)) {
-      if (preset.length === labels.length && preset.every(l => labels.includes(l))) {
-        return key as SizeScale;
-      }
-    }
-    return "custom";
+    const preset = ALL_PRESETS.find(p => p.group === g.group_name && p.labels.length === labels.length && p.labels.every(l => labels.includes(l)));
+    return preset ? preset.id : "custom";
   }
 
-  const currentScale: SizeScale = detectScale(sizeGroup);
+  const offered = kind ? PRESETS[kind] : ALL_PRESETS;
+  const detected: SizeScale = detectScale(sizeGroup);
+  // A preset from another kind of shop (older products) shows as Custom: its rows stay as they are
+  const currentScale: SizeScale = detected === "none" || detected === "custom" || offered.some(p => p.id === detected) ? detected : "custom";
 
   function applySizeScale(scale: SizeScale) {
     if (scale === "none") {
@@ -94,11 +126,13 @@ export function VariantsEditor({ value, onChange }: Props) {
       return;
     }
     if (scale === "custom") {
-      // Empty group, user adds rows manually
-      setGroup("size", { group_name: "Size", type: "size", sort_order: 0, options: [] });
+      // Empty group, user names it and adds rows
+      setGroup("size", { group_name: sizeGroup?.group_name || "Size", type: "size", sort_order: 0, options: [] });
       return;
     }
-    const labels = SIZE_PRESETS[scale];
+    const preset = ALL_PRESETS.find(p => p.id === scale);
+    if (!preset) return;
+    const labels = preset.labels;
     const existing = sizeGroup?.options || [];
     const options: VariantOption[] = labels.map((label, i) => {
       const prev = existing.find(o => o.label === label);
@@ -110,7 +144,7 @@ export function VariantsEditor({ value, onChange }: Props) {
         sort_order: i,
       };
     });
-    setGroup("size", { group_name: "Size", type: "size", sort_order: 0, options });
+    setGroup("size", { group_name: preset.group, type: "size", sort_order: 0, options });
   }
 
   function updateSizeOption(idx: number, patch: Partial<VariantOption>) {
@@ -170,14 +204,23 @@ export function VariantsEditor({ value, onChange }: Props) {
       {/* ── Sizes ── */}
       <section style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Sizes</p>
-          <select className="admin-input" style={{ maxWidth: 180, fontSize: 12, padding: "4px 8px" }} value={currentScale} onChange={e => applySizeScale(e.target.value as SizeScale)}>
-            <option value="none">No size variants</option>
-            <option value="women">Women (XS–XXL)</option>
-            <option value="kids">Kids (2y–12y)</option>
-            <option value="baby">Baby (0–24m)</option>
-            <option value="shoes">Shoes (EU 35–42)</option>
-            <option value="custom">Custom</option>
+          {sizeGroup ? (
+            <input className="admin-input" aria-label="Option name" value={sizeGroup.group_name} maxLength={30}
+              onChange={e => setGroup("size", { ...sizeGroup, group_name: e.target.value })}
+              style={{ maxWidth: 150, fontSize: 13, fontWeight: 700, padding: "4px 8px" }} />
+          ) : (
+            <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{kind ? PRESETS[kind][0].group : "Size"} options</p>
+          )}
+          <select className="admin-input" style={{ maxWidth: 210, fontSize: 12, padding: "4px 8px" }} value={currentScale} onChange={e => applySizeScale(e.target.value as SizeScale)} data-testid="size-preset">
+            <option value="none">No options</option>
+            {kind
+              ? PRESETS[kind].map(p => <option key={p.id} value={p.id}>{p.menu}</option>)
+              : (Object.keys(PRESETS) as ShopKind[]).map(k => (
+                <optgroup key={k} label={KIND_LABEL[k]}>
+                  {PRESETS[k].map(p => <option key={p.id} value={p.id}>{p.menu}</option>)}
+                </optgroup>
+              ))}
+            <option value="custom">Custom (type your own)</option>
           </select>
         </div>
 

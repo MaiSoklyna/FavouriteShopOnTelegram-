@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/providers/AuthProvider";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { Product, Category, Merchant, AdminUser, AttributeTemplate, AttributeValue } from "@/types";
-import { VariantsEditor, type VariantGroup } from "@/components/admin/VariantsEditor";
+import { VariantsEditor, type VariantGroup, type ShopKind } from "@/components/admin/VariantsEditor";
 import { DetailsEditor } from "@/components/admin/DetailsEditor";
 import { EmojiPicker } from "@/components/admin/EmojiPicker";
 import { completeness, filled } from "@/lib/attributes";
@@ -88,6 +88,10 @@ export default function ProductsPage() {
   }, [modal, form.merchant_id, isSuperAdmin, editId]);
 
   const templateById = new Map(allTemplates.map(t => [t.id, t]));
+  // What kind of shop this product belongs to (from its template key, e.g. "beauty_skincare"): the option
+  // presets follow it, so a skincare shop is offered ml / For / Age instead of clothing sizes
+  const kindKey = (shopTemplates.find(t => t.id === details.templateId) ?? shopTemplates[0])?.key?.split("_")[0];
+  const shopKind: ShopKind | null = (["fashion", "beauty", "food", "electronics", "home"] as const).find(k => k === kindKey) ?? null;
   // Brand (and other text) values this shop already uses, offered as suggestions
   const suggestions: Record<string, string[]> = {};
   for (const p of products) for (const [k, v] of Object.entries(p.attributes || {})) {
@@ -351,8 +355,8 @@ export default function ProductsPage() {
               )}
               {/* Variants */}
               <div>
-                <label style={labelS}>Variants (size & color)</label>
-                <VariantsEditor value={variants} onChange={setVariants} />
+                <label style={labelS}>Options customers choose (size, volume, color…)</label>
+                <VariantsEditor value={variants} onChange={setVariants} kind={shopKind} />
               </div>
 
               <div style={{ display: "flex", gap: 16 }}>
