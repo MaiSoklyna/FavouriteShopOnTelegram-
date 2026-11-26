@@ -90,10 +90,18 @@ def test_merchant_admin_cannot_make_platform_pay():
     assert funded_by_for(_body(funded_by="platform"), 1, MERCHANT) == "shop"
 
 
-def test_super_admin_defaults_by_scope_and_can_override():
+def test_super_admin_promotions_are_paid_by_the_platform_by_default():
+    # Decision 2026-11-26: whatever the scope, a super admin's promotion is paid by the platform
     assert funded_by_for(_body(scope="platform"), None, SUPER) == "platform"
-    assert funded_by_for(_body(), 1, SUPER) == "shop"
-    assert funded_by_for(_body(funded_by="platform"), 1, SUPER) == "platform"
+    assert funded_by_for(_body(), 1, SUPER) == "platform"                   # one shop
+    assert funded_by_for(_body(scope="category"), 2, SUPER) == "platform"
+    assert funded_by_for(_body(funded_by="shop"), 1, SUPER) == "shop"       # explicit choice still possible
+
+
+def test_shop_promotions_are_always_paid_by_the_shop():
+    for scope in ("shop", "category", "product"):
+        assert funded_by_for(_body(scope=scope), 1, MERCHANT) == "shop"
+        assert funded_by_for(_body(scope=scope, funded_by="platform"), 1, MERCHANT) == "shop"
 
 
 # ── Reports ─────────────────────────────────────────────────────

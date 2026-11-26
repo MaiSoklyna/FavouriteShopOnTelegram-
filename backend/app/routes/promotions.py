@@ -362,14 +362,13 @@ def funded_by_for(body: PromotionIn, merchant_id: int | None, user: TokenClaims)
     """Who pays this promotion's discount.
 
     A merchant admin's promotions are always paid by their shop — otherwise a
-    shop could raise its own payout. A super admin may choose; by default a
-    platform-wide promotion is paid by the platform and a shop's by the shop.
+    shop could raise its own payout. A promotion the super admin creates is paid by the
+    platform, whatever its scope (decision 2026-11-26); the super admin may still pick
+    "shop" explicitly, e.g. when setting up a promotion a shop asked for.
     """
     if user.role != Role.SUPER_ADMIN:
         return "shop"
-    if body.funded_by:
-        return body.funded_by
-    return "platform" if body.scope == "platform" or not merchant_id else "shop"
+    return body.funded_by or "platform"
 
 
 def _promotion_row(body: PromotionIn, merchant_id: int | None, code_id: int | None, funded_by: str) -> dict:

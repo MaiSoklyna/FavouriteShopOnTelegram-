@@ -136,7 +136,7 @@ export default function PromotionBannersPage() {
       display_locations: Array.from(new Set((p.display_locations || []).map(l => (l === "home_featured" ? "home_promotions" : l)))) as Location[], is_active: p.is_active,
       schedule_type: p.schedule_type ?? "once", weekdays: p.weekdays ?? [], month_days: p.month_days ?? [],
       yearly_ranges: p.yearly_ranges ?? [], auto_apply: p.auto_apply ?? true,
-      funded_by: p.funded_by && p.funded_by !== defaultFunder(p.scope) ? p.funded_by : "",
+      funded_by: (p.funded_by ?? defaultFunder(p.scope)) as Form["funded_by"],   // keep what it is
     });
     setImage(null); setSavedImage(p.image_url); setProductQuery(""); setModal(true);
   }
@@ -169,7 +169,7 @@ export default function PromotionBannersPage() {
       schedule_type: form.schedule_type, weekdays: form.weekdays, month_days: form.month_days,
       yearly_ranges: form.yearly_ranges, auto_apply: form.has_offer && form.audience === "private" ? false : form.auto_apply,
       // Only a super admin may choose; the server ignores it for shop admins
-      funded_by: isSuperAdmin ? form.funded_by || defaultFunder(form.scope) : null,
+      funded_by: isSuperAdmin ? form.funded_by || "platform" : null,   // super admin: platform pays unless chosen
     };
     setSaving(true);
     try {
@@ -369,7 +369,7 @@ export default function PromotionBannersPage() {
                   </Field>
                   {isSuperAdmin && (
                     <Field label="Who pays the discount">
-                      <select className="admin-input" value={form.funded_by || defaultFunder(form.scope)} onChange={e => set("funded_by", e.target.value === defaultFunder(form.scope) ? "" : (e.target.value as Form["funded_by"]))}>
+                      <select className="admin-input" value={form.funded_by || "platform"} onChange={e => set("funded_by", e.target.value as Form["funded_by"])}>
                         <option value="platform">Platform (shop is paid in full)</option>
                         <option value="shop">Shop (comes out of its payout)</option>
                       </select>
@@ -379,7 +379,7 @@ export default function PromotionBannersPage() {
                 )}
                 {form.has_offer && (
                   <small style={hint}>
-                    {(isSuperAdmin ? form.funded_by || defaultFunder(form.scope) : "shop") === "platform"
+                    {(isSuperAdmin ? form.funded_by || "platform" : "shop") === "platform"
                       ? "Byme24 pays this discount. The shop still receives the full price, minus commission."
                       : isSuperAdmin ? "The shop pays this discount: it comes out of the shop's payout." : "Your shop pays this discount: it comes out of your payout."}
                   </small>
