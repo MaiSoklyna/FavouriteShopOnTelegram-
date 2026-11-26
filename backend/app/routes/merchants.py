@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, UploadFile
 
-from app.core.constants import MAX_DELIVERY_KM, PLATFORM_FEE_MAX_KM, Role
+from app.core.constants import DEFAULT_DELIVERY_RADIUS_KM, MAX_DELIVERY_KM, PLATFORM_FEE_MAX_KM, Role
 from app.core.dependencies import get_optional_user, require_any_admin, require_role, require_shop_owner
 from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError, RateLimitError
 from app.core.security import TokenClaims
@@ -256,6 +256,39 @@ async def nearby_merchants(
 
     shops.sort(key=lambda s: (not s["is_open"], s["distance_m"]))
     return shops[offset: offset + limit]
+
+
+@router.get("/{merchant_id}/delivery-check")
+async def delivery_check(merchant_id: int, lat: float, lng: float,
+                         user: TokenClaims | None = Depends(get_optional_user)):
+    """Can this shop deliver to (lat, lng)? For the shop and product pages, at any distance.
+
+    The nearby search only lists shops within the search radius, so a customer further away would get no
+    answer there; this checks one shop directly. Customers outside the area can still browse and order
+    for pickup; only delivery is refused (at checkout)."""
+    if not valid_point(lat, lng):
+        raise BadRequestError("Invalid location")
+    async with SupabaseClient.service_role() as db:
+        m = await db.from_("merchants").eq("id", merchant_id).select_one()
+    if not m or (not (user and user.is_admin) and not shop_setup.is_visible(m)):
+        raise NotFoundError("Merchant", merchant_id)
+    radius = float(m.get("delivery_radius_km") or DEFAULT_DELIVERY_RADIUS_KM)
+    q = quote_delivery(m, (lat, lng))
+    if q is None:   # the shop has no map location yet
+        return {"located": False, "can_deliver": False, "pickup": True, "radius_km": radius,
+                "reason": "This shop hasn't set its location yet", "is_open": is_open(m.get("opening_hours"))}
+    return {
+        "located": True,
+        "distance_km": float(q.distance_km),
+        "radius_km": radius,
+        "can_deliver": q.can_deliver,
+        "delivery_fee": str(q.fee) if q.fee is not None else None,
+        "reason": q.reason,
+        "eta_minutes": q.eta_minutes,
+        "eta_max_minutes": q.eta_max_minutes,
+        "is_open": is_open(m.get("opening_hours")),
+        "pickup": True,   # every shop takes pickup orders
+    }
 
 
 @router.get("/{merchant_id}")

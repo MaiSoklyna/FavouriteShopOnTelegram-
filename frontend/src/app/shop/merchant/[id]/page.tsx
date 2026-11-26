@@ -19,6 +19,9 @@ import { PromoAppliedBanner } from "@/components/shop/PromoAppliedBanner";
 import { ShopOffers } from "@/components/shop/ShopOffers";
 import { img as toImg, IMG } from "@/lib/img";
 import { shareLink, shopLink } from "@/lib/deeplink";
+import { useDeliveryCheck } from "@/lib/deliveryCheck";
+import { OutOfAreaBanner } from "@/components/shop/OutOfAreaBanner";
+import { LocationSheet } from "@/components/shop/LocationSheet";
 
 /** This shop as seen from the customer's location (GET /merchants/nearby). */
 interface NearbyInfo {
@@ -37,7 +40,8 @@ export default function MerchantDetailPage() {
   const { addToCart } = useCart();
   const { user } = useAuth();
   const fav = useFavorites();
-  const { location } = useHomeLocation(!!user);
+  const { location, save: saveLocation } = useHomeLocation(!!user);
+  const [locOpen, setLocOpen] = useState(false);
 
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   useEffect(() => { if (merchant?.id) trackActivity({ type: "shop_view", merchant_id: merchant.id }); }, [merchant?.id]);
@@ -56,7 +60,6 @@ export default function MerchantDetailPage() {
     if (how === "copied") { setShareNote("Link copied"); setTimeout(() => setShareNote(""), 2500); }
   }
   const [heroIdx, setHeroIdx] = useState(0);
-  const [near, setNear] = useState<NearbyInfo | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const productsRef = useRef<HTMLDivElement>(null);
 
@@ -85,13 +88,13 @@ export default function MerchantDetailPage() {
     return () => { alive = false; };
   }, [id]);
 
-  // Distance, delivery fee, ETA and open/closed — computed by the backend from the customer's location
-  useEffect(() => {
-    if (!location || !id) return;
-    api.get<NearbyInfo[]>("/merchants/nearby", { params: { lat: location.lat, lng: location.lng, radius_km: 25, limit: 50 } })
-      .then((rows) => setNear(rows.find((r) => r.id === Number(id)) ?? null))
-      .catch(() => setNear(null));
-  }, [location?.lat, location?.lng, id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Distance, delivery fee, ETA and open/closed from the customer's location: checked for this shop directly,
+  // so a customer far away still gets an answer (and the out-of-area banner) instead of nothing
+  const check = useDeliveryCheck(id ? Number(id) : null, location);
+  const near: NearbyInfo | null = check && check.located ? {
+    id: Number(id), distance_km: check.distance_km ?? 0, is_open: check.is_open, can_deliver: check.can_deliver,
+    delivery_fee: check.delivery_fee ?? null, eta_minutes: check.eta_minutes ?? null, eta_max_minutes: check.eta_max_minutes ?? null,
+  } : null;
 
   // Rotate hero photos
   useEffect(() => {
@@ -242,6 +245,10 @@ export default function MerchantDetailPage() {
         )}
       </section>
 
+      {check && !check.can_deliver && check.located && (
+        <div className="px-4 pt-3"><OutOfAreaBanner check={check} onChangeLocation={() => setLocOpen(true)} /></div>
+      )}
+
       <ShopOffers merchantId={merchant.id} />
 
       {/* The shop's own curated lists (Collections) */}
@@ -280,6 +287,10 @@ export default function MerchantDetailPage() {
       </div>
 
       <ShopReviews merchantId={merchant.id} />
+      {locOpen && (
+        <LocationSheet current={location} onClose={() => setLocOpen(false)}
+          onConfirm={(loc) => { saveLocation(loc); setLocOpen(false); }} />
+      )}
     </div>
   );
 }

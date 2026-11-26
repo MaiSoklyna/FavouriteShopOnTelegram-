@@ -560,7 +560,13 @@ function CheckoutContent() {
               )}
               {errors.address && <p className="px-3.5 pt-1 text-caption text-caution-500">{errors.address}</p>}
               {outOfArea && (
-                <p className="px-3.5 pt-1 text-caption font-semibold text-caution-500">{quoteError} · move the pin or choose Pickup</p>
+                <div className="px-3.5 pt-1">
+                  <p className="text-caption font-semibold text-caution-500">{quoteError}. Move the pin to an address inside the area, or collect it yourself.</p>
+                  <button type="button" onClick={() => setDeliveryType("pickup")} data-testid="switch-pickup"
+                    className="fos-press mt-1.5 inline-flex h-9 items-center gap-1.5 rounded-full bg-navy-700 px-3.5 text-[13px] font-extrabold text-white">
+                    Switch to pickup
+                  </button>
+                </div>
               )}
 
               <div className="fos-no-scrollbar flex gap-2 overflow-x-auto px-3.5 pb-3.5 pt-3">

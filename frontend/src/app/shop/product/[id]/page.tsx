@@ -19,6 +19,9 @@ import { TelegramLoginPrompt } from "@/components/shop/LoginGate";
 import { img, IMG } from "@/lib/img";
 
 import { productLink, shareLink } from "@/lib/deeplink";
+import { useDeliveryCheck } from "@/lib/deliveryCheck";
+import { OutOfAreaBanner } from "@/components/shop/OutOfAreaBanner";
+import { LocationSheet } from "@/components/shop/LocationSheet";
 interface Review { id: number; user_name?: string; rating: number; comment?: string; created_at?: string }
 
 const ICON = { fill: "none", stroke: "currentColor", strokeWidth: 1.75, strokeLinecap: "round", strokeLinejoin: "round" } as const;
@@ -33,7 +36,8 @@ export default function ProductDetailPage() {
   const { user } = useAuth();
   const { addToCart, count } = useCart();
   const wish = useFavorites();
-  const { location } = useHomeLocation(!!user);
+  const { location, save: saveLocation } = useHomeLocation(!!user);
+  const [locOpen, setLocOpen] = useState(false);
 
   const [product, setProduct] = useState<Product | null>(null);
   // Tell the shop someone looked at this product (once per visit; never blocks the page)
@@ -84,6 +88,9 @@ export default function ProductDetailPage() {
     return () => clearTimeout(t);
   }, [notice]);
 
+  // Server check of delivery to the customer's location (any distance; knows each shop's fee rules)
+  const check = useDeliveryCheck(product?.merchant_id, location);
+
   if (loading) return <LoadingPage />;
   if (!product) {
     return (
@@ -110,9 +117,9 @@ export default function ProductDetailPage() {
 
   // Distance from the customer's location to the shop pin (straight line, like the backend)
   const shopPin = shop?.latitude != null && shop?.longitude != null ? { lat: Number(shop.latitude), lng: Number(shop.longitude) } : null;
-  const km = location && shopPin ? distanceKm(location, shopPin) : null;
+  const km = check?.located ? check.distance_km ?? null : location && shopPin ? distanceKm(location, shopPin) : null;
   const radius = Number(shop?.delivery_radius_km) || DEFAULT_RADIUS_KM;
-  const delivers = km == null || km <= radius;
+  const delivers = check ? check.can_deliver || !check.located : km == null || km <= radius;
   const etaMin = km != null ? Math.round(ETA_PREP + ETA_PER_KM * km) : null;
 
   async function handleAddToCart(): Promise<boolean> {
@@ -264,6 +271,10 @@ export default function ProductDetailPage() {
           <span className="grid h-8 w-8 place-items-center rounded-full bg-card text-ink-900 shadow-fos-sm" aria-hidden>→</span>
         </Link>
 
+        {check && check.located && !check.can_deliver && (
+          <div className="mt-3"><OutOfAreaBanner check={check} onChangeLocation={() => setLocOpen(true)} /></div>
+        )}
+
         {/* Trust tiles */}
         <div className="mt-3 grid grid-cols-3 gap-2">
           <TrustTile tone={delivers ? "default" : "warn"} icon={<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7M7 18a2 2 0 1 0 0 .01M17 18a2 2 0 1 0 0 .01" />}>
@@ -347,6 +358,10 @@ export default function ProductDetailPage() {
             <TelegramLoginPrompt />
           </div>
         </div>
+      )}
+      {locOpen && (
+        <LocationSheet current={location} onClose={() => setLocOpen(false)}
+          onConfirm={(loc) => { saveLocation(loc); setLocOpen(false); }} />
       )}
     </div>
   );
