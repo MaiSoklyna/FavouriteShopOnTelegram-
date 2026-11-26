@@ -7,6 +7,7 @@ import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import type { Product, Category, Merchant, AdminUser, AttributeTemplate, AttributeValue } from "@/types";
 import { VariantsEditor, type VariantGroup } from "@/components/admin/VariantsEditor";
 import { DetailsEditor } from "@/components/admin/DetailsEditor";
+import { EmojiPicker } from "@/components/admin/EmojiPicker";
 import { completeness, filled } from "@/lib/attributes";
 import { BrandLoader } from "@/components/ui/Spinner";
 import { usePermissions } from "@/lib/permissions";
@@ -296,7 +297,7 @@ export default function ProductsPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr", gap: 8 }}>
                 <div><label style={labelS}>Name *</label><input className="admin-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
-                <div><label style={labelS}>Icon</label><input className="admin-input" style={{ textAlign: "center", fontSize: 18 }} value={form.icon_emoji} onChange={e => setForm({ ...form, icon_emoji: e.target.value })} placeholder="📦" /></div>
+                <div><label style={labelS}>Icon</label><EmojiPicker value={form.icon_emoji} onChange={v => setForm({ ...form, icon_emoji: v })} /></div>
               </div>
               <div>
                 <label style={labelS}>Shop (owner) *</label>
