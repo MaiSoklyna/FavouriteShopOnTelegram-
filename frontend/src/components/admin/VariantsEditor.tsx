@@ -50,9 +50,7 @@ const PRESETS: Record<ShopKind, Preset[]> = {
   beauty: [
     { id: "ml", menu: "Volume (ml)", group: "Volume", labels: ["15ml", "30ml", "50ml", "100ml", "150ml", "200ml"] },
     { id: "g", menu: "Weight (g)", group: "Weight", labels: ["10g", "30g", "50g", "100g", "200g"] },
-    { id: "for", menu: "For: Women / Men / Unisex", group: "For", labels: ["Women", "Men", "Unisex"] },
-    { id: "kids_for", menu: "For: Girl / Boy", group: "For", labels: ["Girl", "Boy"] },
-    { id: "age", menu: "Age group", group: "Age", labels: ["Kids", "Teens", "Adults", "40+"] },
+    // Who it is for (Women / Men) and age group are product details on the Skincare template, not options
   ],
   food: [
     { id: "cake", menu: "Cake size (inch)", group: "Size", labels: ['4"', '6"', '8"', '10"'] },

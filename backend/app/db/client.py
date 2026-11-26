@@ -200,7 +200,9 @@ class QueryBuilder:
         clause = f"{column}.{direction}"
         if nulls_last:
             clause += ".nullslast"
-        self._order_clause = clause
+        # Chained calls sort by each column in turn (.order("sort_order").order("id") -> "sort_order.asc,id.asc").
+        # Before 2026-11-26 each call replaced the last, so the first column was silently ignored.
+        self._order_clause = f"{self._order_clause},{clause}" if self._order_clause else clause
         return self
 
     def limit(self, n: int) -> QueryBuilder:
