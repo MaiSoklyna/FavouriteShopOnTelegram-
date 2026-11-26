@@ -169,8 +169,10 @@ async def admin_edit_field(field_id: int, body: FieldEdit, user: TokenClaims = r
             raise NotFoundError("Field", field_id)
         changes = body.model_dump(exclude_none=True, exclude={"add_options"})
         if body.add_options:
-            if field["type"] not in ("select", "multi_select"):
-                raise BadRequestError("Only choice fields have options")
+            # Choice fields: the allowed options. Text fields (Brand): recommended values the product form
+            # offers; shops can still type others.
+            if field["type"] not in ("select", "multi_select", "text"):
+                raise BadRequestError("Only choice and text fields have options")
             current = field.get("options") or []
             have = {o["value"] for o in current}
             changes["options"] = current + [o for o in _options_from(body.add_options) if o["value"] not in have]

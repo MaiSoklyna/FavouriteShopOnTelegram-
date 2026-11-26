@@ -97,10 +97,16 @@ function FieldInput({ field, value, onChange, suggestions }: {
   const help = field.help_text ? <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{field.help_text}</p> : null;
 
   if (field.type === "text") {
+    // Recommended values set on the template (e.g. skincare brands) first, then ones this shop already used;
+    // the shop can still type a new one
+    const recommended = (field.options ?? []).map((o) => o.label);
+    const seen = new Set(recommended.map((s) => s.toLowerCase()));
+    const offers = [...recommended, ...(suggestions ?? []).filter((s) => !seen.has(s.toLowerCase()))];
     return (
       <div>{header}
-        <input className="admin-input" maxLength={120} list={suggestions?.length ? listId : undefined} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)} />
-        {suggestions?.length ? <datalist id={listId}>{suggestions.map((s) => <option key={s} value={s} />)}</datalist> : null}
+        <input className="admin-input" maxLength={120} list={offers.length ? listId : undefined} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)}
+          placeholder={recommended.length ? "Choose from the list or type a new one" : undefined} />
+        {offers.length ? <datalist id={listId}>{offers.map((s) => <option key={s} value={s} />)}</datalist> : null}
         {help}
       </div>
     );

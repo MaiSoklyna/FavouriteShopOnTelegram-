@@ -84,9 +84,10 @@ export default function AttributeTemplatesPage() {
                               <td><div style={{ fontWeight: 600 }}>{f.label}</div><div style={{ fontSize: 11, fontFamily: "monospace", color: "var(--text-muted)" }}>{f.key}</div></td>
                               <td style={{ fontSize: 12 }}>{TYPE_LABEL[f.type]}</td>
                               <td style={{ fontSize: 12, maxWidth: 320 }}>
-                                {f.type === "select" || f.type === "multi_select" ? (
+                                {f.type === "select" || f.type === "multi_select" || f.type === "text" ? (
                                   <>
-                                    <div>{f.options.map(o => o.label).join(", ")}</div>
+                                    {f.type === "text" && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Recommended (shops can still type others):</div>}
+                                    <div>{f.options.map(o => o.label).join(", ") || (f.type === "text" ? "None yet" : "")}</div>
                                     <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
                                       <input className="admin-input" style={{ fontSize: 12, padding: "4px 8px" }} placeholder="Add options, comma separated" value={optionDraft[f.id] || ""} onChange={e => setOptionDraft({ ...optionDraft, [f.id]: e.target.value })} />
                                       <button className="btn-outline" disabled={!optionDraft[f.id]?.trim()} onClick={() => { editField(f, { add_options: optionDraft[f.id].split(",") }); setOptionDraft({ ...optionDraft, [f.id]: "" }); }}>Add</button>

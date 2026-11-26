@@ -340,6 +340,15 @@ def test_super_admin_adds_and_edits_fields(client, db):
     assert {t["name"]: t["product_count"] for t in all_}["Skincare"] == 6
 
 
+def test_brand_gets_recommended_values_and_any_brand_still_saves(client, db):
+    # Text fields (Brand) can carry recommended values for the product form; they are not a closed list
+    r = client.patch("/api/attribute-templates/admin/fields/1", headers=SUPER, json={"add_options": ["COSRX", "Beauty of Joseon", "cosrx"]})
+    assert r.status_code == 200, r.text
+    brand = next(f for f in db.t[attrs.FIELDS] if f["id"] == 1)
+    assert [o["label"] for o in brand["options"]] == ["COSRX", "Beauty of Joseon"]
+    assert attrs.clean_value(brand, "My Local Brand") == "My Local Brand"
+
+
 @pytest.mark.parametrize("body,text", [
     ({"key": "brand", "label": "Brand", "type": "text"}, "already exists"),
     ({"key": "notes", "label": "Notes", "type": "text", "filterable": True}, "Only Brand"),
