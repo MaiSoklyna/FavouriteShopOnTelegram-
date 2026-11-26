@@ -236,8 +236,8 @@ export default function MerchantsPage() {
       merchantPayload.latitude = lat;
       merchantPayload.longitude = lng;
     }
-    if (!Number.isFinite(radius) || radius < 0 || radius > 30) {
-      flash("Delivery radius must be between 0 and 30 km", false);
+    if (!Number.isFinite(radius) || radius < 0 || radius > 20) {
+      flash("Delivery radius must be between 0 and 20 km", false);
       return;
     }
     if (radius > 10 && form.delivery_base_fee.trim() === "") {

@@ -1,4 +1,4 @@
-"""Option B (2026-11-25): a shop may deliver up to 30 km, but beyond 10 km it must use its own fees."""
+"""Option B (2026-11-25): a shop may deliver up to 20 km (decision 2026-11-26), but beyond 10 km it must use its own fees."""
 
 import pytest
 from pydantic import ValidationError
@@ -9,10 +9,10 @@ from app.routes.merchants import _check_long_distance
 from app.services import shop_setup
 
 
-def test_radius_limit_is_30_km():
-    assert MerchantUpdate(delivery_radius_km=30).delivery_radius_km == 30
+def test_radius_limit_is_20_km():
+    assert MerchantUpdate(delivery_radius_km=20).delivery_radius_km == 20
     with pytest.raises(ValidationError):
-        MerchantUpdate(delivery_radius_km=31)
+        MerchantUpdate(delivery_radius_km=21)
 
 
 @pytest.mark.parametrize("existing, change, refused", [

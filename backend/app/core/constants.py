@@ -72,10 +72,10 @@ DELIVERY_FEE_TIERS = (
     (8.0, 1.50),
     (10.0, 3.00),
 )
-# Platform standard fees cover up to 10 km. A shop may deliver up to 30 km, but beyond 10 km it must
+# Platform standard fees cover up to 10 km. A shop may deliver up to 20 km, but beyond 10 km it must
 # charge its own fees (base + per km): long-distance pricing is the shop's decision (2026-11-25).
 PLATFORM_FEE_MAX_KM = DELIVERY_FEE_TIERS[-1][0]
-MAX_DELIVERY_KM = 30.0             # the largest delivery radius a shop can choose
+MAX_DELIVERY_KM = 20.0             # the largest delivery radius a shop can choose (decision 2026-11-26)
 DEFAULT_DELIVERY_RADIUS_KM = 5.0   # used when a shop has no radius set
 
 # Delivery time estimate: preparation + travel, shown as a window

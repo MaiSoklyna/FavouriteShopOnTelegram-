@@ -57,11 +57,11 @@ def test_shop_own_fee_is_base_plus_per_km():
 
 
 def test_beyond_10_km_only_the_shops_own_fees_apply():
-    # Option B (2026-11-25): platform bands stop at 10 km; a shop's own fees go up to 30 km
+    # Option B (2026-11-25): platform bands stop at 10 km; a shop's own fees go up to 20 km
     assert delivery_fee(11) is None
     assert delivery_fee(18, base_fee=1.0, per_km_fee=0.25) == Decimal("5.50")
-    assert delivery_fee(30, base_fee=1.0, per_km_fee=0.25) == Decimal("8.50")
-    assert delivery_fee(30.5, base_fee=1.0, per_km_fee=0.25) is None
+    assert delivery_fee(20, base_fee=1.0, per_km_fee=0.25) == Decimal("6.00")
+    assert delivery_fee(20.5, base_fee=1.0, per_km_fee=0.25) is None
 
 
 def test_an_18_km_shop_with_its_own_fees_delivers_18_km():

@@ -234,7 +234,7 @@ function Location({ data, owner, saved, flash, next }: StepProps) {
     if (!pin) { flash("Tap the map where your shop is", false); return; }
     if (!address.trim()) { flash("Enter the shop's address", false); return; }
     const r = Number(radius);
-    if (!(r > 0 && r <= 30)) { flash("Delivery radius must be between 0.5 and 30 km", false); return; }
+    if (!(r > 0 && r <= 20)) { flash("Delivery radius must be between 0.5 and 20 km", false); return; }
     if (r > 10 && s.delivery_fee_mode === "platform") { flash("Over 10 km you need your own delivery fees: set them in the Delivery step first, or keep 10 km or less", false); return; }
     run(() => api.patch(`/merchants/${s.id}`, { latitude: pin.lat, longitude: pin.lng, address: address.trim(), delivery_radius_km: r }),
       async () => { await saved(); next(); });
@@ -254,7 +254,7 @@ function Location({ data, owner, saved, flash, next }: StepProps) {
       <label style={label}>Delivery radius (km)
         <input className="admin-input" inputMode="decimal" value={radius} onChange={(e) => setRadius(e.target.value.replace(/[^\d.]/g, ""))} disabled={!owner} style={{ maxWidth: 140 }} />
         <span style={{ display: "block", fontSize: 12, fontWeight: 400, color: "var(--text-muted)", marginTop: 4 }}>
-          Up to 30 km. Over 10 km you set your own delivery fees (Delivery step): platform fees only cover 10 km.
+          Up to 20 km. Over 10 km you set your own delivery fees (Delivery step): platform fees only cover 10 km.
         </span>
       </label>
       <Footer busy={busy} onSave={owner ? save : undefined} next={next} />

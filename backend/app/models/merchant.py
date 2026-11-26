@@ -30,7 +30,7 @@ class MerchantCreate(BaseModel):
     address: str | None = Field(None, max_length=500)
     latitude: float | None = Field(None, ge=-90, le=90)
     longitude: float | None = Field(None, ge=-180, le=180)
-    delivery_radius_km: float | None = Field(None, ge=0, le=30)
+    delivery_radius_km: float | None = Field(None, ge=0, le=20)
     opening_hours: dict[str, list[list[str]]] | None = None
     delivery_base_fee: float | None = Field(None, ge=0, le=100)
     delivery_per_km_fee: float | None = Field(None, ge=0, le=100)
@@ -60,7 +60,7 @@ class MerchantUpdate(BaseModel):
     address: str | None = Field(None, max_length=500)
     latitude: float | None = Field(None, ge=-90, le=90)
     longitude: float | None = Field(None, ge=-180, le=180)
-    delivery_radius_km: float | None = Field(None, ge=0, le=30)
+    delivery_radius_km: float | None = Field(None, ge=0, le=20)
     opening_hours: dict[str, list[list[str]]] | None = None
     delivery_base_fee: float | None = Field(None, ge=0, le=100)
     delivery_per_km_fee: float | None = Field(None, ge=0, le=100)
@@ -92,7 +92,7 @@ class MerchantResponse(BaseModel):
     address: str | None = Field(None, max_length=500)
     latitude: float | None = Field(None, ge=-90, le=90)
     longitude: float | None = Field(None, ge=-180, le=180)
-    delivery_radius_km: float | None = Field(None, ge=0, le=30)
+    delivery_radius_km: float | None = Field(None, ge=0, le=20)
     opening_hours: dict[str, list[list[str]]] | None = None
     delivery_base_fee: float | None = Field(None, ge=0, le=100)
     delivery_per_km_fee: float | None = Field(None, ge=0, le=100)
